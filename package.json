@@ -1,0 +1,60 @@
+{
+  "name": "diablo-js",
+  "version": "0.0.0",
+  "description": "A re-implementation of Diablo 1 for the browser.",
+  "private": true,
+  "scripts": {
+    "start": "NODE_ENV=development beefy index.js --cwd ./client/",
+    "test": "NODE_ENV=test node --use_strict ./test/main2.js",
+    "auto-test": "NODE_ENV=test mocha --reporter spec ./test/index.test.js",
+    "manual-test": "NODE_ENV=test node --use_strict ./test/main.js",
+    "manual-test2": "NODE_ENV=test node --use_strict ./test/main.js"
+  },
+  "keywords": [
+    "diablo"
+  ],
+  "homepage": "",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "bugs": {
+    "url": ""
+  },
+  "author": {
+    "name": "Shyam Guthikonda",
+    "url": "http://shy.am"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "async": "^0.9.0",
+    "behavior-tree": "git://github.com/doggan/behavior-tree.git",
+    "diablo-file-formats": "^0.0.0",
+    "events": "^1.0.1",
+    "http-browserify": "^1.4.0",
+    "inherits": "^2.0.1",
+    "lodash": "^2.4.1",
+    "pathfinding": "^0.4.11",
+    "stately.js": "^1.2.0",
+    "three-debug-draw": "0.0.5"
+  },
+  "devDependencies": {
+    "chai": "^1.9.1",
+    "graceful-fs": "^3.0.2",
+    "mech-mpq": "0.0.1",
+    "mocha": "^1.20.1",
+    "node-png": "^0.4.3",
+    "three": "^0.67.0"
+  },
+  "browser": {
+    "http": "http-browserify"
+  },
+  "jshintConfig": {
+    "node": true,
+    "browser": true,
+    "unused": true,
+    "predef": [
+      "THREE"
+    ]
+  }
+}
