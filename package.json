@@ -1,7 +1,7 @@
 {
-  "name": "diablo-js",
+  "name": "diablogl",
   "version": "0.0.0",
-  "description": "A re-implementation of Diablo 1 for the browser.",
+  "description": "A re-implementation of the original Diablo with WebGL.",
   "private": true,
   "scripts": {
     "start": "NODE_ENV=development beefy index.js --cwd ./client/",
@@ -11,15 +11,16 @@
     "manual-test2": "NODE_ENV=test node --use_strict ./test/main.js"
   },
   "keywords": [
-    "diablo"
+    "diablo",
+    "webgl"
   ],
-  "homepage": "",
+  "homepage": "https://github.com/doggan/diablogl",
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/doggan/diablogl.git"
   },
   "bugs": {
-    "url": ""
+    "url": "https://github.com/doggan/diablogl/issues"
   },
   "author": {
     "name": "Shyam Guthikonda",
