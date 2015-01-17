@@ -1,10 +1,9 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 'use strict';
 
 var Game = require('./lib/game'),
     LevelController = require('./lib/level_controller'),
-    ResourceMgr = require('./lib/resource_mgr'),
-    LevelLoader = require('./lib/level_loader');
+    ResourceLoader = require('./lib/resource_loader');
 
 document.addEventListener("DOMContentLoaded", function() {
     var game = new Game({
@@ -44,66 +43,89 @@ document.addEventListener("DOMContentLoaded", function() {
     // Hide stats.
     document.getElementsByClassName('rs-base')[0].style.display = 'none';
 
-    function isCollisionTile(col, row) {
-        // TODO:
-        if (!ResourceMgr.isLevelDataLoaded(0)) {
-            return;
-        }
-        var dun = ResourceMgr.getFile('levels/towndata/sector1s.dun');
-        var sol = ResourceMgr.getFile('levels/towndata/town.sol');
-
-        // Temp.. before level is loaded, we might do a mouse over.
-        if (!sol || !dun) {
-            return;
-        }
-
-        var pillarIndex = dun.pillarData[col][row];
-        return sol.isCollision(pillarIndex);
-    }
-
-    game.on('mouseDown', function(x, y) {
-        var worldPos = util.screenToWorldCoord(game.width, game.height, x, y, game.camera, game.THREE);
-        // player.actionComponent.toPosition = new THREE.Vector2(worldPos.x, worldPos.y);
-        var gridPos = util.worldToGridCoord(worldPos.x, worldPos.y);
-
-        if (game.TEMP_isShiftModifierDown) {
-            if (LevelController.getLocalPlayer()) {
-                LevelController.getLocalPlayer().getComponent('ActionComponent').TEMP_requestAttack(gridPos);
-            }
-        } else {
-            if (LevelController.getLocalPlayer()) {
-                LevelController.getLocalPlayer().getComponent('ActionComponent').TEMP_requestMove(gridPos);
-            }
-        }
-    });
-
-    game.on('mouseMove', function(x, y) {
-        var worldPos = util.screenToWorldCoord(game.width, game.height, x, y, game.camera, game.THREE);
-        var gridPos = util.worldToGridCoord(worldPos.x, worldPos.y);
-        dbgDrawActiveTile = [gridPos.col, gridPos.row];
-
-        if (LevelController.getLocalPlayer()) {
-            LevelController.getLocalPlayer().getComponent('ActionComponent').TEMP_targetUpdate(worldPos);
-        }
-    });
-
-    var dbgDrawActiveTile = null;
-
-    game.on('update', function(dt) {
+    game.on('update', function() {
         rS('FPS').frame();
         rS('frame').start();
         glS.start();
         rS('update').start();
 
-        if (dbgDrawActiveTile !== null) {
-            var col = dbgDrawActiveTile[0];
-            var row = dbgDrawActiveTile[1];
-            if (isCollisionTile(col, row)) {
-                util.dbgDrawTile(col, row, 'red', THREE, DbgDraw);
+        // Dbg draw - LoS from enemy to player
+        // var e = LevelController.TEMP_getEnemy();
+        // if (e) {
+        //     var p = LevelController.getLocalPlayer();
+        //
+        //     var p0 = e.getComponent('GameObjectComponent').currentGridPosition.clone();
+        //     var p1 = p.getComponent('GameObjectComponent').currentGridPosition.clone();
+        //
+        //     var hitPos = new THREE.Vector2();
+        //     var res = LevelController.checkLineOfSight(p0, p1, hitPos);
+        //
+        //     var c = 'cyan';
+        //     if (res === false) {
+        //         c = 'red';
+        //     }
+        //
+        //     util.dbgDrawTile(p0.x, p0.y, c, THREE, DbgDraw);
+        //
+        //     while (true) {
+        //         if ((res === false) && p0.equals(hitPos)) {
+        //             break;
+        //         }
+        //
+        //         var d = util.getDirection(p0.x, p0.y, p1.x, p1.y);
+        //         var o = util.getGridOffsetInDirection(d);
+        //         p0.x += o.x;
+        //         p0.y += o.y;
+        //
+        //         util.dbgDrawTile(p0.x, p0.y, c, THREE, DbgDraw);
+        //
+        //         if (p0.equals(p1)) {
+        //             break;
+        //         }
+        //     }
+        // }
+
+        {
+            var mousePos = game.mousePosition;
+            var gridPos = new THREE.Vector2();
+            util.screenToWorldCoord(game.width, game.height, mousePos, game.camera, gridPos);
+            util.worldToGridCoord(gridPos, gridPos);
+
+            if (LevelController.checkStaticCollision(gridPos)) {
+                // util.dbgDrawTile(gridPos.x, gridPos.y, 'red', THREE, DbgDraw);
             } else {
-                util.dbgDrawTile(col, row, 'green', THREE, DbgDraw);
+                util.dbgDrawTile(gridPos.x, gridPos.y, 'green', THREE, DbgDraw);
             }
         }
+
+        // Draw all static collision tiles.
+        // var staticCollisionGrid = LevelController.getStaticCollisionGrid();
+        // if (staticCollisionGrid) {
+        //     for (var j = 0; j < staticCollisionGrid.width; j++) {
+        //         for (var i = 0; i < staticCollisionGrid.height; i++) {
+        //             if (staticCollisionGrid.isWalkableAt(j, i)) {
+        //                 util.dbgDrawTile(j, i, 'green', THREE, DbgDraw);
+        //             } else {
+        //                 util.dbgDrawTile(j, i, 'red', THREE, DbgDraw);
+        //             }
+        //         }
+        //     }
+        // }
+
+        // Draw all dynamic collision tiles.
+        // var dynamicCollisionGrid = LevelController.getDynamicCollisionGrid();
+        // if (dynamicCollisionGrid) {
+        //     for (var j = 0; j < dynamicCollisionGrid.width; j++) {
+        //         for (var i = 0; i < dynamicCollisionGrid.height; i++) {
+        //             if (dynamicCollisionGrid.isWalkableAt(j, i)) {
+        //                 util.dbgDrawTile(j, i, 'green', THREE, DbgDraw);
+        //             } else {
+        //                 util.dbgDrawTile(j, i, 'red', THREE, DbgDraw);
+        //             }
+        //         }
+        //     }
+        // }
+
         if (LevelController.getLocalPlayer()) {
             var player = LevelController.getLocalPlayer();
             var actionComponent = player.getComponent('ActionComponent');
@@ -111,23 +133,9 @@ document.addEventListener("DOMContentLoaded", function() {
                 for (var i = 0; i < actionComponent.currentPath.length; i++) {
                     var col = actionComponent.currentPath[i][0];
                     var row = actionComponent.currentPath[i][1];
-                    util.dbgDrawTile(col, row, 'blue', THREE, DbgDraw);
+                    // util.dbgDrawTile(col, row, 'blue', THREE, DbgDraw);
                 }
             }
-        }
-    });
-
-    // TODO: not the actual shift modifier, but left command on mac....
-    game.TEMP_isShiftModifierDown = false;
-    game.on('keyDown', function(key) {
-        if (key === '[') {
-            game.TEMP_isShiftModifierDown = true;
-        }
-    });
-
-    game.on('keyUp', function(key) {
-        if (key === '[') {
-            game.TEMP_isShiftModifierDown = false;
         }
     });
 
@@ -141,7 +149,7 @@ document.addEventListener("DOMContentLoaded", function() {
         DbgDraw.render(game.scene);
     });
 
-    game.on('lateRender', function() {
+    game.on('frameEnd', function() {
         rS('render').end();
         rS('frame').end();
 
@@ -155,21 +163,28 @@ document.addEventListener("DOMContentLoaded", function() {
         rS('rStats').end();
     });
 
+    var bt = require('behavior-tree');
+    bt.Services.deltaTime = function() {
+        return game.time.deltaTime;
+    };
+    LevelController.init(game);
+
     game.run();
 
-    LevelLoader.loadStartup(function() {
-        LevelLoader.loadLevel(0, onLevelLoaded);
+    ResourceLoader.loadCommon(function() {
+        ResourceLoader.loadLevel(0, onLevelLoaded);
     });
 
-    function onLevelLoaded(level) {
-        LevelController.setCurrentLevel(level);
-        level = LevelController.getCurrentLevel();
+    function onLevelLoaded() {
+        LevelController.TEMP_setCurrentLevel();
 
-        var dun = ResourceMgr.getFile('levels/towndata/sector1s.dun');
-        var min = ResourceMgr.getFile('levels/towndata/town.min');
+        var FileMgr = require('./lib/core/file_mgr');
+        var dun = FileMgr.getFile('levels/towndata/sector1s.dun');
+        var til = FileMgr.getFile('levels/towndata/town.til');
+        var min = FileMgr.getFile('levels/towndata/town.min');
 
         var renderer = require('./lib/level_renderer');
-        renderer.drawDungeon(dun, min, level.tilesetInfos, game.scene);
+        renderer.drawDungeon(dun, til, min, game.scene);
 
         var NetworkMgr = require('./lib/network_mgr');
         game.networkMgr = new NetworkMgr();
@@ -181,18 +196,26 @@ document.addEventListener("DOMContentLoaded", function() {
             if (didSucceed) {
                 console.log('ON CONNECT: succeeded! sessionId: ' + sessionId);
 
-                player = _TEMP_setupPlayer();
+                player = _TEMP_setupPlayer(new THREE.Vector2(0, 0), true);
                 var networkComponent = player.getComponent('NetworkComponent');
-                networkComponent.isMine = true;
                 networkComponent.objectId = sessionId;    // TODO: object id generation; for now just use session id for player
                 networkComponent.ownerId = sessionId;
             } else {
                 console.log('ON CONNECT: failed!');
 
-                player = _TEMP_setupPlayer();
+                player = _TEMP_setupPlayer(new THREE.Vector2(11, 24), true);
+
+                // _TEMP_setupHealer(new THREE.Vector2(4, 4));
+                // _TEMP_setupObject(new THREE.Vector2(8, 3));
 
                 // Enemy.
-                var enemy = _TEMP_setupEnemy(0, -90);
+                _TEMP_setupEnemy(new THREE.Vector2(14, 21));
+                // _TEMP_setupEnemy(new THREE.Vector2(3, 2));
+                // _TEMP_setupEnemy(new THREE.Vector2(4, 2));
+                // _TEMP_setupEnemy(new THREE.Vector2(5, 2));
+                // _TEMP_setupEnemy(new THREE.Vector2(6, 2));
+                // _TEMP_setupEnemy(new THREE.Vector2(3, 3));
+                // _TEMP_setupEnemy(new THREE.Vector2(4, 4));
             }
         });
 
@@ -203,9 +226,8 @@ document.addEventListener("DOMContentLoaded", function() {
         game.networkMgr.on('playerJoined', function(data) {
             console.log('ON PLAYER JOINED: ' + data.sessionId);
 
-            var otherPlayer = _TEMP_setupPlayer();
+            var otherPlayer = _TEMP_setupPlayer(new THREE.Vector2(0, 0), false);
             var networkComponent = otherPlayer.getComponent('NetworkComponent');
-            networkComponent.isMine = false;
             networkComponent.objectId = data.sessionId;    // TODO: object id generation; for now just use session id for player
             networkComponent.ownerId = data.sessionId;
 
@@ -215,8 +237,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 sessionId: networkComponent.ownerId,
                 objectId: LevelController.getLocalPlayer().getComponent('NetworkComponent').objectId,
                 data: {
-                    x: LevelController.getLocalPlayer().positionX,
-                    y: LevelController.getLocalPlayer().positionY
+                    x: LevelController.getLocalPlayer().position.x,
+                    y: LevelController.getLocalPlayer().position.y
                 }
             });
         });
@@ -228,205 +250,493 @@ document.addEventListener("DOMContentLoaded", function() {
         game.networkMgr.connect('localhost', 8080);
     }
 
-    function _TEMP_setupPlayer() {
-        var level = LevelController.getCurrentLevel();
-
-        var Entity = require('./lib/entity');
+    function _TEMP_setupPlayer(gridPos, isMine) {
+        var Entity = require('./lib/core/entity');
+        var GameObjectComponent = require('./lib/component/game_object_component');
         var AnimComponent = require('./lib/component/anim_component');
         var ActionComponent = require('./lib/player/action_component');
         var NetworkComponent = require('./lib/component/network_component');
-        var ModelComponent = require('./lib/component/model_component');
+        var SpriteComponent = require('./lib/component/sprite_component');
+        var InputControllerComponent = require('./lib/player/input_controller_component');
 
         var entity = new Entity(game);
-        entity.addComponent(new AnimComponent(entity, game));
-        entity.addComponent(new ModelComponent(entity, game, { yOffset: -15 }));
-        entity.addComponent(new ActionComponent(entity, game));
-        entity.addComponent(new NetworkComponent(entity, game));
+        entity.addComponent(new GameObjectComponent(entity));
+        entity.addComponent(new AnimComponent(entity));
+        entity.addComponent(new SpriteComponent(entity, { yOffset: -16 }));
+        entity.addComponent(new ActionComponent(entity));
+        entity.addComponent(new NetworkComponent(entity));
+        entity.addComponent(new InputControllerComponent(entity));
+
+        if (isMine) {
+            var CameraComponent = require('./lib/player/follow_camera_component');
+
+            entity.addComponent(new CameraComponent(entity));
+        }
 
         LevelController.registerPlayer(entity);
 
+        var Signals = require('./lib/signals');
+        Signals.sendWarp(entity, gridPos);
+
         var networkComponent = entity.getComponent('NetworkComponent');
-        networkComponent.on('RPC_followPath', function(data) {
-            console.log('received: ' + data);
-            var actionComponent = entity.getComponent('ActionComponent');
-            actionComponent.currentPath = data.path;
-            actionComponent.currentPathIndex = 0;
-            actionComponent.currentTargetPosX = data.targetPosX;
-            actionComponent.currentTargetPosY = data.targetPosY;
-            entity.positionX = data.startX;
-            entity.positionY = data.startY;
-        });
-        networkComponent.on('RPC_forcePosition', function(data) {
-            entity.positionX = data.x;
-            entity.positionY = data.y;
-        });
+        networkComponent.isMine = isMine;
+        // networkComponent.on('RPC_followPath', function(data) {
+        //     console.log('received: ' + data);
+        //     var actionComponent = entity.getComponent('ActionComponent');
+        //     actionComponent.currentPath = data.path;
+        //     actionComponent.currentPathIndex = 0;
+        //     actionComponent.currentTargetPosX = data.targetPosX;
+        //     actionComponent.currentTargetPosY = data.targetPosY;
+        //     entity.position.x = data.startX;
+        //     entity.position.y = data.startY;
+        // });
+        // networkComponent.on('RPC_forcePosition', function(data) {
+        //     entity.position.x = data.x;
+        //     entity.position.y = data.y;
+        // });
         return entity;
     }
 
-    function _TEMP_setupEnemy(x, y) {
-        var level = LevelController.getCurrentLevel();
-
-        var Entity = require('./lib/entity');
-        var ModelComponent = require('./lib/component/model_component');
+    function _TEMP_setupEnemy(gridPos) {
+        var Entity = require('./lib/core/entity');
+        var GameObjectComponent = require('./lib/component/game_object_component');
+        var SpriteComponent = require('./lib/component/sprite_component');
         var AnimComponent = require('./lib/component/anim_component');
+        var ActionComponent = require('./lib/enemy/action_component');
         var BehaviourFallen = require('./lib/behaviour_fallen');
 
         var entity = new Entity(game);
-        entity.addComponent(new ModelComponent(entity, game));
-        entity.addComponent(new AnimComponent(entity, game));
-        entity.addComponent(new BehaviourFallen(entity, game));
+        entity.addComponent(new GameObjectComponent(entity));
+        entity.addComponent(new SpriteComponent(entity, { yOffset: -16 }));
+        entity.addComponent(new AnimComponent(entity));
+        entity.addComponent(new ActionComponent(entity));
+        entity.addComponent(new BehaviourFallen(entity));
 
         LevelController.registerEnemy(entity);
 
-        entity.positionX = x;
-        entity.positionY = y;
+        var Signals = require('./lib/signals');
+        Signals.sendWarp(entity, gridPos);
+
+        var goComponent = entity.getComponent('GameObjectComponent');
+        goComponent.collisionRect = new THREE.Vector2(30, 40);
+        goComponent.collisionOffset = new THREE.Vector2(0, 15);
+
+        return entity;
+    }
+
+    function _TEMP_setupHealer(gridPos) {
+        var Entity = require('./lib/core/entity');
+        var GameObjectComponent = require('./lib/component/game_object_component');
+        var SpriteComponent = require('./lib/component/sprite_component');
+        var AnimComponent = require('./lib/component/anim_component');
+
+        var entity = new Entity(game);
+        entity.addComponent(new GameObjectComponent(entity));
+        entity.addComponent(new SpriteComponent(entity, { yOffset: -16 }));
+        entity.addComponent(new AnimComponent(entity));
+
+        var animComponent = entity.getComponent('AnimComponent');
+        animComponent.play('strytell');
+
+        LevelController.registerEnemy(entity);
+
+        var goComponent = entity.getComponent('GameObjectComponent');
+        goComponent.currentGridPosition.copy(gridPos);
+        util.gridToWorldCoord(gridPos, entity.position);
+
+        goComponent.collisionRect = new THREE.Vector2(32, 62);
+        goComponent.collisionOffset = new THREE.Vector2(0, 30);
+
+        var self = goComponent;
+        goComponent.onStart = function() {
+            self.entity.addSignalListener('interact', self._onInteract.bind(self));
+        };
+
+        goComponent._onInteract = function (fromEntity) {
+            console.log('Stay awhile and listen...');
+
+            // TODO: heal player (fromEntity)
+        };
+
+        return entity;
+    }
+
+    function _TEMP_setupObject(gridPos) {
+        var Entity = require('./lib/core/entity');
+        var GameObjectComponent = require('./lib/component/game_object_component');
+        var SpriteComponent = require('./lib/component/sprite_component');
+
+        var entity = new Entity(game);
+        entity.addComponent(new GameObjectComponent(entity));
+        entity.addComponent(new SpriteComponent(entity, { yOffset: -16 }));
+
+        LevelController.registerEnemy(entity);
+
+        var goComponent = entity.getComponent('GameObjectComponent');
+        goComponent.currentGridPosition.copy(gridPos);
+        util.gridToWorldCoord(gridPos, entity.position);
+
+        goComponent.collisionRect = new THREE.Vector2(32, 26);
+        goComponent.collisionOffset = new THREE.Vector2(-5, 0);
+
+        var SpriteMgr = require('./lib/core/sprite_mgr');
+        var self = goComponent;
+
+        goComponent.onStart = function() {
+            self.entity.addSignalListener('interact', self._onInteract.bind(self));
+
+            var sprite = SpriteMgr.getSprite('chest1');
+            self.spriteClosed = sprite[0];
+            self.spriteOpened = sprite[2];
+
+            self.spriteComponent.setSprite(self.spriteClosed);
+        };
+
+        goComponent._onInteract = function (fromEntity) {
+            self.spriteComponent.setSprite(self.spriteOpened);
+            self.isTargetable = false;
+        };
 
         return entity;
     }
 });
 
-},{"./lib/behaviour_fallen":3,"./lib/component/anim_component":4,"./lib/component/model_component":5,"./lib/component/network_component":6,"./lib/entity":10,"./lib/game":11,"./lib/level_controller":13,"./lib/level_loader":14,"./lib/level_renderer":15,"./lib/network_mgr":16,"./lib/player/action_component":17,"./lib/resource_mgr":18,"./lib/util":19,"three-debug-draw":60}],2:[function(require,module,exports){
+},{"./lib/behaviour_fallen":2,"./lib/component/anim_component":3,"./lib/component/game_object_component":4,"./lib/component/network_component":5,"./lib/component/sprite_component":6,"./lib/core/entity":8,"./lib/core/file_mgr":9,"./lib/core/sprite_mgr":13,"./lib/enemy/action_component":14,"./lib/game":15,"./lib/level_controller":16,"./lib/level_renderer":17,"./lib/network_mgr":18,"./lib/player/action_component":19,"./lib/player/follow_camera_component":20,"./lib/player/input_controller_component":21,"./lib/resource_loader":22,"./lib/signals":23,"./lib/util":24,"behavior-tree":26,"three-debug-draw":83}],2:[function(require,module,exports){
 'use strict';
 
-var animDatas = [];
+var inherits = require('inherits'),
+    Component = require('./core/component');
 
-function _addData(animData) {
-    animDatas.push(animData);
+var LevelController = require('./level_controller'),
+    util = require('./util'),
+    DbgDraw = require('three-debug-draw')(THREE);
+
+var bt = require('behavior-tree');
+
+function buildBehaviorTree(fallen) {
+    var idle =
+        bt.Sequence()
+            .addChild(bt.Action({ update: fallen._idleAction.bind(fallen) }));
+
+    var attack =
+        bt.Sequence()
+            .addChild(bt.Action({ update: fallen._moveToTargetAction.bind(fallen) }))
+            .addChild(bt.Sequence()
+                .addChild(bt.Action({ update: fallen._attackTargetAction.bind(fallen) }))
+                .addChild(bt.Action({ update: fallen._attackTargetWaitAction.bind(fallen) }))
+            );
+
+    var retreat =
+        bt.Sequence()
+            .addChild(bt.Action({ update: fallen._selectRetreatPointAction.bind(fallen) }))
+            .addChild(bt.Action({ update: fallen._moveToRetreatPointAction.bind(fallen) }))
+            .addChild(bt.WaitAction(2));
+
+    return bt.PrioritySelector()
+        .addChild(retreat, fallen._checkRetreatCondition.bind(fallen))
+        .addChild(attack, fallen._checkAttackCondition.bind(fallen))
+        .addChild(idle);
 }
-
-function _getAnimData(animName) {
-    for (var i = 0; i < animDatas.length; i++) {
-        var data = animDatas[i][animName];
-        if (data) {
-            return data;
-        }
-    }
-
-    console.warn('Animation [' + animName + '] not found.');
-    return null;
-}
-
-module.exports = {
-    addData: _addData,
-    getAnimData: _getAnimData
-};
-
-},{}],3:[function(require,module,exports){
-'use strict';
 
 var START_HEALTH = 2;
 
-function BehaviourFallen (entity, game) {
-    this.entity = entity;
-    this.game = game;
-    this.THREE = game.THREE;
+function BehaviourFallen (entity) {
+    Component.call(this, entity);
+
+    this.game = entity.game;
+    this.THREE = this.game.THREE;
 
     this.health = START_HEALTH;
     this.isDead = false;
 
     this.deadElapsedTime = 0;
 
-    this.isTargeted = false;
+    this.entity.addSignalListener('damage', this._onDamaged.bind(this));
+
+    this.targetEntity = null;
+    this.shouldRetreat = false;
 }
 
-BehaviourFallen.prototype.TEMP_doDamage = function() {
+inherits(BehaviourFallen, Component);
+
+BehaviourFallen.prototype._idleAction = function () {
+    // console.log('idle...');
+    this.actionComponent.stopMoving();
+    return bt.Status.SUCCESS;
+};
+
+BehaviourFallen.prototype._checkRetreatCondition = function () {
+    if (!this.actionComponent.isIdle()) {
+        return false;
+    }
+
+    if (this.shouldRetreat) {
+        return true;
+    }
+
+    // if (this.game.isKeyDown(49)) {
+    //     console.log('RETREAT!');
+    //     return true;
+    // }
+
+    return false;
+};
+
+BehaviourFallen.prototype._selectRetreatPointAction = function () {
+    console.log('select retreat point');
+
+    var currentPosition = this.gameObjectComponent.currentGridPosition;
+
+    var xOffset = util.getRandomInt(3, 5);
+    if (util.getRandomInt(0, 2) === 0) {
+        xOffset *= -1;
+    }
+    var yOffset = util.getRandomInt(3, 5);
+    if (util.getRandomInt(0, 2) === 0) {
+        yOffset *= -1;
+    }
+
+    var retreatPosition = new THREE.Vector2(currentPosition.x - xOffset, currentPosition.y - yOffset);
+
+    this.actionComponent.requestMove(retreatPosition);
+
+    return bt.Status.SUCCESS;
+};
+
+BehaviourFallen.prototype._moveToRetreatPointAction = function () {
+    // console.log('retreating...');
+
+    if (this.actionComponent.isMoving()) {
+        return bt.Status.RUNNING;
+    }
+
+    this.shouldRetreat = false;
+    return bt.Status.SUCCESS;
+};
+
+var FOLLOW_RANGE = 8;
+
+BehaviourFallen.prototype._checkAttackCondition = function () {
+    if (!this.actionComponent.isIdle()) {
+        return false;
+    }
+
+    // Target selection.
+    this.targetEntity = LevelController.getNearestPlayerInRange(this.gameObjectComponent.currentGridPosition, FOLLOW_RANGE);
+
+    if (this.targetEntity !== null) {
+        // console.log('go!!!');
+        return true;
+    }
+
+    return false;
+};
+
+BehaviourFallen.prototype._moveToTargetAction = function () {
+    if (this.targetEntity === null) {
+        return bt.Status.FAILURE;
+    }
+
+    var targetGridPos = this.targetEntity.getComponent('GameObjectComponent').currentGridPosition;
+    var myGridPos = this.gameObjectComponent.currentGridPosition;
+    var diffX = Math.abs(targetGridPos.x - myGridPos.x);
+    var diffY = Math.abs(targetGridPos.y - myGridPos.y);
+
+    // Too far.
+    if (diffX + diffY > (FOLLOW_RANGE * 2)) {
+        return bt.Status.FAILURE;
+    }
+
+    if (diffX <= 1 && diffY <= 1) {
+        if (this.actionComponent.isMoving()) {
+            this.actionComponent.stopMoving();
+            return bt.Status.RUNNING;
+        }
+        else {
+            return bt.Status.SUCCESS;
+        }
+    }
+
+    var breadCrumb = LevelController.getNewestBreadcrumb(0, myGridPos);
+    if (!breadCrumb) {
+        return bt.Status.FAILURE;
+    }
+
+    // {
+    //     var p = new THREE.Vector2();
+    //     util.gridToWorldCoord(breadCrumb.gridPosition, p);
+    //     p.z = 1000;
+    //     DbgDraw.drawSphere(p, 8.0, 'magenta');
+    // }
+
+    this.actionComponent.requestMove(breadCrumb.gridPosition);
+
+    // console.log('moving to target');
+    return bt.Status.RUNNING;
+};
+
+BehaviourFallen.prototype._attackTargetAction = function () {
+    // TODO: what should happen if we're about to attack but we get attacked?
+    if (!this.actionComponent.isIdle()) {
+        return bt.Status.FAILURE;
+    }
+
+    this.actionComponent.attackInDirection (this.targetEntity.getComponent('GameObjectComponent').currentGridPosition);
+
+    // console.log('do attack!');
+
+    return bt.Status.SUCCESS;
+};
+
+BehaviourFallen.prototype._attackTargetWaitAction = function () {
+    if (this.actionComponent.isAttacking()) {
+        return bt.Status.RUNNING;
+    }
+
+    return bt.Status.SUCCESS;
+};
+
+BehaviourFallen.prototype._onDamaged = function (info) {
     if (this.isDead) {
         return;
     }
+
+    // console.log('take damage: ' + info.amount);
 
     this.health -= 1;
 
     if (this.health <= 0) {
         this.isDead = true;
-        this.animComponent.play('phalld_0');
-        this.TEMP_TargetOff();
 
         this.deadElapsedTime = 0;
+
+        // Don't allow targeting while dead.
+        this.entity.getComponent('GameObjectComponent').isTargetable = false;
+
+        this.actionComponent.die();
+
+        // TODO:
+        // Alert player.
+        info.fromEntity.getComponent('ActionComponent').TEMP_onEnemyKilled();
+
+        // TODO: alert all other enemies and set retreat flag
+        var enemies = LevelController.TEMP_getEnemies();
+        for (var i = 0; i < enemies.length; i++) {
+            if (!enemies[i].getComponent('BehaviourFallen').isDead) {
+                enemies[i].getComponent('BehaviourFallen').shouldRetreat = true;
+            }
+        }
+    }
+    else {
+        this.actionComponent.takeDamage();
     }
 };
 
 BehaviourFallen.prototype.TEMP_respawn = function () {
     this.health = START_HEALTH;
-    this.animComponent.play('phalln_0');
+    this.actionComponent.idle();
 
     this.isDead = false;
-};
 
-BehaviourFallen.prototype.TEMP_TargetOn = function() {
-    if (this.isDead) {
-        return;
-    }
-
-    this.isTargeted = true;
-};
-
-BehaviourFallen.prototype.TEMP_TargetOff = function() {
-    this.isTargeted = false;
+    this.entity.getComponent('GameObjectComponent').isTargetable = true;
 };
 
 BehaviourFallen.prototype.start = function() {
     this.animComponent = this.entity.getComponent('AnimComponent');
 
-    // TODO: temporary anim-event system
+    this._registerAnimEvents();
+
+    this.tree = buildBehaviorTree(this);
+
+    this.actionComponent = this.entity.getComponent('ActionComponent');
+    this.gameObjectComponent = this.entity.getComponent('GameObjectComponent');
+};
+
+BehaviourFallen.prototype._registerAnimEvents = function () {
+    // TODO: cleaner way to do this for all 8 directions?
+
+    var i;
     var self = this;
-    this.animComponent.onFrameEndCallback = function(animName, frameNum) {
-        if (animName.substring(0, 6) === 'phalld') {
-            if (frameNum === 17) {
-                self.animComponent.stop();
-            }
-        }
-    };
 
-    this.animComponent.play('phalln_0');
+    function doDieEnd() {
+        self.animComponent.stop();
+    }
+
+    for (i = 0; i < 8; i++) {
+        this.animComponent.registerCallback('phalld_' + i, doDieEnd);
+    }
 };
 
-BehaviourFallen.prototype.destroy = function() {
-
-};
-
-BehaviourFallen.prototype.update = function(dt) {
+BehaviourFallen.prototype.update = function() {
     if (this.isDead) {
-        this.deadElapsedTime += dt;
+        this.deadElapsedTime += this.game.time.deltaTime;
 
         if (this.deadElapsedTime >= 5) {
             this.TEMP_respawn();
         }
     }
 
-    this.animComponent.TEMP_isTargeted = this.isTargeted;
+    this.tree.tick();
 };
 
 module.exports = BehaviourFallen;
 
-},{}],4:[function(require,module,exports){
+},{"./core/component":7,"./level_controller":16,"./util":24,"behavior-tree":26,"inherits":56,"three-debug-draw":83}],3:[function(require,module,exports){
 'use strict';
 
-var MaterialMgr = require('./../core/material_mgr'),
-    AnimData = require('./../anim_data');
+var inherits = require('inherits'),
+    Component = require('./../core/component'),
+    assert = require('assert'),
+    SpriteMgr = require('./../core/sprite_mgr');
 
-function AnimComponent (entity, game) {
-    this.entity = entity;
-    this.game = game;
-    this.THREE = THREE;
+function AnimComponent (entity) {
+    Component.call(this, entity);
+
+    this.game = entity.game;
 
     var fps = 30;    // TODO:
     this.timePerFrame = 1 / fps;
     this.currentFrame = 0;
     this.elapsedTime = 0;
 
-    this.currentAnimData = null;
+    this.currentSprite = null;
     this.currentAnimName = null;
 
     this.forceImmediateChange = false;
-    this.onFrameEndCallback = null;
+    this.callbacks = {};
 }
 
+inherits(AnimComponent, Component);
+
 AnimComponent.prototype.start = function () {
-    this.modelComponent = this.entity.getComponent('ModelComponent');
+    this.spriteComponent = this.entity.getComponent('SpriteComponent');
 };
 
-AnimComponent.prototype.destroy = function() {
+AnimComponent.prototype.registerCallback = function (animName, frameNum, callback) {
+    if (!this.callbacks.hasOwnProperty(animName)) {
+        this.callbacks[animName] = {};
+    }
 
+    var entry = this.callbacks[animName];
+
+    // If a frame number is not specified, use the last frame.
+    if (isNaN(frameNum)) {
+        var sprite = SpriteMgr.getSprite(animName);
+        if (!sprite) {
+            console.warn('Animation data for [' + animName + '] not found. Unable to register callback.');
+            return;
+        }
+
+        callback = frameNum;    // callback was second parameter
+        frameNum = sprite.length - 1;
+    }
+
+    if (entry.hasOwnProperty(frameNum)) {
+        console.warn('Callback already registered for [' + animName + '] at frame [' + frameNum + ']');
+        return;
+    }
+
+    entry[frameNum] = callback;
 };
 
 AnimComponent.prototype.play = function (animName) {
@@ -435,13 +745,14 @@ AnimComponent.prototype.play = function (animName) {
         return;
     }
 
-    var animData = AnimData.getAnimData(animName);
-    if (!animData) {
+    var sprite = SpriteMgr.getSprite(animName);
+    if (!sprite) {
+        console.warn('Unable to play animation: ' + animName);
         return;
     }
 
     // console.log('Play [' + animName + '].');
-    this.currentAnimData = animData;
+    this.currentSprite = sprite;
     this.currentAnimName = animName;
     this.currentFrame = 0;
     this.elapsedTime = 0;
@@ -450,91 +761,207 @@ AnimComponent.prototype.play = function (animName) {
 };
 
 AnimComponent.prototype.stop = function() {
-    this.currentAnimData = null;
+    this.currentSprite = null;
 };
 
-AnimComponent.prototype.update = function(dt) {
-    if (!this.currentAnimData) {
+AnimComponent.prototype.update = function() {
+    if (!this.currentSprite) {
         this.elapsedTime = 0;
         return;
     }
 
-    var mesh = this.modelComponent.mesh;
-
     if (this.forceImmediateChange) {
-        this._onChangeFrame(mesh);
+        this._onChangeFrame();
         this.forceImmediateChange = false;
     }
 
     if (this.elapsedTime > this.timePerFrame) {
-        // Current frame is finished.
-        if (this.onFrameEndCallback) {
-            this.onFrameEndCallback(this.currentAnimName, this.currentFrame);
+        // Current frame is finished - trigger callback.
+        this._doCallback(this.currentAnimName, this.currentFrame);
 
-            // If the callback stopped the animation, exit.
-            if (!this.currentAnimData) {
-                return;
-            }
+        // If the callback stopped the animation, exit.
+        if (!this.currentSprite) {
+            return;
         }
 
         // Start next frame.
-        this.currentFrame = (this.currentFrame + 1) % this.currentAnimData.frameCount;
-        this._onChangeFrame(mesh);
+        this.currentFrame = (this.currentFrame + 1) % this.currentSprite.length;
+        this._onChangeFrame();
         this.elapsedTime = 0;
     } else {
-        this.elapsedTime += dt;
+        this.elapsedTime += this.game.time.deltaTime;
     }
 };
 
-AnimComponent.prototype._onChangeFrame = function (mesh) {
-    var textureId = this.currentAnimData.textureIds[this.currentFrame];
-    var desiredMaterial;
-
-    if (this.TEMP_isTargeted) {
-        desiredMaterial = MaterialMgr.getSelectedTargetMaterial(textureId);
-    } else {
-        desiredMaterial = MaterialMgr.getBasicMaterial(textureId);
+AnimComponent.prototype._doCallback = function (animName, frameNum) {
+    var entry = this.callbacks[animName];
+    if (entry) {
+        entry = entry[frameNum];
+        if (entry) {
+            entry();
+        }
     }
+};
 
-    if (mesh.material !== desiredMaterial) {
-        mesh.material = desiredMaterial;
+AnimComponent.prototype._onChangeFrame = function () {
+    assert(this.currentSprite !== null);
+    assert(this.currentFrame < this.currentSprite.length);
 
-        // TODO: can we remove this?
-        // Since the initial blank material for the geometry may not have had
-        // UV coordinates, we need to refresh the buffers completely for
-        // the UV coordinates of the new material to take effect.
-        mesh.geometry.buffersNeedUpdate = true;
-    }
-
-    var uvs = this.currentAnimData.uvs[this.currentFrame];
-    mesh.geometry.faceVertexUvs[0][0] = [
-            new this.THREE.Vector2(uvs[2], uvs[3]),
-            new this.THREE.Vector2(uvs[4], uvs[5]),
-            new this.THREE.Vector2(uvs[0], uvs[1])
-        ];
-    mesh.geometry.faceVertexUvs[0][1] = [
-        new this.THREE.Vector2(uvs[4], uvs[5]),
-        new this.THREE.Vector2(uvs[6], uvs[7]),
-        new this.THREE.Vector2(uvs[0], uvs[1])
-        ];
-    mesh.geometry.uvsNeedUpdate = true;
-
-    // Change the scale of the mesh to match the width/height of this animation.
-    var dimensions = this.currentAnimData.dimensions[this.currentFrame];
-    mesh.scale.set(dimensions[0], dimensions[1], 1);
+    this.spriteComponent.setSprite(this.currentSprite[this.currentFrame]);
 };
 
 module.exports = AnimComponent;
 
-},{"./../anim_data":2,"./../core/material_mgr":8}],5:[function(require,module,exports){
+},{"./../core/component":7,"./../core/sprite_mgr":13,"assert":85,"inherits":56}],4:[function(require,module,exports){
 'use strict';
 
-var util = require('./../util');
+var inherits = require('inherits'),
+    assert = require('assert'),
+    Component = require('./../core/component'),
+    MaterialMgr = require('./../core/material_mgr'),
+    util = require('./../util'),
+    DbgDraw = require('three-debug-draw')(THREE);
 
-function ModelComponent (entity, game, options) {
-    this.entity = entity;
-    this.game = game;
-    this.THREE = game.THREE;
+var LevelController = require('./../level_controller');
+
+function GameObjectComponent (entity) {
+    Component.call(this, entity);
+
+    this.game = entity.game;
+
+    this.currentGridPosition = new THREE.Vector2();
+
+    this.isTargeted = false;
+    this.targetedFrame = -1;
+    this.isTargetable = true;
+
+    this.collisionRect = new THREE.Vector2();
+    this.collisionOffset = new THREE.Vector2();
+
+    this.entity.addSignalListener('target', this._onTargeted.bind(this));
+    this.entity.addSignalListener('warp', this._onWarp.bind(this));
+    this.game.on('frameEnd', this._frameEnd.bind(this));
+}
+
+inherits(GameObjectComponent, Component);
+
+GameObjectComponent.prototype.start = function() {
+    this.spriteComponent = this.entity.getComponent('SpriteComponent');
+
+    var self = this;
+    this.spriteComponent.onSelectMaterialCallback = function(textureId) {
+        if (self.isTargeted) {
+            if (self.entity.getComponent('BehaviourFallen')) {
+                return MaterialMgr.getSelectedTargetMaterial(textureId);
+            } else {
+                return MaterialMgr.getSelectedTargetMaterial2(textureId);
+            }
+        } else {
+            return MaterialMgr.getBasicMaterial(textureId);
+        }
+    };
+};
+
+GameObjectComponent.prototype.destroy = function() {
+    this.game.removeListener('frameEnd', this._frameEnd.bind(this));
+};
+
+GameObjectComponent.prototype._onWarp = function (gridPos) {
+    this.setGridPosition(gridPos);
+    util.gridToWorldCoord(gridPos, this.entity.position);
+};
+
+GameObjectComponent.prototype._onTargeted = function () {
+    assert(this.isTargetable);
+
+    this.isTargeted = true;
+    this.targetedFrame = this.game.time.frameCount;
+
+    this.spriteComponent.requestMaterialChange();
+};
+
+GameObjectComponent.prototype._onUntargeted = function () {
+    assert(this.isTargeted);
+
+    this.isTargeted = false;
+
+    this.spriteComponent.requestMaterialChange();
+};
+
+/**
+ * Set the grid position of this entity.
+ */
+GameObjectComponent.prototype.setGridPosition = function (gridPosition) {
+    // Ignore if we are already at this position.
+    if (gridPosition.equals(this.currentGridPosition)) {
+        return;
+    }
+
+    // Update collision.
+    LevelController.unsetDynamicCollision(this.currentGridPosition);
+    LevelController.setDynamicCollision(gridPosition);
+
+    this.currentGridPosition.copy(gridPosition);
+};
+
+GameObjectComponent.prototype.update = function() {
+    // Entity collision debug draw:
+    // var centerPosX = this.entity.position.x + this.collisionOffset.x;
+    // var centerPosY = this.entity.position.y + this.collisionOffset.y;
+    // var halfWidth = this.collisionRect.x * 0.5;
+    // var halfHeight = this.collisionRect.y * 0.5;
+    // DbgDraw.drawLineStrip([
+    //     new THREE.Vector3(centerPosX - halfWidth, centerPosY - halfHeight, 1000),
+    //     new THREE.Vector3(centerPosX + halfWidth, centerPosY - halfHeight, 1000),
+    //     new THREE.Vector3(centerPosX + halfWidth, centerPosY + halfHeight, 1000),
+    //     new THREE.Vector3(centerPosX - halfWidth, centerPosY + halfHeight, 1000),
+    //     new THREE.Vector3(centerPosX - halfWidth, centerPosY - halfHeight, 1000)],
+    //     'red');
+};
+
+GameObjectComponent.prototype._frameEnd = function () {
+    if (this.isTargeted) {
+        if (this.targetedFrame !== this.game.time.frameCount) {
+            this._onUntargeted();
+        }
+    }
+};
+
+module.exports = GameObjectComponent;
+
+},{"./../core/component":7,"./../core/material_mgr":11,"./../level_controller":16,"./../util":24,"assert":85,"inherits":56,"three-debug-draw":83}],5:[function(require,module,exports){
+'use strict';
+
+var inherits = require('inherits'),
+    Component = require('./../core/component');
+
+function NetworkComponent (entity) {
+    Component.call(this, entity, { requireUpdate: false });
+
+    this.networkMgr = entity.game.networkMgr;
+    this.isMine = true;
+    this.objectId = -1;
+    this.ownerId = -1;
+
+    this.networkMgr.registerObject(this);
+}
+
+inherits(NetworkComponent, Component);
+
+module.exports = NetworkComponent;
+
+},{"./../core/component":7,"inherits":56}],6:[function(require,module,exports){
+'use strict';
+
+var inherits = require('inherits'),
+    Component = require('./../core/component'),
+    util = require('./../util');
+
+function SpriteComponent (entity, options) {
+    Component.call(this, entity);
+
+    this.game = entity.game;
+    this.THREE = this.game.THREE;
 
     options = options || {};
 
@@ -552,7 +979,6 @@ function ModelComponent (entity, game, options) {
     geometry.faces.push(new this.THREE.Face3(0, 1, 3));
     geometry.faces.push(new this.THREE.Face3(1, 2, 3));
 
-    // UVs - actual UV coords will be set by animation.
     geometry.faceVertexUvs = [[]];
     geometry.computeBoundingSphere();
 
@@ -561,6 +987,9 @@ function ModelComponent (entity, game, options) {
         new this.THREE.MeshBasicMaterial({ color: 'magenta' }));
     this.mesh.scale.set(96, 96, 1);    // arbitrary initialization size
     this.game.scene.add(this.mesh);
+
+    this.onSelectMaterialCallback = null;
+    this.currentTextureId = -1;
 
     // For debugging the mesh position:
     // this.testMesh = new this.THREE.Mesh(geometry,
@@ -571,22 +1000,54 @@ function ModelComponent (entity, game, options) {
     // this.game.scene.add(this.testMesh);
 }
 
-ModelComponent.prototype.start = function () {
+inherits(SpriteComponent, Component);
 
-};
-
-ModelComponent.prototype.destroy = function() {
+SpriteComponent.prototype.destroy = function() {
     this.game.scene.remove(this.mesh);
 };
 
-ModelComponent.prototype.update = function(dt) {
-    var posX = this.entity.positionX;
-    var posY = this.entity.positionY;
+SpriteComponent.prototype.setSprite = function(spriteInfo) {
+    this.mesh.scale.set(spriteInfo.w, spriteInfo.h, 1);
+
+    var uvs = spriteInfo.uvs;
+    this.mesh.geometry.faceVertexUvs[0][0] = [uvs[1], uvs[2], uvs[0]];
+    this.mesh.geometry.faceVertexUvs[0][1] = [uvs[2], uvs[3], uvs[0]];
+    this.mesh.geometry.uvsNeedUpdate = true;
+
+    // Update material if texture id changed.
+    var textureId = spriteInfo.textureId;
+    if (this.currentTextureId !== textureId) {
+        this.currentTextureId = textureId;
+
+        this.requestMaterialChange();
+    }
+};
+
+SpriteComponent.prototype.requestMaterialChange = function() {
+    // Trigger callback.
+    var desiredMaterial = this.onSelectMaterialCallback(this.currentTextureId);
+
+    // Update material if it changed.
+    if (this.mesh.material !== desiredMaterial) {
+        this.mesh.material = desiredMaterial;
+
+        // TODO: can we remove this?
+        // Since the initial blank material for the geometry may not have had
+        // UV coordinates, we need to refresh the buffers completely for
+        // the UV coordinates of the new material to take effect.
+        this.mesh.geometry.buffersNeedUpdate = true;
+    }
+};
+
+SpriteComponent.prototype.update = function() {
+    var posX = this.entity.position.x;
+    var posY = this.entity.position.y;
 
     // TODO: by using the fact that our tiles are rendered as the sum of col + row (zcoord),
     // we can use the same formula to place our player correctly.
-    var gridCoord = util.worldToGridCoord(posX, posY);
-    var TODO_zOffset = gridCoord.col + gridCoord.row;
+    var gridCoord = new THREE.Vector2();
+    util.worldToGridCoord(this.entity.position, gridCoord);
+    var TODO_zOffset = gridCoord.x + gridCoord.y;
 
     // Offset the mesh so that entity position is anchored to bottom of quad (and not the center).
     var totalYOffset = this.mesh.scale.y / 2 + this.yOffset;
@@ -598,95 +1059,338 @@ ModelComponent.prototype.update = function(dt) {
     // this.testMesh.position.set(posX, posY + totalYOffset, TODO_zOffset + 100);
 };
 
-module.exports = ModelComponent;
+module.exports = SpriteComponent;
 
-},{"./../util":19}],6:[function(require,module,exports){
+},{"./../core/component":7,"./../util":24,"inherits":56}],7:[function(require,module,exports){
 'use strict';
 
-// Inherit EventEmitter to allow event listeners to be registered directly to this object.
-require('inherits')(NetworkComponent, require('events').EventEmitter);
-
-function NetworkComponent (entity, game) {
+/**
+ * Base class for all components.
+ */
+function Component (entity, params) {
     this.entity = entity;
-    this.game = game;
 
-    this.networkMgr = game.networkMgr;
-    this.isMine = true;
-    this.objectId = -1;
-    this.ownerId = -1;
+    params = params || {};
 
-    this.networkMgr.registerObject(this);
+    // Allow derived components to disable update call.
+    this.requireUpdate = (typeof params.requireUpdate === 'undefined') ? true : params.requireUpdate;
+
+    // Allow callbacks and other logic to be setup from outside of the component.
+    // Allows easier re-use of components.
+    this.onStart = null;
 }
 
-NetworkComponent.prototype.start = function () {
+Component.prototype.startImpl = function () {
+    this.start();
+
+    if (this.onStart) {
+        this.onStart();
+    }
+};
+
+Component.prototype.start = function () {
 
 };
 
-NetworkComponent.prototype.destroy = function() {
+Component.prototype.destroy = function() {
 
 };
 
-NetworkComponent.prototype.update = function(dt) {
+Component.prototype.update = function() {
 
 };
 
-module.exports = NetworkComponent;
+module.exports = Component;
 
-},{"events":68,"inherits":38}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
+'use strict';
+
+var Vector2 = THREE.Vector2,
+    EventEmitter = require("events").EventEmitter;
+
+function Entity (game) {
+    this.game = game;
+    this.position = new Vector2();
+    this.components = [];
+    this.updateableComponents = [];
+    this.eventEmitter = new EventEmitter();
+
+    this.game.on('update', this._update.bind(this));
+
+    this.didCallStart = false;
+}
+
+Entity.prototype._start = function () {
+    for (var i = 0; i < this.components.length; i++) {
+        this.components[i].startImpl();
+    }
+
+    this.didCallStart = true;
+};
+
+Entity.prototype.destroy = function() {
+    for (var i = 0; i < this.components.length; i++) {
+        this.components[i].destroy();
+    }
+
+    this.eventEmitter.removeAllListeners();
+    this.game.removeListener('update', this._update.bind(this));
+};
+
+/**
+ * Add a component to this entity.
+ */
+Entity.prototype.addComponent = function(component) {
+    this.components.push(component);
+
+    if (component.requireUpdate) {
+        this.updateableComponents.push(component);
+    }
+};
+
+/**
+ * Gets a component by class (constructor) name.
+ * Returns null if the component is not found.
+ */
+Entity.prototype.getComponent = function(componentName) {
+    for (var i = 0; i < this.components.length; i++) {
+        if (this.components[i].constructor.name == componentName) {
+            return this.components[i];
+        }
+    }
+
+    return null;
+};
+
+/**
+ * Send a signal to the entity which can be handled by a component
+ * of this entity.
+ */
+Entity.prototype.sendSignal = function (signalType) {
+    switch (arguments.length) {
+        case 1:
+            this.eventEmitter.emit(signalType);
+            break;
+        case 2:
+            this.eventEmitter.emit(signalType, arguments[1]);
+            break;
+        case 3:
+            this.eventEmitter.emit(signalType, arguments[1], arguments[2]);
+            break;
+        default:
+            // Slowest case - for multiple arguments.
+            var len = arguments.length;
+            var args = new Array(len - 1);
+            for (var i = 1; i < len; i++) {
+                args[i - 1] = arguments[i];
+            }
+            this.eventEmitter.emit(signalType, args);
+    }
+};
+
+/**
+ * Add a listener to handle the given signal type.
+ */
+Entity.prototype.addSignalListener = function (signalType, listener) {
+    this.eventEmitter.addListener(signalType, listener);
+};
+
+/**
+ * Remove a listener from handling the given signal type.
+ */
+Entity.prototype.removeSignalListener = function (signalType, listener) {
+    this.eventEmitter.removeListener(signalType, listener);
+};
+
+Entity.prototype._update = function() {
+    // Trigger 'start' on first update.
+    if (!this.didCallStart) {
+        this._start();
+    }
+
+    for (var i = 0; i < this.updateableComponents.length; i++) {
+        this.updateableComponents[i].update();
+    }
+};
+
+module.exports = Entity;
+
+},{"events":90}],9:[function(require,module,exports){
+'use strict';
+
+var util = require('./../util'),
+    async = require('async'),
+    DFormats = require('diablo-file-formats'),
+    pathLib = require('path');
+
+function loadFileImpl(path, userCallback) {
+    return function(asyncCallback) {
+        util.requestReadFile(path, function(err, res, buffer) {
+            if (err) {
+                console.error('Unable to load data file: ' + path);
+                throw err;
+            }
+
+            userCallback(buffer);
+            asyncCallback();
+        });
+    };
+}
+
+function createFileImpl(path, buffer) {
+    switch (pathLib.extname(path)) {
+        case '.pal':
+            return DFormats.Pal.load(buffer, path);
+        case '.cel':
+            return DFormats.Cel.load(buffer, path);
+        case '.cl2':
+            return DFormats.Cl2.load(buffer, path);
+        case '.min':
+            return DFormats.Min.load(buffer, path);
+        case '.til':
+            return DFormats.Til.load(buffer, path);
+        case '.sol':
+            return DFormats.Sol.load(buffer, path);
+        case '.dun':
+            return DFormats.Dun.load(buffer, path);
+        default:
+            console.warn('Unhandled extension: ' + pathLib.extname(path));
+    }
+
+    return null;
+}
+
+function createFileLoader(loadUnit, path) {
+    return loadFileImpl(path, function(buffer) {
+        var file = createFileImpl(path, buffer);
+
+        if (file) {
+            // Duplicate check.
+            if (loadedFiles[path]) {
+                console.warn('File already loaded: ' + path);
+                return;
+            }
+
+            loadedFiles[path] = file;
+            loadedFileInfos[path] = { loadUnit: loadUnit };
+        } else {
+            console.warn('Unable to load file: ' + path);
+        }
+    });
+}
+
+var loadedFiles = {};
+var loadedFileInfos = {};
+
+/**
+ * Loads a list of files into the specific load unit.
+ */
+function _loadFiles(loadUnit, paths, onFinishedCallback) {
+    var fileLoaderWork = new Array(paths.length);
+    for (var i = 0; i < paths.length; i++) {
+        fileLoaderWork[i] = createFileLoader(loadUnit, paths[i]);
+    }
+
+    async.series(fileLoaderWork, function() {
+        onFinishedCallback();
+    });
+}
+
+/**
+ * Unloads files for a given load unit.
+ */
+function _unloadFiles(loadUnit) {
+    // Gather list of paths to delete.
+    var unloadPaths = [];
+    for (var key in loadedFileInfos) {
+        var info = loadedFileInfos[key];
+        if (info.loadUnit === loadUnit) {
+            unloadPaths.push(key);
+        }
+    }
+
+    // Perform deletion.
+    for (var i = 0; i < unloadPaths.length; i++) {
+        var path = unloadPaths[i];
+        delete loadedFiles[path];
+        delete loadedFileInfos[path];
+    }
+}
+
+/**
+ * Unloads all files.
+ */
+function _unloadAllFiles() {
+    loadedFiles = {};
+    loadedFileInfos = {};
+}
+
+/**
+ * Gets a file.
+ */
+function _getFile(fileName) {
+    return loadedFiles[fileName];
+}
+
+module.exports = {
+    loadFiles: _loadFiles,
+    unloadFiles: _unloadFiles,
+    unloadAllFiles: _unloadAllFiles,
+    getFile: _getFile
+};
+
+},{"./../util":24,"async":25,"diablo-file-formats":39,"path":93}],10:[function(require,module,exports){
 'use strict';
 
 var Packer = require('./packer'),
     assert = require('assert');
 
-function createIndexOffsets(decodedFrameLists, frameListToIndexOffsetLUT) {
-    // Offset is simply the total # of frames before a list's first frame.
-    var offset = 0;
-    for (var i = 0; i < decodedFrameLists.length; i++) {
-        frameListToIndexOffsetLUT[i] = offset;
-        offset += decodedFrameLists[i].length;
-    }
-}
+var Vector2 = THREE.Vector2;
 
-function createBufferInfos(maxWidth, maxHeight, decodedFrameLists, indexToBufferIndexLUT, bufferInfos) {
+var BYTES_PER_PIXEL = 4;    // RGBA
+
+/**
+ * Attempts to pack and arrange all frame data efficiently onto fixed-size shared buffers.
+ */
+function createBufferInfos(maxWidth, maxHeight, decodedFrames, frameInfos, bufferInfos) {
     var currentBufferIndex = 0;
     var packer = new Packer(maxWidth, maxHeight);
     bufferInfos[currentBufferIndex].packer = packer;
 
-    var currentIndex = 0;
-    for (var i = 0; i < decodedFrameLists.length; i++) {
-        var decodedFrames = decodedFrameLists[i];
-        for (var j = 0; j < decodedFrames.length; j++) {
-            var frame = decodedFrames[j];
-            var block = {
-                w: frame.width, h: frame.height,
-                listIndex: i,
-                frameIndex: j,
-                index: currentIndex
-            };
+    for (var i = 0; i < decodedFrames.length; i++) {
+        var frame = decodedFrames[i];
 
-            // Attempt to pack the block into the current packer.
+        var frameInfo = frameInfos[i];
+        frameInfo.w = frame.width;
+        frameInfo.h = frame.height;
+
+        var block = {
+            w: frame.width, h: frame.height,
+            frameIndex: i
+        };
+
+        // Attempt to pack the block into the current packer.
+        if (!packer.fit(block)) {
+            // No more room - pack failed! Create a new atlas.
+            bufferInfos.push([]);
+            currentBufferIndex++;
+
+            packer = new Packer(maxWidth, maxHeight);
+            bufferInfos[currentBufferIndex].packer = packer;
+
+            // Attempt to fit into newly created packer.
             if (!packer.fit(block)) {
-                // No more room - pack failed! Create a new atlas.
-                bufferInfos.push([]);
-                currentBufferIndex++;
+                console.error('Block does not fit into an empty packer: ' + block);
 
-                packer = new Packer(maxWidth, maxHeight);
-                bufferInfos[currentBufferIndex].packer = packer;
-
-                // Attempt to fit into newly created packer.
-                if (!packer.fit(block)) {
-                    console.error('Block does not fit into an empty packer: ' + block);
-
-                    // No owner atlas.
-                    indexToBufferIndexLUT[currentIndex++] = null;
-                    break;
-                }
+                // No owner atlas.
+                frameInfo.bufferIndex = -1;
+                continue;
             }
-
-            // Add to the current atlas.
-            bufferInfos[currentBufferIndex].push(block);
-            indexToBufferIndexLUT[currentIndex++] = currentBufferIndex;
         }
+
+        // Add to the current atlas.
+        bufferInfos[currentBufferIndex].push(block);
+        frameInfo.bufferIndex = currentBufferIndex;
     }
 }
 
@@ -716,12 +1420,12 @@ function copyColorBuffer(fromBuffer, width, height, toBuffer, toX, toY, totalWid
 /**
  * Allocate color buffers and copy all frame data over.
  */
-function createBuffers(maxWidth, maxHeight, decodedFrameLists, bufferInfos, buffers) {
+function createBuffers(maxWidth, maxHeight, decodedFrames, bufferInfos, buffers) {
     var i, buffer;
 
     // Create color buffers.
     for (i = 0; i < bufferInfos.length; i++) {
-        buffer = new Uint8Array(maxWidth * maxHeight * 4);
+        buffer = new Uint8Array(maxWidth * maxHeight * BYTES_PER_PIXEL);
         buffer.width = maxWidth;
         buffer.height = maxHeight;
         buffers[i] = buffer;
@@ -730,10 +1434,10 @@ function createBuffers(maxWidth, maxHeight, decodedFrameLists, bufferInfos, buff
     // Copy all frame color data to buffer.
     for (i = 0; i < bufferInfos.length; i++) {
         var blocks = bufferInfos[i];
+        buffer = buffers[i];
         for (var j = 0; j < blocks.length; j++) {
             var block = blocks[j];
-            var frame = decodedFrameLists[block.listIndex][block.frameIndex];
-            buffer = buffers[i];
+            var frame = decodedFrames[block.frameIndex];
             copyColorBuffer(
                 frame.colors,
                 block.w, block.h,
@@ -744,7 +1448,10 @@ function createBuffers(maxWidth, maxHeight, decodedFrameLists, bufferInfos, buff
     }
 }
 
-function createUVs(bufferInfos, buffers, uvs) {
+/**
+ * Calculate UV coordinates for each frame given it's location within the buffer.
+ */
+function createUVs(frameInfos, bufferInfos, buffers) {
     for (var i = 0; i < bufferInfos.length; i++) {
         var blocks = bufferInfos[i];
         var buffer = buffers[i];
@@ -754,67 +1461,51 @@ function createUVs(bufferInfos, buffers, uvs) {
         for (var j = 0; j < blocks.length; j++) {
             var block = blocks[j];
 
-            uvs[block.index] = [
-                // Top left.
-                block.x / width,
-                (block.y + block.h) / height,
-                // Bottom left.
-                block.x / width,
-                block.y / height,
-                // Bottom right.
-                (block.x + block.w) / width,
-                block.y / height,
-                // Top right.
-                (block.x + block.w) / width,
-                (block.y + block.h) / height
-            ];
+            var uvs = new Array(4);
+            // Top left.
+            uvs[0] = new Vector2(block.x / width, (block.y + block.h) / height);
+            // Bottom left.
+            uvs[1] = new Vector2(block.x / width, block.y / height);
+            // Bottom right.
+            uvs[2] = new Vector2((block.x + block.w) / width, block.y / height);
+            // Top right.
+            uvs[3] = new Vector2((block.x + block.w) / width, (block.y + block.h) / height);
+
+            frameInfos[block.frameIndex].uvs = uvs;
         }
     }
 }
 
-function getTotalFrameCount(decodedFrameLists) {
-    var totalCount = 0;
-    for (var i = 0; i < decodedFrameLists.length; i++) {
-        totalCount += decodedFrameLists[i].length;
-    }
-    return totalCount;
-}
-
 /**
  * Pack all frame data into compact atlases (color buffers).
- * Returns the UV and look-up info for all packed frames.
+ * Returns the packed color buffers, and a list of all the frame data
+ * and their indices into the packed color buffers.
  * @param  {[number]} maxWidth  The maximum width of the generated color buffers.
  * @param  {[number]} maxHeight The maximum height of the generated color buffers.
- * @param  {[array]} decodedFrameLists    Arrays of all the frame data to be packed.
+ * @param  {[array]} decodedFrames    Decoded frame data packed into atlas.
  */
-function _pack(maxWidth, maxHeight, decodedFrameLists) {
-    var frameListToIndexOffsetLUT = new Array(decodedFrameLists.length);
-    createIndexOffsets(decodedFrameLists, frameListToIndexOffsetLUT);
+function _pack(maxWidth, maxHeight, decodedFrames) {
+    // Allocate results.
+    var frameInfos = new Array(decodedFrames.length);
+    for (var i = 0; i < frameInfos.length; i++) {
+        frameInfos[i] = {};
+    }
 
-    var totalFrameCount = getTotalFrameCount(decodedFrameLists);
-    var indexToBufferIndexLUT = new Array(totalFrameCount);
     var bufferInfos = [[]];
-    createBufferInfos(maxWidth, maxHeight, decodedFrameLists, indexToBufferIndexLUT, bufferInfos);
+    createBufferInfos(maxWidth, maxHeight, decodedFrames, frameInfos, bufferInfos);
 
     var buffers = new Array(bufferInfos.length);
-    createBuffers(maxWidth, maxHeight, decodedFrameLists, bufferInfos, buffers);
+    createBuffers(maxWidth, maxHeight, decodedFrames, bufferInfos, buffers);
 
-    var uvs = new Array(indexToBufferIndexLUT.length);
-    createUVs(bufferInfos, buffers, uvs);
+    createUVs(frameInfos, bufferInfos, buffers);
 
-    assert(decodedFrameLists.length === frameListToIndexOffsetLUT.length);
-    assert(totalFrameCount === indexToBufferIndexLUT.length);
-    assert(totalFrameCount === uvs.length);
+    assert(frameInfos.length === decodedFrames.length);
 
     return {
-        // For a given list of frames, return the index offset.
-        frameListToIndexOffsetLUT: frameListToIndexOffsetLUT,
-        // For a given index, return it's buffer index.
-        indexToBufferIndexLUT: indexToBufferIndexLUT,
+        // Data for each frame.
+        frameInfos: frameInfos,
         // Packed frame color buffers.
-        colorBuffers: buffers,
-        // UV coordinates for all packed frames.
-        uvs: uvs
+        colorBuffers: buffers
     };
 }
 
@@ -822,18 +1513,20 @@ module.exports = {
     pack: _pack
 };
 
-},{"./packer":9,"assert":62}],8:[function(require,module,exports){
+},{"./packer":12,"assert":85}],11:[function(require,module,exports){
 'use strict';
 
-// TODO: will need better ID mapping scheme to allow for unloading.
 var loadedTextures = [];
+var loadedTextureInfos = [];
+
 var basicMaterials = [];
 var selectedTargetMaterials = [];
+var selectedTargetMaterials2 = [];
 
 /**
  * Creates a texture from a given color buffer and returns the textureId.
  */
-function _loadTexture(colorBuffer, THREE) {
+function _loadTexture(loadUnit, colorBuffer) {
     var imageTexture = new THREE.DataTexture(
         colorBuffer,
         colorBuffer.width, colorBuffer.height,
@@ -849,16 +1542,38 @@ function _loadTexture(colorBuffer, THREE) {
     imageTexture.flipY = false;
     imageTexture.needsUpdate = true;
 
+    // TODO: if we constantly load/unload textures, this will
+    // pose a theoretic limit to the # of times we can do that.
+    // A better implementation would set a MAX_TEXTURE limit, and treat
+    // the array as a circular buffer. The texture id would be the
+    // next free entry in the array.
     var textureId = loadedTextures.length;
     loadedTextures.push(imageTexture);
+    loadedTextureInfos.push(loadUnit);
+
     return textureId;
 }
 
 /**
- * Unload a given texture and all materials referencing this texture.
+ * Unload all textures and all materials referencing this texture
+ * in the given load unit.
  */
-function _unloadTexture(textureId) {
-    // body...
+function _unloadTextures(loadUnit) {
+    // Gather list of indices to delete.
+    var unloadIndices = [];
+    for (var i = 0; i < loadedTextureInfos.length; i++) {
+        if (loadedTextureInfos[i] === loadUnit) {
+            unloadIndices.push(i);
+        }
+    }
+
+    // Perform deletion.
+    // We can't actually delete the entries in the arrays
+    // since that would invalidate all other entries.
+    for (i = 0; i < unloadIndices.length; i++) {
+        loadedTextures[i] = null;
+        loadedTextureInfos[i] = null;
+    }
 }
 
 /**
@@ -892,6 +1607,7 @@ function _getBasicMaterial(textureId) {
  * Get the selected target material for the given textureId.
  */
 function _getSelectedTargetMaterial(textureId) {
+    var color = new THREE.Vector3(0.8, 0.3, 0.3);
     var material = selectedTargetMaterials[textureId];
 
     // Return existing material.
@@ -905,9 +1621,13 @@ function _getSelectedTargetMaterial(textureId) {
     var vertShader = document.getElementById('vertexShader').innerHTML;
     var fragShader = document.getElementById('fragmentShader').innerHTML;
 
+    // TODO: instead of using uniform for border color, might be more efficient to use
+    // vertex color buffer instead?
+
     // TODO: only allows 1 unit to be targeted?
     var uniforms = {
-        texture1: { type: "t", value: texture }
+        texture1: { type: 't', value: texture },
+        borderColor: { type: 'v3', value: color }
     };
 
     // Generate a new material.
@@ -922,14 +1642,51 @@ function _getSelectedTargetMaterial(textureId) {
     return material;
 }
 
+function _getSelectedTargetMaterial2(textureId) {
+    var color = new THREE.Vector3(0.7, 0.7, 0.4);
+    var material = selectedTargetMaterials2[textureId];
+
+    // Return existing material.
+    if (material) {
+        return material;
+    }
+
+    var texture = loadedTextures[textureId];
+
+    // TODO: remove from HTML document
+    var vertShader = document.getElementById('vertexShader').innerHTML;
+    var fragShader = document.getElementById('fragmentShader').innerHTML;
+
+    // TODO: instead of using uniform for border color, might be more efficient to use
+    // vertex color buffer instead?
+
+    // TODO: only allows 1 unit to be targeted?
+    var uniforms = {
+        texture1: { type: 't', value: texture },
+        borderColor: { type: 'v3', value: color }
+    };
+
+    // Generate a new material.
+    material = new THREE.ShaderMaterial({
+        uniforms: uniforms,
+        vertexShader: vertShader,
+        fragmentShader: fragShader
+    });
+
+    selectedTargetMaterials2[textureId] = material;
+
+    return material;
+}
+
 module.exports = {
     loadTexture: _loadTexture,
-    unloadTexture: _unloadTexture,
+    unloadTextures: _unloadTextures,
     getBasicMaterial: _getBasicMaterial,
-    getSelectedTargetMaterial: _getSelectedTargetMaterial
+    getSelectedTargetMaterial: _getSelectedTargetMaterial,
+    getSelectedTargetMaterial2: _getSelectedTargetMaterial2
 };
 
-},{}],9:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 'use strict';
 
 function Packer(w, h) {
@@ -988,79 +1745,364 @@ _splitNode: function(node, w, h) {
 
 module.exports = Packer;
 
-},{}],10:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 'use strict';
 
-function Entity (game) {
-    this.game = game;
-    this.positionX = 0;
-    this.positionY = 0;
-    this.components = [];
+var loadedSprites = {};
+var loadedSpriteInfos = {};
 
-    this.game.on('update', this._update.bind(this));
+function _registerSprite(loadUnit, name, sprite) {
+    // Duplicate check.
+    if (loadedSprites[name]) {
+        console.warn('Sprite already registered: ' + name);
+        return;
+    }
 
-    this.didCallStart = false;
+    loadedSprites[name] = sprite;
+    loadedSpriteInfos[name] = { loadUnit: loadUnit };
 }
 
-Entity.prototype._start = function () {
-    for (var i = 0; i < this.components.length; i++) {
-        this.components[i].start();
-    }
-
-    this.didCallStart = true;
-};
-
-Entity.prototype.destroy = function() {
-    for (var i = 0; i < this.components.length; i++) {
-        this.components[i].destroy();
-    }
-
-    this.game.removeListener('update', this._update.bind(this));
-};
-
-/**
- * Add a component to this entity.
- */
-Entity.prototype.addComponent = function(component) {
-    this.components.push(component);
-};
-
-/**
- * Gets a component by class (constructor) name.
- * Returns null if the component is not found.
- */
-Entity.prototype.getComponent = function(componentName) {
-    for (var i = 0; i < this.components.length; i++) {
-        if (this.components[i].constructor.name == componentName) {
-            return this.components[i];
+function _unloadSprites(loadUnit) {
+    // Gather list of sprites to delete.
+    var unloadNames = [];
+    for (var key in loadedSpriteInfos) {
+        var info = loadedSpriteInfos[key];
+        if (info.loadUnit === loadUnit) {
+            unloadNames.push(key);
         }
+    }
+
+    // Perform deletion.
+    for (var i = 0; i < unloadNames.length; i++) {
+        var name = unloadNames[i];
+        delete loadedSprites[name];
+        delete loadedSpriteInfos[name];
+    }
+}
+
+function _getSprite(name) {
+    return loadedSprites[name];
+}
+
+module.exports = {
+    registerSprite: _registerSprite,
+    unloadSprites: _unloadSprites,
+    getSprite: _getSprite
+};
+
+},{}],14:[function(require,module,exports){
+'use strict';
+
+var assert = require('assert'),
+    inherits = require('inherits'),
+    Component = require('./../core/component'),
+    util = require('./../util'),
+    DbgDraw = require('three-debug-draw')(THREE),
+    LevelController = require('./../level_controller'),
+    Signals = require('./../signals');
+
+var Vector2 = THREE.Vector2;
+
+var State = {
+    IDLE: 0,
+    MOVE: 1,
+    ATTACK: 2,
+    DAMAGE: 3,
+    DEAD: 4,
+};
+
+function ActionComponent (entity) {
+    Component.call(this, entity);
+
+    this.game = entity.game;
+
+    this.MOVE_SPEED = new Vector2(80, 40);
+
+    this.currentState = State.IDLE;
+
+    this.currentDestinationGridPosition = new Vector2();
+    this.currentFacingDirection = 0;
+    this.currentMoveDirection = new Vector2();
+    this.currentMoveSpeed = 0;
+    this.currentTargetPosition = this.entity.position.clone();
+    this.currentDistanceRemainingToTargetPosition = 0;
+}
+
+inherits(ActionComponent, Component);
+
+ActionComponent.prototype.start = function() {
+    this.animComponent = this.entity.getComponent('AnimComponent');
+    this.gameObjectComponent = this.entity.getComponent('GameObjectComponent');
+
+    this._registerAnimEvents();
+};
+
+ActionComponent.prototype._registerAnimEvents = function () {
+    // TODO: cleaner way to do this for all 8 directions?
+
+    var i;
+    var self = this;
+
+    function doAttack() {
+        var attackGridPosition = util.getGridOffsetInDirection(self.currentFacingDirection);
+        attackGridPosition.add(self.gameObjectComponent.currentGridPosition);
+
+        // var dbgAttackWorldPos = new THREE.Vector2();
+        // util.gridToWorldCoord(attackGridPosition, dbgAttackWorldPos);
+        // DbgDraw.drawSphere(new THREE.Vector3(dbgAttackWorldPos.x, dbgAttackWorldPos.y, 1000), 10, 'yellow');
+
+        var player = LevelController.getPlayerAtGridPosition(attackGridPosition);
+        if (player) {
+            var info = {
+                amount: 1,
+                fromEntity: self.entity,
+            };
+            Signals.sendDamage(player, info);
+        }
+    }
+
+    function doAttackEnd() {
+        self.currentState = State.IDLE;
+    }
+
+    for (i = 0; i < 8; i++) {
+        this.animComponent.registerCallback('phalla_' + i, 9, doAttack);
+    }
+    for (i = 0; i < 8; i++) {
+        this.animComponent.registerCallback('phalla_' + i, doAttackEnd);
+    }
+
+    function doTakeDamageEnd() {
+        self.currentState = State.IDLE;
+    }
+
+    for (i = 0; i < 8; i++) {
+        this.animComponent.registerCallback('phallh_' + i, doTakeDamageEnd);
+    }
+};
+
+ActionComponent.prototype.update = function(dt) {
+    switch (this.currentState) {
+        case State.MOVE:
+            this._followPath(dt);
+            break;
+    }
+
+    // Animation update.
+    switch (this.currentState) {
+        case State.IDLE:
+            this.animComponent.play('phalln_' + this.currentFacingDirection);
+            break;
+        case State.MOVE:
+            this.animComponent.play('phallw_' + this.currentFacingDirection);
+            break;
+    }
+
+    // TODO: temp - move to AI
+    // if (this.game.isMouseButtonDown()) {
+    //     var mousePos = this.game.mousePosition;
+    //     var gridPos = new Vector2();
+    //     util.screenToWorldCoord(this.game.width, this.game.height, mousePos, this.game.camera, gridPos);
+    //     util.worldToGridCoord(gridPos, gridPos);
+    //
+    //     this.requestMove(gridPos);
+    // }
+    // if (this.game.isKeyDown(49)) {
+    //     var breadCrumb = LevelController.getNewestBreadcrumb(0);
+    //     if (breadCrumb) {
+    //         this.requestMove(breadCrumb.gridPosition);
+    //     }
+    // }
+};
+
+ActionComponent.prototype._followPath = function () {
+    var moveAmount = this.currentMoveSpeed * this.game.time.deltaTime;
+    this.currentDistanceRemainingToTargetPosition -= moveAmount;
+
+    // Arrived at target position?
+    if (this.currentDistanceRemainingToTargetPosition <= 0.0) {
+        this.entity.position.copy(this.currentTargetPosition);
+
+        // End of path?
+        if (this.gameObjectComponent.currentGridPosition.equals(this.currentDestinationGridPosition)) {
+            this.currentState = State.IDLE;
+        } else {
+            var nextNode = this._getNextNode(this.currentDestinationGridPosition);
+
+            // If unable to move, stop and go idle.
+            if (nextNode !== null) {
+                this._setTargetGridPosition(nextNode);
+            }
+            else {
+                this.currentState = State.IDLE;
+            }
+        }
+    } else {
+        this.entity.position.set(
+            this.entity.position.x + this.currentMoveDirection.x * moveAmount,
+            this.entity.position.y + this.currentMoveDirection.y * moveAmount);
+
+        // DbgDraw.drawLine(
+        //     new this.game.THREE.Vector3(this.entity.position.x, this.entity.position.y, 6000),
+        //     new this.game.THREE.Vector3(this.currentTargetPosition.x, this.currentTargetPosition.y, 6000),
+        //     'red'
+        // );
+    }
+};
+
+ActionComponent.prototype._setTargetGridPosition = function (pos) {
+    // Facing direction.
+    this._setFacingDirection(pos.x, pos.y);
+
+    // Move speed.
+    this.currentMoveSpeed = util.getMoveSpeed(this.currentFacingDirection, this.MOVE_SPEED.x, this.MOVE_SPEED.y);
+
+    // Update current grid position.
+    this.gameObjectComponent.setGridPosition(pos);
+
+    // Target position.
+    util.gridToWorldCoord(this.gameObjectComponent.currentGridPosition, this.currentTargetPosition);
+    this.currentDistanceRemainingToTargetPosition = this.entity.position.distanceTo(this.currentTargetPosition);
+
+    // Move direction.
+    this.currentMoveDirection.setX(this.currentTargetPosition.x - this.entity.position.x);
+    this.currentMoveDirection.setY(this.currentTargetPosition.y - this.entity.position.y);
+    this.currentMoveDirection.normalize();
+};
+
+ActionComponent.prototype._setFacingDirection = function (x, y) {
+    var facingDirection = util.getDirection(
+        this.gameObjectComponent.currentGridPosition.x, this.gameObjectComponent.currentGridPosition.y,
+        x, y);
+    if (facingDirection !== -1) {
+        this.currentFacingDirection = facingDirection;
+    }
+};
+
+ActionComponent.prototype.isMoving = function () {
+    return this.currentState === State.MOVE;
+};
+
+/**
+ * From the current grid position, get the next node in the
+ * direction of targetGridPosition that we will need to traverse
+ * if moving in a straight line to the target.
+ */
+ActionComponent.prototype._getNextNode = function(targetGridPosition) {
+    var direction = util.getDirection(
+        this.gameObjectComponent.currentGridPosition.x, this.gameObjectComponent.currentGridPosition.y,
+        targetGridPosition.x, targetGridPosition.y);
+
+    assert(direction !== -1);
+
+    var offset = util.getGridOffsetInDirection(direction);
+
+    var nextNode = new Vector2(
+        this.gameObjectComponent.currentGridPosition.x + offset.x,
+        this.gameObjectComponent.currentGridPosition.y + offset.y);
+
+    // Next node is not a collision? Move to it.
+    if (!LevelController.checkCollision(nextNode)) {
+        return nextNode;
+    }
+
+    // Collision! Local avoidance.
+
+    // Next node is the destination but it's blocked. Stop movement.
+    if (nextNode.equals(this.currentDestinationGridPosition)) {
+        return null;
+    }
+
+    // Next node is not the destination but it's blocked. Attempt to strafe.
+    var strafeDir = (direction + 1) % 8;
+    offset = util.getGridOffsetInDirection(strafeDir);
+
+    nextNode = new Vector2(
+        this.gameObjectComponent.currentGridPosition.x + offset.x,
+        this.gameObjectComponent.currentGridPosition.y + offset.y);
+
+    if (!LevelController.checkCollision(nextNode)) {
+        return nextNode;
+    }
+
+    // Strafe in other direction if blocked.
+    strafeDir = ((direction - 1) + 8) % 8;
+    offset = util.getGridOffsetInDirection(strafeDir);
+
+    nextNode = new Vector2(
+        this.gameObjectComponent.currentGridPosition.x + offset.x,
+        this.gameObjectComponent.currentGridPosition.y + offset.y);
+
+    if (!LevelController.checkCollision(nextNode)) {
+        return nextNode;
     }
 
     return null;
 };
 
-/**
- * Set the position of this entity.
- */
-Entity.prototype.setPosition = function(x, y) {
-    this.positionX = x;
-    this.positionY = y;
-};
+ActionComponent.prototype.requestMove = function (targetGridPosition) {
+    assert(this.currentState === State.IDLE ||
+           this.currentState === State.MOVE);
 
-Entity.prototype._update = function(dt) {
-    // Trigger 'start' on first update.
-    if (!this.didCallStart) {
-        this._start();
+    // If not currently moving, initialize the movement.
+    // First node will be the current position. FollowPath routine
+    // will handle transition to the next node in the destination direction.
+    if (!this.isMoving()) {
+        this.currentTargetPosition.copy(this.entity.position);
+        this.currentDistanceRemainingToTargetPosition = 0.0;
     }
 
-    for (var i = 0; i < this.components.length; i++) {
-        this.components[i].update(dt);
+    this.currentState = State.MOVE;
+    this.currentDestinationGridPosition.copy(targetGridPosition);
+
+    return true;
+};
+
+ActionComponent.prototype.stopMoving = function () {
+    if (this.isMoving()) {
+        this.currentDestinationGridPosition.copy(this.gameObjectComponent.currentGridPosition);
     }
 };
 
-module.exports = Entity;
+ActionComponent.prototype.isIdle = function () {
+    return this.currentState === State.IDLE;
+};
 
-},{}],11:[function(require,module,exports){
+ActionComponent.prototype.idle = function () {
+    this.currentState = State.IDLE;
+};
+
+ActionComponent.prototype.isAttacking = function () {
+    return this.currentState === State.ATTACK;
+};
+
+ActionComponent.prototype.attackInDirection = function (gridPos) {
+    assert(this.currentState === State.IDLE);
+
+    this._setFacingDirection(gridPos.x, gridPos.y);
+    this.animComponent.play('phalla_' + this.currentFacingDirection);
+    this.currentState = State.ATTACK;
+};
+
+ActionComponent.prototype.takeDamage = function () {
+    this.animComponent.play('phallh_' + this.currentFacingDirection);
+    this.currentState = State.DAMAGE;
+};
+
+ActionComponent.prototype.die = function () {
+    this.animComponent.play('phalld_' + this.currentFacingDirection);
+    this.currentState = State.DEAD;
+};
+
+ActionComponent.prototype.faceDirection = function (gridPos) {
+    assert(this.currentState === State.IDLE);
+
+    this._setFacingDirection(gridPos.x, gridPos.y);
+};
+
+module.exports = ActionComponent;
+
+},{"./../core/component":7,"./../level_controller":16,"./../signals":23,"./../util":24,"assert":85,"inherits":56,"three-debug-draw":83}],15:[function(require,module,exports){
 'use strict';
 
 // Inherit EventEmitter to allow event listeners to be registered directly to this object.
@@ -1080,21 +2122,17 @@ function Game(options) {
     this._initRenderer(options);
 
     this.prevTime = Date.now() / 1000;
+    this.time = {
+        // The time in seconds it took to complete the last frame.
+        deltaTime: 0,
+        // The total number of frames that have passed.
+        frameCount: 0
+    };
 
-    // TODO: temporary
     document.addEventListener('keydown', this._onKeyDown.bind(this), false);
     document.addEventListener('keyup', this._onKeyUp.bind(this), false);
+    this.keyStates = [];
 }
-
-Game.prototype._onKeyDown = function (event) {
-    var key = String.fromCharCode(event.keyCode);
-    this.emit('keyDown', key);
-};
-
-Game.prototype._onKeyUp = function (event) {
-    var key = String.fromCharCode(event.keyCode);
-    this.emit('keyUp', key);
-};
 
 Game.prototype._initRenderer = function(options) {
     var viewSize = this.height / 2;
@@ -1114,11 +2152,28 @@ Game.prototype._initRenderer = function(options) {
 
     window.addEventListener('resize', this._onWindowResize.bind(this), false);
     this.canvas.addEventListener('mousedown', this._onCanvasMouseDown.bind(this), false);
+    this.canvas.addEventListener('mouseup', this._onCanvasMouseUp.bind(this), false);
     this.canvas.addEventListener('mousemove', this._onCanvasMouseMove.bind(this), false);
+
+    this.mouseButtonStates = [];
+    this.mousePosition = new THREE.Vector2();
 };
 
 Game.prototype._onWindowResize = function() {
     this.emit('windowResize');
+};
+
+var InputState = {
+    NONE: 0,
+    DOWN: 1,
+    UP: 2,
+    PRESSED: 3,
+};
+
+var MouseButton = {
+    LEFT: 1,
+    RIGHT: 2,
+    MIDDLE: 3,
 };
 
 function mouseEventToXY(game, event) {
@@ -1153,18 +2208,79 @@ function mouseEventToXY(game, event) {
     };
 }
 
+function mouseEventToButton(event) {
+    return event.which || event.button;
+}
+
+/**
+ * Was the mouse button pushed down this frame?
+ */
+Game.prototype.isMouseButtonDown = function (buttonIndex) {
+    return this.mouseButtonStates[MouseButton.LEFT] === InputState.DOWN;
+};
+
+/**
+ * Was the mouse button lifted up this frame?
+ */
+Game.prototype.isMouseButtonUp = function (buttonIndex) {
+    return this.mouseButtonStates[MouseButton.LEFT] === InputState.UP;
+};
+
+/**
+ * Is the mouse button pressed down?
+ */
+Game.prototype.isMouseButtonPressed = function (buttonIndex) {
+    return this.mouseButtonStates[MouseButton.LEFT] === InputState.PRESSED;
+};
+
 Game.prototype._onCanvasMouseDown = function(event) {
     event.preventDefault();
 
-    var mousePos = mouseEventToXY(this, event);
-    this.emit('mouseDown', mousePos.x, mousePos.y);
+    var button = mouseEventToButton(event);
+    this.mouseButtonStates[button] = InputState.DOWN;
+};
+
+Game.prototype._onCanvasMouseUp = function(event) {
+    event.preventDefault();
+
+    var button = mouseEventToButton(event);
+    this.mouseButtonStates[button] = InputState.UP;
 };
 
 Game.prototype._onCanvasMouseMove = function(event) {
     event.preventDefault();
 
     var mousePos = mouseEventToXY(this, event);
-    this.emit('mouseMove', mousePos.x, mousePos.y);
+    this.mousePosition.set(mousePos.x, mousePos.y);
+};
+
+/**
+ * Was the key pushed down this frame?
+ */
+Game.prototype.isKeyDown = function (keyCode) {
+    return this.keyStates[keyCode] === InputState.DOWN;
+};
+
+/**
+ * Was the key released this frame?
+ */
+Game.prototype.isKeyUp = function (keyCode) {
+    return this.keyStates[keyCode] === InputState.UP;
+};
+
+/**
+ * Is the key pressed down?
+ */
+Game.prototype.isKeyPressed = function (keyCode) {
+    return this.keyStates[keyCode] === InputState.PRESSED;
+};
+
+Game.prototype._onKeyDown = function (event) {
+    this.keyStates[event.keyCode] = InputState.DOWN;
+};
+
+Game.prototype._onKeyUp = function (event) {
+    this.keyStates[event.keyCode] = InputState.UP;
 };
 
 /**
@@ -1176,16 +2292,46 @@ Game.prototype.run = function() {
 
 Game.prototype._update = function() {
     var time = Date.now() / 1000;
-    var dt = time - this.prevTime;
+    this.time.deltaTime = time - this.prevTime;
 
-    this.emit('update', dt);
-    this.emit('lateUpdate', dt);
+    this.emit('update');
+    this.emit('lateUpdate');
 
     this._render();
+    this._updateInputStates();
 
+    this.emit('frameEnd');
+
+    this.time.frameCount += 1;
     this.prevTime = time;
 
     window.requestAnimationFrame(this._update.bind(this));
+};
+
+Game.prototype._updateInputStates = function () {
+    // Mouse states.
+    for (var i in this.mouseButtonStates) {
+        switch (this.mouseButtonStates[i]) {
+            case InputState.DOWN:
+                this.mouseButtonStates[i] = InputState.PRESSED;
+                break;
+            case InputState.UP:
+                this.mouseButtonStates[i] = InputState.NONE;
+                break;
+        }
+    }
+
+    // Key states.
+    for (i in this.keyStates) {
+        switch (this.keyStates[i]) {
+            case InputState.DOWN:
+                this.keyStates[i] = InputState.PRESSED;
+                break;
+            case InputState.UP:
+                this.keyStates[i] = InputState.NONE;
+                break;
+        }
+    }
 };
 
 Game.prototype._render = function() {
@@ -1193,95 +2339,161 @@ Game.prototype._render = function() {
 
     this.renderer.clearDepth();
     this.renderer.render(this.scene, this.camera);
-
-    this.emit('lateRender');
 };
 
 module.exports = Game;
 
-},{"events":68,"inherits":38}],12:[function(require,module,exports){
-'use strict';
-
-// function Level(dunMap, dunFiles) {
-//     this.dunMap = dunMap;
-//     this.dunFiles = dunFiles;
-//
-//     this.colCount = dunMap.length;
-//     this.rowCount = (this.colCount > 0) ? this.dunMap[0].length : 0;
-// }
-
-function Level() {
-    // All the tile infos (indexed by frame #) in the current level.
-    this.tilesetInfos = [];
-}
-
-/*
-function getDunByName(dunFiles, name) {
-    for (var i = 0; i < dunFiles.length; i++) {
-        if (dunFiles[i].fileName === name) {
-            return dunFiles[i];
-        }
-    }
-
-    return null;
-}*/
-
-/*
-function _load(dunFiles) {
-    // TODO: currently only handling town.
-    var dunMap = new Array(96);
-    for (var i = 0; i < dunMap.length; i++) {
-        dunMap[i] = new Array(96);
-    }
-
-    var row; var col;
-
-    for (row = 0; row < dunMap.length; row++) {
-        for (col = 0; col < dunMap.length; col++) {
-            dunMap[col][row] = null;
-        }
-    }
-
-    var dun;
-
-    dun = getDunByName(dunFiles, 'sector1s');
-    for (row = 0; row < dun.rowCount; row++) {
-        for (col = 0; col < dun.colCount; col++) {
-            dunMap[col + dun.startCol][row + dun.startRow] = 0;
-        }
-    }
-    dun = getDunByName(dunFiles, 'sector2s');
-    for (row = 0; row < dun.rowCount; row++) {
-        for (col = 0; col < dun.colCount; col++) {
-            dunMap[col + dun.startCol][row + dun.startRow] = 1;
-        }
-    }
-    dun = getDunByName(dunFiles, 'sector3s');
-    for (row = 0; row < dun.rowCount; row++) {
-        for (col = 0; col < dun.colCount; col++) {
-            dunMap[col + dun.startCol][row + dun.startRow] = 2;
-        }
-    }
-    dun = getDunByName(dunFiles, 'sector4s');
-    for (row = 0; row < dun.rowCount; row++) {
-        for (col = 0; col < dun.colCount; col++) {
-            dunMap[col + dun.startCol][row + dun.startRow] = 3;
-        }
-    }
-
-    return new Level(dunMap, dunFiles);
-}*/
-
-module.exports = Level;
-
-},{}],13:[function(require,module,exports){
+},{"events":90,"inherits":56}],16:[function(require,module,exports){
 'use strict';
 
 var util = require('./util');
+var FileMgr = require('./core/file_mgr');
 
 var enemies = [];
 var players = [];
 var localPlayer = null;
+
+var activeBreadcrumbs = [];
+var Vector2;
+var DbgDraw;
+var g_engine;
+
+var BREADCRUMB_UNSPAWN_TIME = 5.0;
+
+function init(engine) {
+    g_engine = engine;
+    engine.on('update', update);
+
+    Vector2 = engine.THREE.Vector2;
+    DbgDraw = require('three-debug-draw')(engine.THREE);
+}
+
+function update() {
+    // Prune breadcrumbs.
+    for (var i = 0; i < activeBreadcrumbs.length; /*i++*/) {
+        if (activeBreadcrumbs[i].elapsedTime >= BREADCRUMB_UNSPAWN_TIME) {
+            activeBreadcrumbs.splice(i, 1);
+            continue;
+        }
+
+        i++;
+    }
+
+    // Advance all breadcrumbs forward in time.
+    var deltaTime = g_engine.time.deltaTime;
+    for (i = 0; i < activeBreadcrumbs.length; i++) {
+        activeBreadcrumbs[i].elapsedTime += deltaTime;
+    }
+
+    // debug draw:
+    // for (i = 0; i < activeBreadcrumbs.length; i++) {
+    //     var breadcrumb = activeBreadcrumbs[i];
+    //     var pos = new Vector2();
+    //
+    //     util.gridToWorldCoord(breadcrumb.gridPosition, pos);
+    //     pos.z = 1000;
+    //
+    //     DbgDraw.drawSphere(pos, 5.0, 'cyan');
+    // }
+
+    // var bc = getNewestBreadcrumb(0, new Vector2(2, 2));
+    // if (bc) {
+    //     var p = new Vector2();
+    //     util.gridToWorldCoord(bc.gridPosition, p);
+    //     p.z = 1000;
+    //     DbgDraw.drawSphere(p, 8.0, 'magenta');
+    // }
+}
+
+function addBreadcrumb(breadcrumb) {
+    activeBreadcrumbs.push(breadcrumb);
+    breadcrumb.elapsedTime = 0;
+}
+
+function clearBreadcrumbs(id) {
+    for (var i = 0; i < activeBreadcrumbs.length; /*i++*/) {
+        if (activeBreadcrumbs[i].id === id) {
+            activeBreadcrumbs.splice(i, 1);
+        }
+        else {
+            i++;
+        }
+    }
+}
+
+function getNewestBreadcrumb(id, fromGridPosition) {
+    var newest = null;
+    var newestTime = Number.MAX_VALUE;
+    for (var i = 0; i < activeBreadcrumbs.length; i++) {
+        if (activeBreadcrumbs[i].id === id) {
+            // Newest is the one with least amount of elapsed time.
+            if (activeBreadcrumbs[i].elapsedTime < newestTime) {
+                // Also must be in LoS.
+                if (checkLineOfSight(fromGridPosition, activeBreadcrumbs[i].gridPosition)) {
+                    newest = activeBreadcrumbs[i];
+                    newestTime = newest.elapsedTime;
+                }
+            }
+        }
+    }
+    return newest;
+}
+
+function checkLineOfSight(fromGridPosition, toGridPosition, hitGridPosition) {
+    // Origin point is a collision?
+    // if (_checkCollision(fromGridPosition)) {
+    //     hitGridPosition.copy(fromGridPosition);
+    //     return false;
+    // }
+
+    var currentGridPosition = fromGridPosition.clone();
+    while (true) {
+        // We made it to the destination position without any collisions.
+        if (currentGridPosition.equals(toGridPosition)) {
+            return true;
+        }
+
+        // Go to the next cell along the direction.
+        var direction = util.getDirection(currentGridPosition.x, currentGridPosition.y, toGridPosition.x, toGridPosition.y);
+        var offset = util.getGridOffsetInDirection(direction);
+        currentGridPosition.add(offset);
+
+        // TODO: ignore destination cell collision (player)
+        if (currentGridPosition.equals(toGridPosition)) {
+            return true;
+        }
+
+        // Is there a collision at the next cell?
+        if (_checkCollision(currentGridPosition)) {
+            if (hitGridPosition) {
+                hitGridPosition.copy(currentGridPosition);
+            }
+            return false;
+        }
+    }
+
+    // No collisions.
+    return true;
+}
+
+function getNearestPlayerInRange(fromGridPosition, maxRange) {
+    var nearestPlayer = null;
+    var nearestPlayerDist = Number.MAX_VALUE;
+    for (var i = 0; i < players.length; i++) {
+        var pos = players[i].getComponent('GameObjectComponent').currentGridPosition;
+        var dx = Math.abs(fromGridPosition.x - pos.x);
+        var dy = Math.abs(fromGridPosition.y - pos.y);
+        var d = dx + dy;
+        if (d < maxRange) {
+            if (d < nearestPlayerDist) {
+                nearestPlayer = players[i];
+                nearestPlayerDist = d;
+            }
+        }
+    }
+
+    return nearestPlayer;
+}
 
 function _registerPlayer(player) {
     players.push(player);
@@ -1296,16 +2508,37 @@ function _getLocalPlayer() {
     return localPlayer;
 }
 
+function getPlayerAtGridPosition(gridPosition) {
+    for (var i = 0; i < players.length; i++) {
+        var gameObjectComponent = players[i].getComponent('GameObjectComponent');
+        if (gridPosition.equals(gameObjectComponent.currentGridPosition)) {
+            return players[i];
+        }
+    }
+
+    return null;
+}
+
 function _registerEnemy(enemy) {
     enemies.push(enemy);
 }
 
-function _getEnemy(gridCoord) {
+function TEMP_getEnemy() {
+    if (enemies.length > 0)
+        return enemies[0];
+
+    return null;
+}
+
+function _getEnemy(gridPos) {
     for (var i = 0; i < enemies.length; i++) {
         var enemy = enemies[i];
-        var enemyGridPos = util.worldToGridCoord(enemy.positionX, enemy.positionY);
-        if ((gridCoord[0] === enemyGridPos.col) &&
-            (gridCoord[1] === enemyGridPos.row)) {
+
+        // TODO: shouldn't need to convert enemy world coordinate since it already has it's integer grid coordinate
+        var enemyGridPos = new THREE.Vector2();
+        util.worldToGridCoord(enemy.position, enemyGridPos);
+
+        if (gridPos.equals(enemyGridPos)) {
             return enemy;
         }
     }
@@ -1313,19 +2546,32 @@ function _getEnemy(gridCoord) {
     return null;
 }
 
-function _getNearestEnemyWorldPos(worldPos, maxDist) {
-    var maxDistSqr = maxDist * maxDist;
+function TEMP_getEnemies() {
+    return enemies;
+}
+
+function _getNearestEnemyWorldPos(worldPos) {
+    // TODO: how to handle overlapping targets? closest to camera (lowest y coord?)?
     var best = -1;
-    var bestDistSqr = Number.MAX_VALUE;
     for (var i = 0; i < enemies.length; i++) {
         var enemy = enemies[i];
-        var x = (worldPos.x - enemy.positionX);
-        var y = (worldPos.y - (enemy.positionY + 30));
-        var distSqr = x * x + y * y;
-        if ((distSqr < maxDistSqr) &&
-            (distSqr < bestDistSqr)) {
+        var goComponent = enemy.getComponent('GameObjectComponent');
+        if (!goComponent.isTargetable) {
+            continue;
+        }
+
+        var centerX = enemy.position.x + goComponent.collisionOffset.x;
+        var centerY = enemy.position.y + goComponent.collisionOffset.y;
+        var halfWidth = goComponent.collisionRect.x * 0.5;
+        var halfHeight = goComponent.collisionRect.y * 0.5;
+        var minX = centerX - halfWidth;
+        var maxX = centerX + halfWidth;
+        var minY = centerY - halfHeight;
+        var maxY = centerY + halfHeight;
+
+        if (worldPos.x >= minX && worldPos.x <= maxX &&
+            worldPos.y >= minY && worldPos.y <= maxY) {
             best = i;
-            bestDistSqr = distSqr;
         }
     }
 
@@ -1336,218 +2582,156 @@ function _getNearestEnemyWorldPos(worldPos, maxDist) {
     return null;
 }
 
-var currentLevel = null;
+function _isCollisionTile(col, row) {
+    // TODO:
+    var dun = FileMgr.getFile('levels/towndata/sector1s.dun');
+    var til = FileMgr.getFile('levels/towndata/town.til');
+    var sol = FileMgr.getFile('levels/towndata/town.sol');
+
+    // Temp.. before level is loaded, we might do a mouse over.
+    if (!sol || !dun || !til) {
+        return false;
+    }
+
+    // TODO:
+    dun.unpack(til);
+
+    var pillarIndex = dun.pillarData[col][row];
+    return sol.isCollision(pillarIndex);
+}
+
+var PF = require('pathfinding');
+var collisionGridStatic = null;
+var collisionGridDynamic = null;
+
+function _onLevelLoaded() {
+    // TODO: town only for now
+    var width = 50;
+    var height = 50;
+
+    collisionGridStatic = new PF.Grid(width, height);
+    collisionGridDynamic = new PF.Grid(width, height);
+
+    for (var i = 0; i < width; i++) {
+        for (var j = 0; j < height; j++) {
+            if (_isCollisionTile(i, j)) {
+                collisionGridStatic.setWalkableAt(i, j, false);
+            }
+
+            collisionGridDynamic.getNodeAt(i, j).count = 0;
+        }
+    }
+}
+
+function _getStaticCollisionGrid() {
+    if (collisionGridStatic) {
+        return collisionGridStatic.clone();
+    }
+
+    return null;
+}
+
+function _getDynamicCollisionGrid() {
+    if (collisionGridDynamic) {
+        return collisionGridDynamic.clone();
+    }
+
+    return null;
+}
+
+function _getCollisionGrid() {
+    var grid = _getStaticCollisionGrid();
+    if (grid) {
+        var dynamicGrid = collisionGridDynamic;
+        if (dynamicGrid) {
+            for (var i = 0; i < grid.width; i++) {
+                for (var j = 0; j < grid.height; j++) {
+                    if (!dynamicGrid.isWalkableAt(i, j)) {
+                        grid.setWalkableAt(i, j, false);
+                    }
+                }
+            }
+        }
+    }
+
+    return grid;
+}
+
+function _setDynamicCollision(gridPos) {
+    var node = collisionGridDynamic.getNodeAt(gridPos.x, gridPos.y);
+    node.count = node.count + 1;
+
+    node.walkable = false;
+}
+
+function _unsetDynamicCollision(gridPos) {
+    var node = collisionGridDynamic.getNodeAt(gridPos.x, gridPos.y);
+    node.count = Math.max(node.count - 1, 0);
+
+    if (node.count === 0) {
+        node.walkable = true;
+    }
+}
+
+function _checkStaticCollision(gridPos) {
+    if (collisionGridStatic) {
+        return !collisionGridStatic.isWalkableAt(gridPos.x, gridPos.y);
+    } else {
+        return false;
+    }
+}
+
+function _checkDynamicCollision(gridPos) {
+    if (collisionGridDynamic) {
+        return !collisionGridDynamic.isWalkableAt(gridPos.x, gridPos.y);
+    } else {
+        return false;
+    }
+}
+
+function _checkCollision(gridPos) {
+    return _checkStaticCollision(gridPos) || _checkDynamicCollision(gridPos);
+}
 
 module.exports = {
-    getCurrentLevel: function() {
-        return currentLevel;
-    },
-    setCurrentLevel: function(level) {
-        currentLevel = level;
+    init: init,
+
+    TEMP_setCurrentLevel: function() {
+        _onLevelLoaded();
     },
 
     registerPlayer: _registerPlayer,
     getLocalPlayer: _getLocalPlayer,
+    getPlayerAtGridPosition: getPlayerAtGridPosition,
 
     registerEnemy: _registerEnemy,
     getEnemy: _getEnemy,
-    getNearestEnemyWorldPos: _getNearestEnemyWorldPos
+    getNearestEnemyWorldPos: _getNearestEnemyWorldPos,
+
+    getStaticCollisionGrid: _getStaticCollisionGrid,
+    getDynamicCollisionGrid: _getDynamicCollisionGrid,
+    getCollisionGrid: _getCollisionGrid,
+
+    setDynamicCollision: _setDynamicCollision,
+    unsetDynamicCollision: _unsetDynamicCollision,
+
+    checkStaticCollision: _checkStaticCollision,
+    checkDynamicCollision: _checkDynamicCollision,
+    checkCollision: _checkCollision,
+
+    addBreadcrumb: addBreadcrumb,
+    clearBreadcrumbs: clearBreadcrumbs,
+    getNewestBreadcrumb: getNewestBreadcrumb,
+
+    checkLineOfSight: checkLineOfSight,
+
+    getNearestPlayerInRange: getNearestPlayerInRange,
+
+    TEMP_getEnemy: TEMP_getEnemy,
+    TEMP_getEnemies: TEMP_getEnemies,
 };
 
-},{"./util":19}],14:[function(require,module,exports){
-'use strict';
-
-var ResourceMgr = require('./resource_mgr'),
-    FramePacker = require('./core/frame_packer'),
-    MaterialMgr = require('./core/material_mgr'),
-    Level = require('./level'),
-    AnimData = require('./anim_data');
-
-function prepareAnimImpl(pal, cl2Path, decodedFrameLists) {
-    var cl2 = ResourceMgr.getFile(cl2Path);
-    var decodedImages = cl2.decodeFrames(pal);
-
-    decodedFrameLists.push(decodedImages[0]);
-    var lastIndex = decodedFrameLists.length - 1;
-
-    // Store some basic meta info in properties of first animation
-    // in this series. Allows for easy retrieval during later parsing.
-    decodedFrameLists[lastIndex].baseAnimName = cl2.name;
-    decodedFrameLists[lastIndex].imageCount = decodedImages.length;
-
-    for (var i = 1; i < decodedImages.length; i++) {
-        decodedFrameLists.push(decodedImages[i]);
-    }
-}
-
-function registerTextures(colorBuffers, colorBufferIndexToTextureIdLUT) {
-    for (var i = 0; i < colorBuffers.length; i++) {
-        var textureId = MaterialMgr.loadTexture(colorBuffers[i], THREE);
-        colorBufferIndexToTextureIdLUT[i] = textureId;
-    }
-}
-
-function parseTileset(packedFrameInfo, decodedFrameLists, colorBufferIndexToTextureIdLUT, startListOffset, level, animData) {
-    var decodedFrames = decodedFrameLists[startListOffset];
-    var frameListOffsetIndex = packedFrameInfo.frameListToIndexOffsetLUT[startListOffset];
-
-    for (var i = 0; i < decodedFrames.length; i++) {
-        var index = frameListOffsetIndex + i;
-        var bufferIndex = packedFrameInfo.indexToBufferIndexLUT[index];
-
-        level.tilesetInfos[i] = {
-            textureId: colorBufferIndexToTextureIdLUT[bufferIndex],
-            uvs: packedFrameInfo.uvs[index]
-        };
-    }
-
-    return startListOffset + 1;
-}
-
-function parseAnim(packedFrameInfo, decodedFrameLists, colorBufferIndexToTextureIdLUT, startListOffset, level, animData) {
-    var baseAnimName = decodedFrameLists[startListOffset].baseAnimName;
-    var imageCount = decodedFrameLists[startListOffset].imageCount;
-
-    var endOffset = startListOffset + imageCount;
-    var animCount = 0;
-    for (var i = startListOffset; i < endOffset; i++) {
-        var frameListOffsetIndex = packedFrameInfo.frameListToIndexOffsetLUT[i];
-        var decodedFrames = decodedFrameLists[i];
-
-        var frameCount = decodedFrames.length;
-        var uvs = new Array(frameCount);
-        var textureIds = new Array(frameCount);
-        var dimensions = new Array(frameCount);
-        for (var j = 0; j < frameCount; j++) {
-            var frame = decodedFrames[j];
-            var index = frameListOffsetIndex + j;
-            uvs[j] = packedFrameInfo.uvs[index];
-            textureIds[j] = colorBufferIndexToTextureIdLUT[packedFrameInfo.indexToBufferIndexLUT[index]];
-            dimensions[j] = [frame.width, frame.height];
-        }
-
-        // Animation naming convention:
-        // phalln_0, phalln_1, ..., phalln_7
-        var animName = baseAnimName + '_' + animCount;
-        animData[animName] = {
-            frameCount: frameCount,
-            textureIds: textureIds,
-            uvs: uvs,
-            dimensions: dimensions
-        };
-
-        animCount++;
-    }
-
-    return endOffset;
-}
-
-function doLoadStartup(decodedFrameLists, parsers) {
-    function prepare_player(decodedFrameLists, parsers) {
-        var pal = ResourceMgr.getFile('levels/towndata/town.pal');
-        prepareAnimImpl(pal, 'plrgfx/warrior/wls/wlsas.cl2', decodedFrameLists);
-        prepareAnimImpl(pal, 'plrgfx/warrior/wls/wlsaw.cl2', decodedFrameLists);
-        prepareAnimImpl(pal, 'plrgfx/warrior/wls/wlsat.cl2', decodedFrameLists);
-        parsers.push(parseAnim, parseAnim, parseAnim);
-    }
-
-    prepare_player(decodedFrameLists, parsers);
-}
-
-function doLoadLevel_0(decodedFrameLists, parsers) {
-    function prepare_town(decodedFrameLists, parsers) {
-        var pal = ResourceMgr.getFile('levels/towndata/town.pal');
-        var cel = ResourceMgr.getFile('levels/towndata/town.cel');
-        decodedFrameLists.push(cel.decodeFrames(pal));
-        parsers.push(parseTileset);
-    }
-
-    function prepare_falspear(decodedFrameLists, parsers) {
-        var pal = ResourceMgr.getFile('levels/towndata/town.pal');
-        prepareAnimImpl(pal, 'monsters/falspear/phalla.cl2', decodedFrameLists);
-        prepareAnimImpl(pal, 'monsters/falspear/phalln.cl2', decodedFrameLists);
-        prepareAnimImpl(pal, 'monsters/falspear/phalld.cl2', decodedFrameLists);
-        parsers.push(parseAnim, parseAnim, parseAnim);
-    }
-
-    prepare_town(decodedFrameLists, parsers);
-    prepare_falspear(decodedFrameLists, parsers);
-}
-
-function _loadStartup(onFinishedCallback) {
-    console.log('Loading persistent data...');
-    ResourceMgr.loadPersistentData(function() {
-        var decodedFrameLists = [];
-        var parsers = [];
-
-        doLoadStartup(decodedFrameLists, parsers);
-
-        // Pack all the level frames into compact texture atlases.
-        var width = 1024;
-        var height = 1024;
-        var packedFrameInfo = FramePacker.pack(width, height, decodedFrameLists);
-
-        // Register the texture atlases.
-        var colorBufferIndexToTextureIdLUT = [];
-        registerTextures(packedFrameInfo.colorBuffers, colorBufferIndexToTextureIdLUT);
-
-        var animData = {};
-
-        // Create run-time structures for easy access to the data.
-        var listOffset = 0;
-        for (var i = 0; i < parsers.length; i++) {
-            listOffset = parsers[i](packedFrameInfo, decodedFrameLists, colorBufferIndexToTextureIdLUT, listOffset, null, animData);
-        }
-
-        AnimData.addData(animData);
-        onFinishedCallback();
-    });
-}
-
-function _loadLevel(levelIndex, onFinishedCallback) {
-    console.log('Loading level data...');
-    ResourceMgr.loadLevelData(levelIndex, function() {
-        var decodedFrameLists = [];
-        var parsers = [];
-
-        switch (levelIndex) {
-            case 0:
-                doLoadLevel_0(decodedFrameLists, parsers);
-                break;
-            default:
-                console.error('Unhandled level index: ' + levelIndex);
-                return;
-        }
-
-        // Pack all the level frames into compact texture atlases.
-        var width = 1024;
-        var height = 1024;
-        var packedFrameInfo = FramePacker.pack(width, height, decodedFrameLists);
-
-        // Register the texture atlases.
-        var colorBufferIndexToTextureIdLUT = [];
-        registerTextures(packedFrameInfo.colorBuffers, colorBufferIndexToTextureIdLUT);
-
-        var level = new Level();
-        var animData = {};
-
-        // Create run-time structures for easy access to the data.
-        var listOffset = 0;
-        for (var i = 0; i < parsers.length; i++) {
-            listOffset = parsers[i](packedFrameInfo, decodedFrameLists, colorBufferIndexToTextureIdLUT, listOffset, level, animData);
-        }
-
-        AnimData.addData(animData);
-        onFinishedCallback(level);
-    });
-}
-
-module.exports = {
-    loadStartup: _loadStartup,
-    loadLevel: _loadLevel
-};
-
-},{"./anim_data":2,"./core/frame_packer":7,"./core/material_mgr":8,"./level":12,"./resource_mgr":18}],15:[function(require,module,exports){
+},{"./core/file_mgr":9,"./util":24,"pathfinding":58,"three-debug-draw":83}],17:[function(require,module,exports){
 'use strict';
 
 var MaterialMgr = require('./core/material_mgr');
@@ -1634,6 +2818,8 @@ function drawPillarSide(pillarBlocks, blockStartIndex, xOffset, yOffset, zCoord)
 
             var vertOffset = geometry.vertices.length;
 
+            // TODO: tileInfo has a w/h property that can be used to dynamically dimensions
+
             // Vertices (bottom left, bottom right, top right, top left).
             geometry.vertices.push(new THREE.Vector3(xOffset + rect.x, yOffset + rect.y + extraYOffset, zCoord));
             geometry.vertices.push(new THREE.Vector3(xOffset + rect.x + BLOCK_WIDTH, yOffset + rect.y + extraYOffset, zCoord));
@@ -1647,15 +2833,11 @@ function drawPillarSide(pillarBlocks, blockStartIndex, xOffset, yOffset, zCoord)
             // UVs.
             var uvs = tileInfo.uvs;
             geometry.faceVertexUvs[0].push([
-                    new THREE.Vector2(uvs[2], uvs[3]),
-                    new THREE.Vector2(uvs[4], uvs[5]),
-                    new THREE.Vector2(uvs[0], uvs[1])
-                ]);
+                uvs[1], uvs[2], uvs[0]
+            ]);
             geometry.faceVertexUvs[0].push([
-                new THREE.Vector2(uvs[4], uvs[5]),
-                new THREE.Vector2(uvs[6], uvs[7]),
-                new THREE.Vector2(uvs[0], uvs[1])
-                ]);
+                uvs[2], uvs[3], uvs[0]
+            ]);
         } else {
             isFirst = true;
         }
@@ -1675,11 +2857,15 @@ var materials = [];
 var tilesetInfos;
 var textureIdToGeometryLUT = [];
 
-function _drawDungeon(dunFile, minFile, inTilesetInfos, scene) {
+function _drawDungeon(dunFile, tilFile, minFile, scene) {
     geometries = [];
     materials = [];
-    tilesetInfos = inTilesetInfos;
     textureIdToGeometryLUT = [];
+
+    var SpriteMgr = require('./core/sprite_mgr');
+    tilesetInfos = SpriteMgr.getSprite('town');
+
+    dunFile.unpack(tilFile);
 
     for (var row = 0; row < dunFile.rowCount; row++) {
         for (var col = 0; col < dunFile.colCount; col++) {
@@ -1718,7 +2904,7 @@ module.exports = {
     drawDungeon: _drawDungeon
 };
 
-},{"./core/material_mgr":8}],16:[function(require,module,exports){
+},{"./core/material_mgr":11,"./core/sprite_mgr":13}],18:[function(require,module,exports){
 'use strict';
 
 // Inherit EventEmitter to allow event listeners to be registered directly to this object.
@@ -1735,6 +2921,7 @@ function NetworkMgr () {
 
 NetworkMgr.prototype.registerObject = function(obj) {
     // TODO: duplicate check
+    // TODO: type check
     this.networkObjects.push(obj);
 };
 
@@ -1870,243 +3057,267 @@ CreateChannel
 
 module.exports = NetworkMgr;
 
-},{"events":68,"inherits":38,"lodash":39}],17:[function(require,module,exports){
+},{"events":90,"inherits":56,"lodash":57}],19:[function(require,module,exports){
 'use strict';
 
-var PF = require('pathfinding'),
+var assert = require('assert'),
+    inherits = require('inherits'),
+    Component = require('./../core/component'),
+    PF = require('pathfinding'),
     util = require('./../util'),
     DbgDraw = require('three-debug-draw')(THREE),
     LevelController = require('./../level_controller'),
-    ResourceMgr = require('./../resource_mgr');
+    Signals = require('./../signals');
 
-function ActionComponent (entity, game) {
-    this.entity = entity;
-    this.game = game;
+var Vector2 = THREE.Vector2;
 
-    this.MOVE_SPEED = 100;
+var State = {
+    IDLE: 0,
+    MOVE: 1,
+    ATTACK: 2,
+};
 
-    this.currentNode = [0, 0];
-    this.currentDirection = new this.game.THREE.Vector2(0, -1);
+function ActionComponent (entity) {
+    Component.call(this, entity);
+
+    this.game = entity.game;
+
+    this.MOVE_SPEED = new Vector2(150, 100);
+
+    this.currentState = State.IDLE;
+
+    this.currentFacingDirection = 0;
+    this.currentMoveDirection = new Vector2();
+    this.currentMoveSpeed = 0;
     this.currentPath = null;
     this.currentPathIndex = -1;
-    this.currentTargetPosX = entity.positionX;
-    this.currentTargetPosY = entity.positionY;
-
-    // TODO: turn into general purpose FSM
-    this.isAttacking = false;
-
-    this.TEMP_prevEnemyTarget = null;
-}
-
-ActionComponent.prototype.start = function() {
-    this.animComponent = this.entity.getComponent('AnimComponent');
-    this.networkComponent = this.entity.getComponent('NetworkComponent');
-
-    // TODO: temporary anim-event system
-    var self = this;
-    this.animComponent.onFrameEndCallback = function(animName, frameNum) {
-        if (animName.substring(0, 5) === 'wlsat') {
-            if (frameNum === 15) {
-                self.isAttacking = false;
-            } else if (frameNum === 9) {
-                // var pos = util.gridToWorldCoord(self.attackTile[0], self.attackTile[1]);
-                // DbgDraw.drawSphere(new THREE.Vector3(pos.x, pos.y, 1000), 10, 'yellow');
-
-                var enemy = LevelController.getEnemy(self.attackTile);
-                if (enemy) {
-                    var fallen = enemy.getComponent('BehaviourFallen');
-                    fallen.TEMP_doDamage();
-
-                    fallen.TEMP_TargetOn();
-                } else{
-                    console.log('no enemy found!!');
-                }
-            }
-        }
-    };
-};
-
-ActionComponent.prototype.destroy = function() {
-
-};
-
-ActionComponent.prototype.update = function(dt) {
-    // TODO:
-    if (this.networkComponent.isMine) {
-        this.game.camera.position.x = this.entity.positionX;
-        this.game.camera.position.y = this.entity.positionY;
-    }
-
-    if (this.networkComponent.isMine) {
-        if (this.attackTile) {
-            // util.dbgDrawTile(this.attackTile[0], this.attackTile[1], 'yellow', this.game.THREE, DbgDraw);
-        }
-
-        // Draw current tile.
-        util.dbgDrawTile(this.currentNode[0], this.currentNode[1], 'cyan', this.game.THREE, DbgDraw);
-    }
-
-    if (this.currentPath === null) {
-        this._updateAnimation();
-        return;
-    }
-
-    // TODO: moveSpeed should be different in X/Y directions due to distance differences (y = 0.5 * x)
-    var moveAmount = this.MOVE_SPEED * dt;
-
-    var oldPos = new this.game.THREE.Vector2(this.entity.positionX, this.entity.positionY);
-    var newPosX, newPosY;
-    var distSqr = oldPos.distanceToSquared(new this.game.THREE.Vector2(this.currentTargetPosX, this.currentTargetPosY));
-    if (distSqr <= (moveAmount * moveAmount)) {
-        newPosX = this.currentTargetPosX;
-        newPosY = this.currentTargetPosY;
-
-        // Update current node.
-        this.currentNode = this.currentPath[this.currentPathIndex];
-
-        // End of path?
-        if ((this.currentPathIndex + 1) >= this.currentPath.length) {
-            this.currentPath = null;
-        } else {
-            // To next node.
-            this.currentPathIndex++;
-            var omg = util.gridToWorldCoord(
-                this.currentPath[this.currentPathIndex][0], this.currentPath[this.currentPathIndex][1]);
-            this.currentTargetPosX = omg.x;
-            this.currentTargetPosY = omg.y;
-        }
-    } else {
-        var dir = new this.game.THREE.Vector2(this.currentTargetPosX - oldPos.x, this.currentTargetPosY - oldPos.y);
-        dir.normalize();
-
-        this.currentDirection = dir;
-
-        newPosX = oldPos.x + dir.x * moveAmount;
-        newPosY = oldPos.y + dir.y * moveAmount;
-
-        // DbgDraw.drawLine(
-        //     new this.game.THREE.Vector3(oldPos.x, oldPos.y, 6000),
-        //     new this.game.THREE.Vector3(this.currentTargetPosX, this.currentTargetPosY, 6000),
-        //     'red'
-        // );
-    }
-
-    this.entity.setPosition(newPosX, newPosY);
-
-    this._updateAnimation();
-};
-
-/**
- * Convert a direction vector into a direction index.
- * 0 = down
- * 1 = down/left
- * 2 = left
- * ...
- * 7 = down/right
- */
-function dirVecToDirIndex(dirVec) {
-    if (dirVec.x === 0) {
-        if (dirVec.y < 0) {
-            return 0;
-        } else {
-            return 4;
-        }
-    } else if (dirVec.y === 0) {
-        if (dirVec.x < 0) {
-            return 2;
-        } else {
-            return 6;
-        }
-    } else if (dirVec.x < 0) {
-        if (dirVec.y < 0) {
-            return 1;
-        } else {
-            return 3;
-        }
-    } else if (dirVec.x > 0) {
-        if (dirVec.y < 0) {
-            return 7;
-        } else {
-            return 5;
-        }
-    }
-
-    return 0;
-}
-
-var DIR_INDEX_GRID_OFFSET_LUT = [];
-DIR_INDEX_GRID_OFFSET_LUT[0] = [1, 1];
-DIR_INDEX_GRID_OFFSET_LUT[1] = [0, 1];
-DIR_INDEX_GRID_OFFSET_LUT[2] = [-1, 1];
-DIR_INDEX_GRID_OFFSET_LUT[3] = [-1, 0];
-DIR_INDEX_GRID_OFFSET_LUT[4] = [-1, -1];
-DIR_INDEX_GRID_OFFSET_LUT[5] = [0, -1];
-DIR_INDEX_GRID_OFFSET_LUT[6] = [1, -1];
-DIR_INDEX_GRID_OFFSET_LUT[7] = [1, 0];
-
-function dirIndexToGridOffset(index) {
-    return DIR_INDEX_GRID_OFFSET_LUT[index];
-}
-
-function isCollisionTile(col, row) {
-    // TODO: temp
-    var dun = ResourceMgr.getFile('levels/towndata/sector1s.dun');
-    var sol = ResourceMgr.getFile('levels/towndata/town.sol');
-    var pillarIndex = dun.pillarData[col][row];
-    return sol.isCollision(pillarIndex);
-}
-
-ActionComponent.prototype.TEMP_targetUpdate = function (worldPos) {
-    var enemy = LevelController.getNearestEnemyWorldPos(worldPos, 20);
-    if (enemy) {
-        enemy.getComponent('BehaviourFallen').TEMP_TargetOn();
-        this.TEMP_prevEnemyTarget = enemy;
-    } else {
-        if (this.TEMP_prevEnemyTarget) {
-            this.TEMP_prevEnemyTarget.getComponent('BehaviourFallen').TEMP_TargetOff();
-            this.TEMP_prevEnemyTarget = null;
-        }
-    }
-};
-
-// TODO: should be 'poll-driven' as opposed to 'event-driven'.
-ActionComponent.prototype.TEMP_requestMove = function (gridPos) {
-    // If we have a target, let's attack it.
-    if (this.TEMP_prevEnemyTarget) {
-        var enemyGridPos = util.worldToGridCoord(this.TEMP_prevEnemyTarget.positionX, this.TEMP_prevEnemyTarget.positionY);
-        this.TEMP_requestAttack(enemyGridPos);
-        return;
-    }
-
-    var grid = new PF.Grid(50, 50);
-    var finder = new PF.AStarFinder({
+    this.currentTargetPosition = this.entity.position.clone();
+    this.currentDistanceRemainingToTargetPosition = 0;
+    this.pathfinder = new PF.AStarFinder({
         allowDiagonal: true,
         dontCrossCorners: true
     });
 
-    for (var i = 0; i < 50; i++) {
-        for (var j = 0; j < 50; j++) {
-            if (isCollisionTile(j, i)) {
-                grid.setWalkableAt(j, i, false);
-            }
+    this.breadCrumbSpawnTimer = 0;
+    this.TEMP_enemyKillCount = 0;
+}
+
+inherits(ActionComponent, Component);
+
+ActionComponent.prototype.start = function() {
+    this.animComponent = this.entity.getComponent('AnimComponent');
+    this.networkComponent = this.entity.getComponent('NetworkComponent');
+    this.gameObjectComponent = this.entity.getComponent('GameObjectComponent');
+
+    this._registerAnimEvents();
+
+    this.entity.addSignalListener('damage', this._onDamaged.bind(this));
+};
+
+ActionComponent.prototype._registerAnimEvents = function () {
+    // TODO: cleaner way to do this for all 8 directions?
+
+    var i;
+    var self = this;
+
+    function doAttack() {
+        var attackGridPosition = util.getGridOffsetInDirection(self.currentFacingDirection);
+        attackGridPosition.add(self.gameObjectComponent.currentGridPosition);
+
+        // var dbgAttackWorldPos = new THREE.Vector2();
+        // util.gridToWorldCoord(attackGridPosition, dbgAttackWorldPos);
+        // DbgDraw.drawSphere(new THREE.Vector3(dbgAttackWorldPos.x, dbgAttackWorldPos.y, 1000), 10, 'yellow');
+
+        var enemy = LevelController.getEnemy(attackGridPosition);
+        if (enemy) {
+            var info = {
+                amount: 1,
+                fromEntity: self.entity,
+            };
+            Signals.sendDamage(enemy, info);
         }
     }
 
-    var path = finder.findPath(
-        this.currentNode[0], this.currentNode[1],
-        gridPos.col, gridPos.row,
-        grid);
-
-    if (path.length < 2) {
-        return;
+    function doAttackEnd() {
+        self.currentState = State.IDLE;
     }
 
-    this.currentPath = path;
-    this.currentPathIndex = 1;
-    var targetPos = util.gridToWorldCoord(path[this.currentPathIndex][0], path[this.currentPathIndex][1]);
-    this.currentTargetPosX = targetPos.x;
-    this.currentTargetPosY = targetPos.y;
+    for (i = 0; i < 8; i++) {
+        this.animComponent.registerCallback('wlsat_' + i, 9, doAttack);
+    }
+    for (i = 0; i < 8; i++) {
+        this.animComponent.registerCallback('wlsat_' + i, doAttackEnd);
+    }
+};
 
+ActionComponent.prototype._onDamaged = function (info) {
+    // console.log('Player takes damage: ' + info.amount);
+};
+
+ActionComponent.prototype.TEMP_onEnemyKilled = function() {
+    this.TEMP_enemyKillCount++;
+    console.log('enemy killed: ' + this.TEMP_enemyKillCount);
+}
+
+var BREADCRUMB_SPAWN_INTERVAL = 0.5;
+
+ActionComponent.prototype.update = function() {
+    switch (this.currentState) {
+        case State.MOVE:
+            this._followPath();
+            break;
+    }
+
+    // Animation update.
+    switch (this.currentState) {
+        case State.IDLE:
+            this.animComponent.play('wlsas_' + this.currentFacingDirection);
+            break;
+        case State.MOVE:
+            this.animComponent.play('wlsaw_' + this.currentFacingDirection);
+            break;
+    }
+
+    if (this.breadCrumbSpawnTimer > BREADCRUMB_SPAWN_INTERVAL) {
+        var breadCrumb = {
+            id: 0,
+            gridPosition: this.gameObjectComponent.currentGridPosition.clone()
+        };
+
+        LevelController.addBreadcrumb(breadCrumb);
+
+        this.breadCrumbSpawnTimer = 0;
+    }
+    else {
+        this.breadCrumbSpawnTimer += this.game.time.deltaTime;
+    }
+};
+
+ActionComponent.prototype._followPath = function () {
+    var moveAmount = this.currentMoveSpeed * this.game.time.deltaTime;
+    this.currentDistanceRemainingToTargetPosition -= moveAmount;
+
+    // Arrived at target position?
+    if (this.currentDistanceRemainingToTargetPosition <= 0.0) {
+        this.entity.position.copy(this.currentTargetPosition);
+
+        // End of path?
+        if (this._isEndOfPath()) {
+            this.currentPath = null;
+            this.currentState = State.IDLE;
+        } else {
+            // To next node.
+            this.currentPathIndex++;
+
+            var nextPathNode = this.currentPath[this.currentPathIndex];
+            this._setTargetGridPosition(nextPathNode[0], nextPathNode[1]);
+        }
+    } else {
+        this.entity.position.set(
+            this.entity.position.x + this.currentMoveDirection.x * moveAmount,
+            this.entity.position.y + this.currentMoveDirection.y * moveAmount);
+
+        // DbgDraw.drawLine(
+        //     new this.game.THREE.Vector3(this.entity.position.x, this.entity.position.y, 6000),
+        //     new this.game.THREE.Vector3(this.currentTargetPosition.x, this.currentTargetPosition.y, 6000),
+        //     'red'
+        // );
+    }
+};
+
+ActionComponent.prototype._isEndOfPath = function () {
+    // End of the path?
+    if ((this.currentPathIndex + 1) >= this.currentPath.length) {
+        return true;
+    }
+
+    // Next path node is blocked?
+    var nextNode = this.currentPath[this.currentPathIndex + 1];
+    var nextGridPos = new THREE.Vector2(nextNode[0], nextNode[1]);
+    if (LevelController.checkDynamicCollision(nextGridPos)) {
+        return true;
+    }
+
+    return false;
+};
+
+ActionComponent.prototype._setTargetGridPosition = function (x, y) {
+    // Facing direction.
+    this._setFacingDirection(x, y);
+
+    // Move speed.
+    this.currentMoveSpeed = util.getMoveSpeed(this.currentFacingDirection, this.MOVE_SPEED.x, this.MOVE_SPEED.y);
+
+    // Update current grid position.
+    this.gameObjectComponent.setGridPosition(new Vector2(x, y));
+
+    // Target position.
+    util.gridToWorldCoord(this.gameObjectComponent.currentGridPosition, this.currentTargetPosition);
+    this.currentDistanceRemainingToTargetPosition = this.entity.position.distanceTo(this.currentTargetPosition);
+
+    // Move direction.
+    this.currentMoveDirection.setX(this.currentTargetPosition.x - this.entity.position.x);
+    this.currentMoveDirection.setY(this.currentTargetPosition.y - this.entity.position.y);
+    this.currentMoveDirection.normalize();
+};
+
+ActionComponent.prototype._setFacingDirection = function (x, y) {
+    var facingDirection = util.getDirection(this.gameObjectComponent.currentGridPosition.x, this.gameObjectComponent.currentGridPosition.y, x, y);
+    if (facingDirection !== -1) {
+        this.currentFacingDirection = facingDirection;
+    }
+};
+
+ActionComponent.prototype.isMoving = function () {
+    return this.currentState === State.MOVE;
+};
+
+ActionComponent.prototype.requestMove = function (targetGridPosition, ignoreTargetGridPositionCollision) {
+    assert(this.currentState === State.IDLE ||
+           this.currentState === State.MOVE);
+
+    // No need to re-calculate path since we're already moving to same location.
+    if (this.isMoving()) {
+        var lastPathNode = this.currentPath[this.currentPath.length - 1];
+        if ((lastPathNode[0] === targetGridPosition.x) &&
+            (lastPathNode[1] === targetGridPosition.y)) {
+            return true;
+        }
+    }
+
+    // If target is already 1 cell away, no need to actually move.
+    if (ignoreTargetGridPositionCollision &&
+        util.getGridDistance(this.gameObjectComponent.currentGridPosition, targetGridPosition) === 1) {
+        // Only short-circuit if we're already stopped, else we could be moving to a different location.
+        if (!this.isMoving()) {
+            return true;
+        }
+    }
+
+    var grid = LevelController.getCollisionGrid();
+
+    if (ignoreTargetGridPositionCollision) {
+        grid.setWalkableAt(targetGridPosition.x, targetGridPosition.y, true);
+    }
+
+    var path = this.pathfinder.findPath(
+        this.gameObjectComponent.currentGridPosition.x, this.gameObjectComponent.currentGridPosition.y,
+        targetGridPosition.x, targetGridPosition.y,
+        grid);
+
+    // No path.
+    if (path.length < 2) {
+        return false;
+    }
+
+    this.currentState = State.MOVE;
+    this.currentPath = path;
+    this.currentPathIndex = 0;
+
+    var nextPathNode = path[this.currentPathIndex];
+    this._setTargetGridPosition(nextPathNode[0], nextPathNode[1]);
+
+    /*
     // TODO: alert remote player to follow this path
     this.networkComponent.networkMgr.broadcastToOthers_object({
         rpc: 'RPC_followPath',
@@ -2115,218 +3326,647 @@ ActionComponent.prototype.TEMP_requestMove = function (gridPos) {
             path: path,
             targetPosX: this.currentTargetPosX,
             targetPosY: this.currentTargetPosY,
-            startX: this.entity.positionX,
-            startY: this.entity.positionY
+            startX: this.entity.position.x,
+            startY: this.entity.position.y
         }
     });
+    */
+
+    return true;
 };
 
-ActionComponent.prototype._updateAnimation = function () {
-    if (this.isAttacking) {
-        return;
-    }
-
-    // TODO;
-    var idx;
-    if (this.currentPath === null) {
-        idx = dirVecToDirIndex(this.currentDirection);
-        this.animComponent.play('wlsas_' + idx);
-    } else {
-        idx = dirVecToDirIndex(this.currentDirection);
-        this.animComponent.play('wlsaw_' + idx);
+ActionComponent.prototype.stopMoving = function () {
+    if (this.isMoving()) {
+        // Trim the path so only the current target node remains.
+        var startIndex = this.currentPathIndex;
+        var endIndex = startIndex + 1;
+        if (endIndex < this.currentPath.length) {
+            this.currentPath = this.currentPath.slice(startIndex, endIndex);
+        }
     }
 };
 
-ActionComponent.prototype.TEMP_requestAttack = function(gridPos) {
-    if (this.isAttacking) {
-        return;
-    }
+ActionComponent.prototype.isAttacking = function () {
+    return this.currentState === State.ATTACK;
+};
 
-    // Stop moving.
-    this.currentPath = null;
+ActionComponent.prototype.attackInDirection = function (gridPos) {
+    assert(this.currentState === State.IDLE);
 
-    this.isAttacking = true;
+    this._setFacingDirection(gridPos.x, gridPos.y);
+    this.animComponent.play('wlsat_' + this.currentFacingDirection);
+    this.currentState = State.ATTACK;
+};
 
-    // Face correct direction and attack.
-    var a = util.gridToWorldCoord(gridPos.col, gridPos.row);
-    var b = util.gridToWorldCoord(this.currentNode[0], this.currentNode[1]);
-    this.currentDirection = new this.game.THREE.Vector2(
-        a.x - b.x,
-        a.y - b.y);
-    this.currentDirection.normalize();
-    var idx = dirVecToDirIndex(this.currentDirection);
+ActionComponent.prototype.faceDirection = function (gridPos) {
+    assert(this.currentState === State.IDLE);
 
-    this.animComponent.play('wlsat_' + idx);
-
-    var gridOffset = dirIndexToGridOffset(idx);
-    this.attackTile = [this.currentNode[0] + gridOffset[0], this.currentNode[1] + gridOffset[1]];
+    this._setFacingDirection(gridPos.x, gridPos.y);
 };
 
 module.exports = ActionComponent;
 
-},{"./../level_controller":13,"./../resource_mgr":18,"./../util":19,"pathfinding":40,"three-debug-draw":60}],18:[function(require,module,exports){
+},{"./../core/component":7,"./../level_controller":16,"./../signals":23,"./../util":24,"assert":85,"inherits":56,"pathfinding":58,"three-debug-draw":83}],20:[function(require,module,exports){
 'use strict';
 
-var util = require('./util'),
-    async = require('async'),
-    DFormats = require('diablo-file-formats');
+var inherits = require('inherits'),
+    Component = require('./../core/component');
 
-function doLoadImpl(path, userCallback) {
-    return function(asyncCallback) {
-        util.requestReadFile(path, function(err, res, buffer) {
-            if (err) {
-                console.error('Unable to load data file: ' + path);
-                throw err;
-            }
+function FollowCameraComponent (entity) {
+    Component.call(this, entity);
 
-            userCallback(buffer, path);
-            asyncCallback();
-        });
+    this.camera = entity.game.camera;
+}
+
+inherits(FollowCameraComponent, Component);
+
+FollowCameraComponent.prototype.update = function() {
+    // TODO: technically should be done in a lateUpdate to prevent camera position from being 1 frame behind
+    // (depending on update order)
+    this.camera.position.x = this.entity.position.x;
+    this.camera.position.y = this.entity.position.y;
+};
+
+module.exports = FollowCameraComponent;
+
+},{"./../core/component":7,"inherits":56}],21:[function(require,module,exports){
+'use strict';
+
+var inherits = require('inherits'),
+    Component = require('./../core/component'),
+    assert = require('assert'),
+    Stately = require('stately.js'),
+    util = require('./../util');
+
+function InputControllerComponent (entity) {
+    Component.call(this, entity);
+
+    this.game = entity.game;
+
+    this.mouseWorldPosition = new THREE.Vector2();
+    this.mouseGridPosition = new THREE.Vector2();
+    this.nextAction = null;
+
+    this.currentTargetThisFrame = null;
+    this.currentMoveToTarget = null;
+    this.previousMoveToGridPosition = new THREE.Vector2();
+
+    this.fsm = null;
+    this.fsmOnUpdate = null;
+}
+
+inherits(InputControllerComponent, Component);
+
+InputControllerComponent.prototype.start = function () {
+    this.actionComponent = this.entity.getComponent('ActionComponent');
+    this.gameObjectComponent = this.entity.getComponent('GameObjectComponent');
+
+    // Define FSM.
+    var stateDesc = {
+        'Idle': {
+            toMove: function() { return this.Move; },
+            toAttack: function() { return this.Attack; },
+            toMoveToTarget: function() { return this.MoveToTarget; }
+        },
+        'Move': {
+            toIdle: function() { return this.Idle; },
+            toAttack: function() { return this.Attack; },
+            toMoveToTarget: function() { return this.MoveToTarget; }
+        },
+        'Attack': {
+            toIdle: function() { return this.Idle; },
+            toMove: function() { return this.Move; },
+            toMoveToTarget: function() { return this.MoveToTarget; }
+        },
+        'MoveToTarget': {
+            toIdle: function() { return this.Idle; },
+            toAttack: function() { return this.Attack; },
+            toMove: function() { return this.Move; }
+        }
+    };
+
+    // Initialize.
+    this.fsm = Stately.machine(stateDesc, 'Idle');
+    this.fsmOnUpdate = this._updateIdle;
+
+    // Set callbacks.
+    var self = this;
+    this.fsm.onenterIdle = function () { self.fsmOnUpdate = self._updateIdle; };
+    this.fsm.onenterMove = function () { self.fsmOnUpdate = self._updateMove; };
+    this.fsm.onenterAttack = function () { self.fsmOnUpdate = self._updateAttack; };
+    this.fsm.onenterMoveToTarget = function () {
+        self.fsmOnUpdate = self._updateMoveToTarget;
+
+        assert(self.currentMoveToTarget !== null);
+        self.previousMoveToGridPosition = getTargetGridPosition(self.currentMoveToTarget);
+    };
+    this.fsm.onleaveMoveToTarget = function () { self.currentMoveToTarget = null; };
+};
+
+// TODO: refactor 'action queue' system to use a single object: { name: ATTACK, params... }
+var Action = {
+    MOVE: 0,
+    ATTACK: 1,
+    MOVE_TO_TARGET: 2
+};
+
+InputControllerComponent.prototype.update = function() {
+    var mousePos = this.game.mousePosition;
+    util.screenToWorldCoord(this.game.width, this.game.height, mousePos, this.game.camera, this.mouseWorldPosition);
+    util.worldToGridCoord(this.mouseWorldPosition, this.mouseGridPosition);
+
+    this._updateTarget();
+    this.fsmOnUpdate();
+};
+
+var LevelController = require('./../level_controller');
+var Signals = require('./../signals');
+
+InputControllerComponent.prototype._updateTarget = function () {
+    var enemy = LevelController.getNearestEnemyWorldPos(this.mouseWorldPosition);
+    if (enemy) {
+        Signals.sendTarget(enemy);
+        this.currentTargetThisFrame = enemy;
+    } else {
+        this.currentTargetThisFrame = null;
+    }
+};
+
+// TODO: move to input system
+var KeyCode = {
+    SHIFT: 16
+};
+
+function getTargetGridPosition(targetEntity) {
+    // TODO:
+    var goComponent = targetEntity.getComponent('GameObjectComponent');
+    return goComponent.currentGridPosition.clone();
+}
+
+InputControllerComponent.prototype._clearNextAction = function () {
+    this.nextAction = null;
+};
+
+InputControllerComponent.prototype._hasNextAction = function () {
+    return this.nextAction !== null;
+};
+
+function createAttackAction(attackPos) {
+    return {
+        type: Action.ATTACK,
+        pos: attackPos.clone()
     };
 }
 
-function doLoadPAL(path, storageObject) {
-    return doLoadImpl(path, function(buffer, path) {
-        storageObject[path] = DFormats.Pal.load(buffer, path);
+function createMoveAction(movePos) {
+    return {
+        type: Action.MOVE,
+        pos: movePos.clone()
+    };
+}
+
+function createMoveToAction(target) {
+    return {
+        type: Action.MOVE_TO_TARGET,
+        target: target
+    };
+}
+
+InputControllerComponent.prototype._updateIdle = function() {
+    if (this.game.isMouseButtonDown()) {
+        if (this.game.isKeyPressed(KeyCode.SHIFT)) {
+            this.actionComponent.attackInDirection(this.mouseGridPosition);
+            this.fsm.toAttack();
+        } else if (this.currentTargetThisFrame) {
+            var targetPos = getTargetGridPosition(this.currentTargetThisFrame);
+            if (this.actionComponent.requestMove(targetPos, true)) {
+                this.currentMoveToTarget = this.currentTargetThisFrame;
+                this.fsm.toMoveToTarget();
+            }
+        } else if (this.actionComponent.requestMove(this.mouseGridPosition)) {
+            this.fsm.toMove();
+        }
+    }
+};
+
+InputControllerComponent.prototype._updateMove = function() {
+    if (this.game.isMouseButtonDown()) {
+        if (this.game.isKeyPressed(KeyCode.SHIFT)) {
+            this.actionComponent.stopMoving();
+            this.nextAction = createAttackAction(this.mouseGridPosition);
+        } else if (this.currentTargetThisFrame) {
+            this.actionComponent.stopMoving();
+            this.nextAction = createMoveToAction(this.currentTargetThisFrame);
+        } else {
+            if (this.actionComponent.requestMove(this.mouseGridPosition)) {
+                // Continue moving...
+            } else {
+                this.actionComponent.stopMoving();
+            }
+
+            this._clearNextAction();
+        }
+    }
+
+    if (this.game.isMouseButtonPressed()) {
+        if (this._hasNextAction()) {
+            // Something is queued... don't overwrite it with a mouse press
+        }
+        else {
+            if (this.actionComponent.requestMove(this.mouseGridPosition)) {
+                // Continue moving...
+            } else {
+                this.actionComponent.stopMoving();
+            }
+        }
+    }
+
+    if (!this.actionComponent.isMoving()) {
+        var didTransition = false;
+        if (this._hasNextAction()) {
+            switch (this.nextAction.type) {
+                case Action.ATTACK:
+                    this.actionComponent.attackInDirection(this.nextAction.pos);
+                    this.fsm.toAttack();
+                    didTransition = true;
+                    break;
+                case Action.MOVE_TO_TARGET:
+                    var targetPos = getTargetGridPosition(this.nextAction.target);
+                    if (this.actionComponent.requestMove(targetPos, true)) {
+                        this.currentMoveToTarget = this.nextAction.target;
+                        this.fsm.toMoveToTarget();
+                        didTransition = true;
+                    }
+                    break;
+            }
+
+            this._clearNextAction();
+        }
+
+        if (!didTransition) {
+            this.fsm.toIdle();
+        }
+    }
+};
+
+InputControllerComponent.prototype._updateAttack = function() {
+    if (this.game.isMouseButtonDown()) {
+        if (this.game.isKeyPressed(KeyCode.SHIFT)) {
+            this.nextAction = createAttackAction(this.mouseGridPosition);
+        } else if (this.currentTargetThisFrame) {
+            this.nextAction = createMoveToAction(this.currentTargetThisFrame);
+        } else {
+            this.nextAction = createMoveAction(this.mouseGridPosition);
+        }
+    }
+
+    if (!this.actionComponent.isAttacking()) {
+        var didTransition = false;
+        if (this._hasNextAction()) {
+            switch (this.nextAction.type) {
+                case Action.ATTACK:
+                    this.actionComponent.attackInDirection(this.nextAction.pos);
+                    didTransition = true;
+                    break;
+                case Action.MOVE_TO_TARGET:
+                    var targetPos = getTargetGridPosition(this.nextAction.target);
+                    if (this.actionComponent.requestMove(targetPos, true)) {
+                        this.currentMoveToTarget = this.nextAction.target;
+                        this.fsm.toMoveToTarget();
+                        didTransition = true;
+                    }
+                    break;
+                case Action.MOVE:
+                    if (this.actionComponent.requestMove(this.nextAction.pos)) {
+                        this.fsm.toMove();
+                        didTransition = true;
+                    }
+                    break;
+            }
+
+            this._clearNextAction();
+        }
+
+        if (!didTransition) {
+            this.fsm.toIdle();
+        }
+    }
+};
+
+InputControllerComponent.prototype._updateMoveToTarget = function () {
+    assert(this.currentMoveToTarget !== null);
+
+    if (this.game.isMouseButtonDown()) {
+        if (this.game.isKeyPressed(KeyCode.SHIFT)) {
+            this.actionComponent.stopMoving();
+            this.nextAction = createAttackAction(this.mouseGridPosition);
+        } else if (this.currentTargetThisFrame) {
+            if (this.currentTargetThisFrame !== this.currentMoveToTarget) {
+                // New target!
+                this.currentMoveToTarget = this.currentTargetThisFrame;
+            }
+        } else {
+            if (!this.actionComponent.requestMove(this.mouseGridPosition)) {
+                this.actionComponent.stopMoving();
+            }
+
+            this.fsm.toMove();
+            this.currentMoveToTarget = null;
+            this._clearNextAction();
+        }
+    }
+
+    // TODO: handle transitions in case move target disappears (dies, etc)
+
+    if (!this.currentMoveToTarget) {
+        return;
+    }
+
+    var currentMoveToGridPosition = getTargetGridPosition(this.currentMoveToTarget);
+
+    // If our target position changed, re-pathfind.
+    if (!currentMoveToGridPosition.equals(this.previousMoveToGridPosition)) {
+        if (!this.actionComponent.requestMove(currentMoveToGridPosition, true)) {
+            this.actionComponent.stopMoving();
+        }
+
+        this.previousMoveToGridPosition.copy(currentMoveToGridPosition);
+    }
+
+    if (!this.actionComponent.isMoving()) {
+        var didTransition = false;
+        if (this._hasNextAction()) {
+            switch (this.nextAction.type) {
+                case Action.ATTACK:
+                    this.actionComponent.attackInDirection(this.nextAction.pos);
+                    this.fsm.toAttack();
+                    didTransition = true;
+                    break;
+            }
+
+            this._clearNextAction();
+        }
+
+        if (!didTransition) {
+            var distanceFromTarget = util.getGridDistance(currentMoveToGridPosition, this.gameObjectComponent.currentGridPosition);
+            if (distanceFromTarget === 1) {
+                // Depending on target type, our action is different.
+                if (this.currentMoveToTarget.getComponent('BehaviourFallen')) {
+                    // Enemy.
+                    this.actionComponent.attackInDirection(currentMoveToGridPosition);
+                    this.fsm.toAttack();
+                } else {
+                    // NPC.
+                    this.actionComponent.faceDirection(currentMoveToGridPosition);
+                    Signals.sendInteract(this.entity, this.currentMoveToTarget);
+                    this.fsm.toIdle();
+                }
+            } else {
+                this.fsm.toIdle();
+            }
+        }
+    }
+};
+
+module.exports = InputControllerComponent;
+
+},{"./../core/component":7,"./../level_controller":16,"./../signals":23,"./../util":24,"assert":85,"inherits":56,"stately.js":82}],22:[function(require,module,exports){
+'use strict';
+
+var FileMgr = require('./core/file_mgr'),
+    FramePacker = require('./core/frame_packer'),
+    SpriteMgr = require('./core/sprite_mgr'),
+    MaterialMgr = require('./core/material_mgr'),
+    assert = require('assert'),
+    pathLib = require('path');
+
+var LoadUnit = {
+    COMMON: 0,
+    LEVEL: 1
+};
+
+function appendArray(array0, array1) {
+    array1.forEach(function(entry) {
+        array0.push(entry);
     });
 }
 
-function doLoadCEL(path, storageObject) {
-    return doLoadImpl(path, function(buffer, path) {
-        storageObject[path] = DFormats.Cel.load(buffer, path);
+function decodeCEL(outFrames, spriteLUT, path) {
+    var pal = FileMgr.getFile('levels/towndata/town.pal');  // TODO:
+
+    var cel = FileMgr.getFile(path);
+    var frames = cel.decodeFrames(pal);
+    appendArray(outFrames, frames);
+
+    spriteLUT.push({
+        name: cel.name,
+        frameCount: frames.length
     });
 }
 
-function doLoadCL2(path, storageObject) {
-    return doLoadImpl(path, function(buffer, path) {
-        storageObject[path] = DFormats.Cl2.load(buffer, path);
-    });
+function decodeCL2(outFrames, spriteLUT, path) {
+    var pal = FileMgr.getFile('levels/towndata/town.pal');  // TODO:
+
+    var cl2 = FileMgr.getFile(path);
+    var images = cl2.decodeFrames(pal);
+
+    for (var i = 0; i < images.length; i++) {
+        var frames = images[i];
+        appendArray(outFrames, frames);
+
+        var spriteName = cl2.name + '_' + i;
+
+        spriteLUT.push({
+            name: spriteName,
+            frameCount: frames.length
+        });
+    }
 }
 
-function doLoadMIN(path, storageObject) {
-    return doLoadImpl(path, function(buffer, path) {
-        storageObject[path] = DFormats.Min.load(buffer, path);
-    });
+function loadSprites(loadUnit, filePaths) {
+    var frames = [];
+    var spriteLUT = [];
+
+    // Decode all frame data.
+    for (var i = 0; i < filePaths.length; i++) {
+        switch (pathLib.extname(filePaths[i])) {
+            case '.cel':
+                decodeCEL(frames, spriteLUT, filePaths[i]);
+                break;
+            case '.cl2':
+                decodeCL2(frames, spriteLUT, filePaths[i]);
+                break;
+        }
+    }
+
+    // Pack all the frame data into compact texture atlases.
+    var width = 1024;
+    var height = 1024;
+    var packedFrameInfo = FramePacker.pack(width, height, frames);
+
+    // Generate textures.
+    var colorBufferIndexToTextureIdLUT = [];
+    var colorBuffers = packedFrameInfo.colorBuffers;
+    for (i = 0; i < colorBuffers.length; i++) {
+        var textureId = MaterialMgr.loadTexture(loadUnit, colorBuffers[i]);
+        colorBufferIndexToTextureIdLUT[i] = textureId;
+    }
+
+    // Register sprites.
+    var count = 0;
+    var frameInfos = packedFrameInfo.frameInfos;
+    for (i = 0; i < spriteLUT.length; i++) {
+        var spriteInfo = spriteLUT[i];
+        var spriteEntry = new Array(spriteInfo.frameCount);
+
+        for (var j = 0; j < spriteEntry.length; j++) {
+            var frameInfo = frameInfos[count++];
+
+            spriteEntry[j] = {
+                w: frameInfo.w, h: frameInfo.h,
+                uvs: frameInfo.uvs,
+                textureId: colorBufferIndexToTextureIdLUT[frameInfo.bufferIndex]
+            };
+        }
+
+        SpriteMgr.registerSprite(loadUnit, spriteInfo.name, spriteEntry);
+    }
 }
 
-function doLoadTIL(path, storageObject) {
-    return doLoadImpl(path, function(buffer, path) {
-        storageObject[path] = DFormats.Til.load(buffer, path);
-    });
-}
+function _loadCommon(onFinishedCallback) {
+    console.log('Loading common data...');
 
-function doLoadSOL(path, storageObject, tilPath) {
-    return doLoadImpl(path, function(buffer, path) {
-        var tilFile = storageObject[tilPath];
-        storageObject[path] = DFormats.Sol.load(buffer, path, tilFile);
-    });
-}
+    var filePaths = [
+        'levels/towndata/town.pal',
+        //'plrgfx/warrior/wls/wlsst.cl2',
+        //'plrgfx/warrior/wls/wlswl.cl2',
+        'plrgfx/warrior/wls/wlsas.cl2',
+        'plrgfx/warrior/wls/wlsaw.cl2',
+        'plrgfx/warrior/wls/wlsat.cl2'
+    ];
 
-function doLoadDUN(path, storageObject, tilPath) {
-    return doLoadImpl(path, function(buffer, path) {
-        var tilFile = storageObject[tilPath];
-        storageObject[path] = DFormats.Dun.load(buffer, path, tilFile);
-    });
-}
+    var loadUnit = LoadUnit.COMMON;
+    FileMgr.loadFiles(loadUnit, filePaths, function() {
+        loadSprites(loadUnit, filePaths);
 
-var persistentFiles = {};
-var levelFiles = {};
-
-var isPersistentDataLoaded = false;
-var loadedLevelDataIndex = -1;
-
-function _unloadPersistentData() {
-    persistentFiles = {};
-    isPersistentDataLoaded = false;
-}
-
-function _unloadLevelData() {
-    levelFiles = {};
-    loadedLevelDataIndex = -1;
-}
-
-function _loadPersistentData(onFinishedCallback) {
-    async.parallel([
-        doLoadPAL('levels/towndata/town.pal', persistentFiles),
-        // doLoadCL2('plrgfx/warrior/wls/wlsst.cl2', persistentFiles),
-        // doLoadCL2('plrgfx/warrior/wls/wlswl.cl2', persistentFiles),
-        doLoadCL2('plrgfx/warrior/wls/wlsas.cl2', persistentFiles),
-        doLoadCL2('plrgfx/warrior/wls/wlsaw.cl2', persistentFiles),
-        doLoadCL2('plrgfx/warrior/wls/wlsat.cl2', persistentFiles),
-    ], function() {
-        isPersistentDataLoaded = true;
         onFinishedCallback();
     });
 }
 
-function doLoadTownData(levelIndex, onFinishedCallback) {
-    async.parallel([
-        doLoadCEL('levels/towndata/town.cel', levelFiles),
-        doLoadMIN('levels/towndata/town.min', levelFiles),
-        doLoadTIL('levels/towndata/town.til', levelFiles),
+function doLoadLevel_0(onFinishedCallback) {
+    var filePaths = [
+        'levels/towndata/town.cel',
+        'levels/towndata/town.min',
+        'levels/towndata/town.til',
+        'levels/towndata/town.sol',
+        'levels/towndata/sector1s.dun',
 
-        doLoadCL2('monsters/falspear/phalln.cl2', levelFiles),
-        doLoadCL2('monsters/falspear/phalla.cl2', levelFiles),
-        doLoadCL2('monsters/falspear/phalld.cl2', levelFiles),
-    ], function() {
-        // Break it up into two phases, since these files are dependent on files
-        // from the first phase. Allows us to take advantage of async.parallel.
-        async.parallel([
-            doLoadSOL('levels/towndata/town.sol', levelFiles, 'levels/towndata/town.til'),
-            doLoadDUN('levels/towndata/sector1s.dun', levelFiles, 'levels/towndata/town.til')
-        ], function() {
-            loadedLevelDataIndex = levelIndex;
-            onFinishedCallback();
-        });
+        'towners/strytell/strytell.cel',
+
+        'objects/chest1.cel',
+
+        'monsters/falspear/phalln.cl2',
+        'monsters/falspear/phalla.cl2',
+        'monsters/falspear/phalld.cl2',
+        'monsters/falspear/phallw.cl2',
+        'monsters/falspear/phallh.cl2',
+    ];
+
+    var loadUnit = LoadUnit.LEVEL;
+    FileMgr.loadFiles(loadUnit, filePaths, function() {
+        loadSprites(loadUnit, filePaths);
+
+        onFinishedCallback();
     });
 }
 
-function _loadLevelData(levelIndex, onFinishedCallback) {
+var activeLevelIndex = null;
+
+function _loadLevel(levelIndex, onFinishedCallback) {
+    assert(activeLevelIndex === null, 'Level is already loaded: ' + activeLevelIndex);
+
+    console.log('Loading level [' + levelIndex + '] data...');
+    activeLevelIndex = levelIndex;
+
     switch (levelIndex) {
         case 0:
-            doLoadTownData(levelIndex, onFinishedCallback);
-            return;
+            doLoadLevel_0(onFinishedCallback);
+            break;
         default:
             console.error('Unhandled level index: ' + levelIndex);
+            break;
     }
 }
 
-function _getFile(fileName) {
-    var file = persistentFiles[fileName];
-    if (typeof file === 'undefined') {
-        file = levelFiles[fileName];
-        if (typeof file === 'undefined') {
-            console.warn('File not found: ' + fileName);
-            return null;
-        }
-    }
+function doUnload(loadUnit) {
+    MaterialMgr.unloadTextures(loadUnit);
+    SpriteMgr.unloadSprites(loadUnit);
+    FileMgr.unloadFiles(loadUnit);
+}
 
-    return file;
+function _unloadCommon() {
+    console.log('Unloading common data...');
+
+    doUnload(LoadUnit.COMMON);
+}
+
+function _unloadActiveLevel() {
+    assert(activeLevelIndex !== null);
+
+    console.log('Unloading level [' + activeLevelIndex + '] data...');
+
+    doUnload(LoadUnit.LEVEL);
+    activeLevelIndex = null;
 }
 
 module.exports = {
-    loadPersistentData: _loadPersistentData,
-    unloadPersistentData: _unloadPersistentData,
-    loadLevelData: _loadLevelData,
-    unloadLevelData: _unloadLevelData,
-    getFile: _getFile,
+    loadCommon: _loadCommon,
+    unloadCommon: _unloadCommon,
 
-    isPersistentDataLoaded: function() {
-        return isPersistentDataLoaded;
+    loadLevel: _loadLevel,
+    unloadActiveLevel: _unloadActiveLevel
+};
+
+},{"./core/file_mgr":9,"./core/frame_packer":10,"./core/material_mgr":11,"./core/sprite_mgr":13,"assert":85,"path":93}],23:[function(require,module,exports){
+'use strict';
+
+module.exports = {
+    /**
+     * Warp an entity to a given grid position.
+     */
+    sendWarp: function(toEntity, gridPos) {
+        toEntity.sendSignal('warp', gridPos);
     },
-    isLevelDataLoaded: function(levelIndex) {
-        return levelIndex === loadedLevelDataIndex;
+
+    /**
+     * Damage a given entity.
+     * Info:
+     *  amount: the amount of damage
+     *  fromEntity: the entity that initiated the damage
+     */
+    sendDamage: function(toEntity, info) {
+        toEntity.sendSignal('damage', info);
+    },
+
+    sendTarget: function(toEntity) {
+        toEntity.sendSignal('target');
+    },
+
+    sendInteract: function(fromEntity, toEntity) {
+        toEntity.sendSignal('interact', fromEntity);
     }
 };
 
-},{"./util":19,"async":20,"diablo-file-formats":21}],19:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 
 var http = require('http');
 
 var SCHEME = 'http';
+// TODO: external IP is not working from within network
 var HOST = 'localhost';
+// var HOST = '122.130.169.187';
 var PORT = '3000';
 var PATH_BASE = '/mpq_files/';
 
@@ -2393,41 +4033,148 @@ function _screenToProjectionCoord(screenWidth, screenHeight, screenPosX, screenP
 /**
  * Convert screen coordinates to world coordinates.
  */
-function _screenToWorldCoord(screenWidth, screenHeight, screenPosX, screenPosY, camera, THREE) {
-    var projectPos = _screenToProjectionCoord(screenWidth, screenHeight, screenPosX, screenPosY);
+function _screenToWorldCoord(screenWidth, screenHeight, screenPos, camera, resultVec) {
+    var projectPos = _screenToProjectionCoord(screenWidth, screenHeight, screenPos.x, screenPos.y);
+
+    // TODO: eliminate this dependency?
     var projector = new THREE.Projector();
     var v = new THREE.Vector3(projectPos.x, projectPos.y, 0);
     projector.unprojectVector(v, camera);
 
-    return {
-        x: v.x,
-        y: v.y
-    };
+    resultVec.set(v.x, v.y);
 }
 
-function _worldToGridCoord(worldPosX, worldPosY) {
-    var col = (worldPosX / TILE_WIDTH) - (worldPosY / TILE_HEIGHT);
-    var row = ((-2 * worldPosY) / TILE_HEIGHT) - col;
+/**
+ * Convert world to grid coordinate.
+ */
+function _worldToGridCoord(worldPos, resultVec) {
+    var col = (worldPos.x / TILE_WIDTH) - (worldPos.y / TILE_HEIGHT);
+    var row = ((-2 * worldPos.y) / TILE_HEIGHT) - col;
 
     // TODO: clamp to world boundaries?
     col = Math.min(Math.max(col, 0), 49);
     row = Math.min(Math.max(row, 0), 49);
 
-    return {
-        col: Math.floor(col),
-        row: Math.floor(row)
-    };
+    resultVec.set(Math.floor(col), Math.floor(row));
 }
 
-function _gridToWorldCoord(col, row) {
-    return {
-        x: (col * (TILE_WIDTH / 2)) - (row * (TILE_WIDTH / 2)),
-        y: -(TILE_HEIGHT / 2) - (col * (TILE_HEIGHT / 2)) - (row * (TILE_HEIGHT / 2))
-    };
+/**
+ * Convert grid to world coordinates.
+ */
+function _gridToWorldCoord(gridPos, resultVec) {
+    resultVec.set(
+        (gridPos.x * (TILE_WIDTH / 2)) - (gridPos.y * (TILE_WIDTH / 2)),
+        -(TILE_HEIGHT / 2) - (gridPos.x * (TILE_HEIGHT / 2)) - (gridPos.y * (TILE_HEIGHT / 2))
+    );
+}
+
+/**
+ * Gets the distance in grid coordinates between two grid positions.
+ * Neighbor grid coordinates (in 8 directions) will have a distance of 1.
+ * Reference:
+ *  - http://en.wikipedia.org/wiki/Chebyshev_distance
+ */
+function _getGridDistance(fromGridPos, toGridPos) {
+    var dx = Math.abs(fromGridPos.x - toGridPos.x);
+    var dy = Math.abs(fromGridPos.y - toGridPos.y);
+    return Math.max(dx, dy);
+}
+
+/**
+ * Get the grid offset for 1 grid position in the facing direction.
+ */
+function _getGridOffsetInDirection(direction) {
+    var result = new THREE.Vector2();
+
+    switch (direction) {
+        case 0:
+            result.set(1, 1);
+            break;
+        case 1:
+            result.set(0, 1);
+            break;
+        case 2:
+            result.set(-1, 1);
+            break;
+        case 3:
+            result.set(-1, 0);
+            break;
+        case 4:
+            result.set(-1, -1);
+            break;
+        case 5:
+            result.set(0, -1);
+            break;
+        case 6:
+            result.set(1, -1);
+            break;
+        case 7:
+            result.set(1, 0);
+            break;
+        default:
+            console.warn('Unhandled facing direction: ' + direction);
+            break;
+    }
+
+    return result;
+}
+
+function _getMoveSpeed(direction, xSpeed, ySpeed) {
+    // For diagonal tiles, we adjust the speed to scale with the ratio of the tiles.
+    // This helps maintain the 3D perspective illusion.
+    var sum = TILE_WIDTH + TILE_HEIGHT;
+    var xPercent = TILE_WIDTH / sum;
+    var yPercent = TILE_HEIGHT / sum;
+    var speed = (xSpeed * xPercent) + (ySpeed * yPercent);
+
+    switch (direction) {
+        case 0: return ySpeed;
+        case 1: return speed;
+        case 2: return xSpeed;
+        case 3: return speed;
+        case 4: return ySpeed;
+        case 5: return speed;
+        case 6: return xSpeed;
+        case 7: return speed;
+        default:
+            console.warn('Unhandled direction: ' + direction);
+            return xSpeed;
+    }
+}
+
+function _getDirection(oldX, oldY, newX, newY) {
+    var dx = newX - oldX;
+    var dy = newY - oldY;
+
+    dx = Math.max(-1, Math.min(1, dx));
+    dy = Math.max(-1, Math.min(1, dy));
+
+    if (dx === 0) {
+        switch (dy) {
+            case 1: return 1;
+            case -1: return 5;
+        }
+    } else if (dx === 1) {
+        switch (dy) {
+            case 1: return 0;
+            case 0: return 7;
+            default: return 6;
+        }
+    } else {
+        switch (dy) {
+            case 1: return 2;
+            case 0: return 3;
+            default: return 4;
+        }
+    }
+
+    // Failure - maintain current facing direction.
+    return -1;
 }
 
 function _dbgDrawTile(col, row, colorStr, THREE, DbgDraw) {
-    var centerPos = _gridToWorldCoord(col, row);
+    var centerPos = new THREE.Vector2();
+    _gridToWorldCoord(new THREE.Vector2(col, row), centerPos);
 
     var z = 6000;
     var points = [
@@ -2461,6 +4208,10 @@ function _dbgDrawTile(col, row, colorStr, THREE, DbgDraw) {
     DbgDraw.drawLineStrip(points, colorStr);
 }
 
+function getRandomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 module.exports = {
     requestReadFile: _requestReadFile,
 
@@ -2470,12 +4221,18 @@ module.exports = {
     screenToWorldCoord: _screenToWorldCoord,
     worldToGridCoord: _worldToGridCoord,
     gridToWorldCoord: _gridToWorldCoord,
+    getGridDistance: _getGridDistance,
+    getGridOffsetInDirection: _getGridOffsetInDirection,
+    getMoveSpeed: _getMoveSpeed,
+    getDirection: _getDirection,
+
+    getRandomInt: getRandomInt,
 
     dbgDrawTile: _dbgDrawTile
 };
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":65,"http":33}],20:[function(require,module,exports){
+},{"buffer":86,"http":52}],25:[function(require,module,exports){
 (function (process){
 /*!
  * async
@@ -3601,8 +5358,638 @@ module.exports = {
 
 }());
 
-}).call(this,require("q+64fw"))
-},{"q+64fw":71}],21:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"_process":94}],26:[function(require,module,exports){
+'use strict';
+
+module.exports = {
+    Status: require('./lib/core/status'),
+    Action: require('./lib/action'),
+    Sequence: require('./lib/sequence'),
+    Selector: require('./lib/selector'),
+    PrioritySelector: require('./lib/priority_selector'),
+    Parallel: require('./lib/parallel').Parallel,
+    ParallelPolicy: require('./lib/parallel').ParallelPolicy,
+    Decorator: require('./lib/decorator'),
+    WaitAction: require('./lib/wait_action'),
+    Services: require('./lib/services'),
+    log: require('./lib/core/logger'),
+};
+
+},{"./lib/action":27,"./lib/core/logger":29,"./lib/core/status":30,"./lib/decorator":31,"./lib/parallel":32,"./lib/priority_selector":33,"./lib/selector":34,"./lib/sequence":35,"./lib/services":36,"./lib/wait_action":37}],27:[function(require,module,exports){
+'use strict';
+
+var inherits = require('inherits'),
+    BaseNode = require('./core/base').BaseNode;
+
+function Action(params) {
+    var self = this;
+    if (!(self instanceof Action)) {
+        self = new Action(params);
+    } else {
+        BaseNode.call(self, params);
+    }
+    return self;
+}
+
+inherits(Action, BaseNode);
+
+module.exports = Action;
+
+},{"./core/base":28,"inherits":56}],28:[function(require,module,exports){
+'use strict';
+
+var inherits = require('inherits'),
+    assert = require('assert'),
+    Status = require('./status');
+
+function BaseNode(params) {
+    this.status = Status.INVALID;
+
+    params = params || {};
+    this.start = params.start || null;
+    this.update = params.update;
+    this.end = params.end || null;
+
+    assert(this.update, 'Update callback required.');
+}
+
+BaseNode.prototype.tick = function () {
+    if (this.status !== Status.RUNNING) {
+        if (this.start) {
+            this.start();
+        }
+    }
+
+    this.status = this.update();
+    assert(!isNaN(this.status), 'Update must return a Status. Currently returning: ' + this.status);
+
+    if (this.status !== Status.RUNNING) {
+        if (this.end) {
+            this.end();
+        }
+    }
+
+    return this.status;
+};
+
+BaseNode.prototype.isRunning = function () {
+    return this.status === Status.RUNNING;
+};
+
+BaseNode.prototype.isFinished = function () {
+    return (this.status === Status.SUCCESS) ||
+           (this.status === Status.FAILURE);
+};
+
+BaseNode.prototype.abort = function () {
+    assert(this.isRunning(), 'Attempting to abort a non-running node.');
+
+    this.status = Status.ABORTED;
+    this.onAbort();
+
+    if (this.end) {
+        this.end();
+    }
+};
+
+/**
+ * Override in sub-classes to recursively handle abort on child nodes.
+ */
+BaseNode.prototype.onAbort = function () {
+
+};
+
+function Composite(params) {
+    BaseNode.call(this, params);
+    this.children = [];
+}
+
+inherits(Composite, BaseNode);
+
+Composite.prototype.addChild = function (node) {
+    this.children.push(node);
+
+    // Allow chaining.
+    return this;
+};
+
+Composite.prototype.onAbort = function () {
+    for (var i = 0; i < this.children.length; i++) {
+        if (this.children[i].isRunning()) {
+            this.children[i].abort();
+        }
+    }
+};
+
+module.exports = {
+    BaseNode: BaseNode,
+    Composite: Composite
+};
+
+},{"./status":30,"assert":85,"inherits":56}],29:[function(require,module,exports){
+'use strict';
+
+var archy = require('archy'),
+    Composite = require('./base').Composite,
+    Decorator = require('./../decorator');
+
+function getChildren(node) {
+    if (node instanceof Composite) {
+        return node.children.slice(0);
+    } else if (node instanceof Decorator) {
+        return [node.child];
+    } else {
+        return [];
+    }
+}
+
+function recurseNode(node) {
+    var children = getChildren(node);
+    if (children.length === 0) {
+        if (!node) {
+            return '<null node>';
+        } else {
+            return node.constructor.name;
+        }
+    }
+
+    for (var i = 0; i < children.length; i++) {
+        children[i] = recurseNode(children[i]);
+    }
+
+    return {
+        label: node.constructor.name,
+        nodes: children
+    };
+}
+
+/**
+ * Prints a tree to the console with indentation.
+ */
+module.exports = function _log(tree) {
+    var result = recurseNode(tree);
+    result = archy(result);
+    console.log(result);
+};
+
+},{"./../decorator":31,"./base":28,"archy":38}],30:[function(require,module,exports){
+'use strict';
+
+module.exports = {
+    INVALID: 0,
+    SUCCESS: 1,
+    FAILURE: 2,
+    RUNNING: 3,
+    ABORTED: 4
+};
+
+},{}],31:[function(require,module,exports){
+'use strict';
+
+var inherits = require('inherits'),
+    BaseNode = require('./core/base').BaseNode;
+
+function Decorator(params) {
+    BaseNode.call(this, params);
+    this.child = null;
+}
+
+inherits(Decorator, BaseNode);
+
+Decorator.prototype.setChild = function (node) {
+    this.child = node;
+
+    // Allow chaining.
+    return this;
+};
+
+Decorator.prototype.onAbort = function () {
+    if (this.child.isRunning()) {
+        this.child.abort();
+    }
+};
+
+module.exports = Decorator;
+
+},{"./core/base":28,"inherits":56}],32:[function(require,module,exports){
+'use strict';
+
+var Status = require('./core/status'),
+    inherits = require('inherits'),
+    Composite = require('./core/base').Composite;
+
+var ParallelPolicy = {
+    REQUIRE_ONE : 0,
+    REQUIRE_ALL : 1
+};
+
+function Parallel(successPolicy, failurePolicy) {
+    var self = this;
+    if (!(self instanceof Parallel)) {
+        self = new Parallel(successPolicy, failurePolicy);
+    } else {
+        var params = {
+            update: function() {
+                var successCount = 0;
+                var failureCount = 0;
+
+                for (var i = 0; i < self.children.length; i++) {
+                    var node = self.children[i];
+                    if (!node.isFinished()) {
+                        node.tick();
+                    }
+
+                    if (node.status === Status.SUCCESS) {
+                        if (self.successPolicy === ParallelPolicy.REQUIRE_ONE) {
+                            return Status.SUCCESS;
+                        }
+
+                        successCount++;
+                    } else if (node.status === Status.FAILURE) {
+                        if (self.failurePolicy === ParallelPolicy.REQUIRE_ONE) {
+                            return Status.FAILURE;
+                        }
+
+                        failureCount++;
+                    }
+                }
+
+                if ((self.successPolicy === ParallelPolicy.REQUIRE_ALL) &&
+                    (successCount === self.children.length)) {
+                    return Status.SUCCESS;
+                }
+
+                if ((self.failurePolicy === ParallelPolicy.REQUIRE_ALL) &&
+                    (failureCount === self.children.length)) {
+                    return Status.FAILURE;
+                }
+
+                return Status.RUNNING;
+            },
+            end: function() {
+                // Properly shut down all running children if we finish.
+                for (var i = 0; i < self.children.length; i++) {
+                    var node = self.children[i];
+                    if (node.isRunning()) {
+                        node.abort();
+                    }
+                }
+            }
+        };
+
+        Composite.call(self, params);
+        self.currentChildIndex = -1;
+        self.successPolicy = successPolicy || ParallelPolicy.REQUIRE_ONE;
+        self.failurePolicy = failurePolicy || ParallelPolicy.REQUIRE_ONE;
+    }
+    return self;
+}
+
+inherits(Parallel, Composite);
+
+module.exports = {
+    Parallel: Parallel,
+    ParallelPolicy: ParallelPolicy,
+};
+
+},{"./core/base":28,"./core/status":30,"inherits":56}],33:[function(require,module,exports){
+'use strict';
+
+var Status = require('./core/status'),
+    inherits = require('inherits'),
+    assert = require('assert'),
+    Composite = require('./core/base').Composite;
+
+var INVALID_CHILD_INDEX = -1;
+
+function PrioritySelector() {
+    var self = this;
+    if (!(self instanceof PrioritySelector)) {
+        self = new PrioritySelector();
+    } else {
+        var params = {
+            start: function() {
+                assert(self.children.length > 0, 'PrioritySelector has no children.');
+                assert(self.children.length === self.childCheckers.length, 'Number of children must equal number of checker functions.');
+                self.lastRunningChildIndex = INVALID_CHILD_INDEX;
+                self.lastRunningChild = null;
+            },
+            update: function() {
+                for (var i = 0; i < self.children.length; i++) {
+                    var child = self.children[i];
+                    var checker = self.childCheckers[i];
+
+                    // Check higher priority children...
+                    if (i < self.lastRunningChildIndex) {
+                        assert(self.lastRunningChild);
+
+                        // Is a higher priority child able to run?
+                        if (checker()) {
+                            // Abort the previously running child.
+                            if (self.lastRunningChild.isRunning()) {
+                                self.lastRunningChild.abort();
+                            }
+                        } else {
+                            // Check failed - skip to next child.
+                            continue;
+                        }
+                    }
+                    // Currently running child...
+                    else if (i === self.lastRunningChildIndex) {
+                        // Do not call the check function on the currently running child.
+                    }
+                    else {
+                        // Nothing is currently running.
+                        assert(self.lastRunningChildIndex === INVALID_CHILD_INDEX);
+                        assert(self.lastRunningChild === null);
+
+                        // Check failed - skip to next child.
+                        if (!checker()) {
+                            continue;
+                        }
+                    }
+
+                    var status = child.tick();
+
+                    // Progress to the next child on failure.
+                    if (status === Status.FAILURE) {
+                        self.lastRunningChildIndex = INVALID_CHILD_INDEX;
+                        self.lastRunningChild = null;
+                        continue;
+                    }
+
+                    self.lastRunningChildIndex = i;
+                    self.lastRunningChild = child;
+                    return status;
+                }
+
+                // All children failed.
+                return Status.FAILURE;
+            }
+        };
+
+        Composite.call(self, params);
+        self.childCheckers = [];
+        self.lastRunningChildIndex = INVALID_CHILD_INDEX;
+        self.lastRunningChild = null;
+    }
+    return self;
+}
+
+inherits(PrioritySelector, Composite);
+
+/**
+ * Overridden addChild method to allow passing a checker function
+ * for the given child. When evaluating nodes for priority switching,
+ * the checker will be evaluated. If the checker returns true,
+ * the currently executing node will be aborted, and the node
+ * associated with the checker will be started.
+ */
+PrioritySelector.prototype.addChild = function (node, checker) {
+    // If no checker function is provided, use a default one.
+    if (!checker) {
+        this.childCheckers.push(function() {
+            return true;
+        });
+    } else {
+        this.childCheckers.push(checker);
+    }
+    return Composite.prototype.addChild.call(this, node);
+};
+
+module.exports = PrioritySelector;
+
+},{"./core/base":28,"./core/status":30,"assert":85,"inherits":56}],34:[function(require,module,exports){
+'use strict';
+
+var Status = require('./core/status'),
+    inherits = require('inherits'),
+    assert = require('assert'),
+    Composite = require('./core/base').Composite;
+
+function Selector() {
+    var self = this;
+    if (!(self instanceof Selector)) {
+        self = new Selector();
+    } else {
+        var params = {
+            start: function() {
+                assert(self.children.length > 0, 'Selector has no children.');
+                self.currentChildIndex = 0;
+            },
+            update: function() {
+                while (true) {
+                    var status = self.children[self.currentChildIndex].tick();
+
+                    // Progress to next child on failure.
+                    if (status === Status.FAILURE) {
+                        self.currentChildIndex++;
+
+                        // All done?
+                        if (self.currentChildIndex === self.children.length) {
+                            return Status.FAILURE;
+                        }
+                    } else {
+                        return status;
+                    }
+                }
+            }
+        };
+
+        Composite.call(self, params);
+        self.currentChildIndex = -1;
+    }
+    return self;
+}
+
+inherits(Selector, Composite);
+
+module.exports = Selector;
+
+},{"./core/base":28,"./core/status":30,"assert":85,"inherits":56}],35:[function(require,module,exports){
+'use strict';
+
+var Status = require('./core/status'),
+    inherits = require('inherits'),
+    assert = require('assert'),
+    Composite = require('./core/base').Composite;
+
+function Sequence() {
+    var self = this;
+    if (!(self instanceof Sequence)) {
+        self = new Sequence();
+    } else {
+        var params = {
+            start: function() {
+                assert(self.children.length > 0, 'Sequence has no children.');
+                self.currentChildIndex = 0;
+            },
+            update: function() {
+                while (true) {
+                    var status = self.children[self.currentChildIndex].tick();
+
+                    // Progress to next child on success.
+                    if (status === Status.SUCCESS) {
+                        self.currentChildIndex++;
+
+                        // All done?
+                        if (self.currentChildIndex === self.children.length) {
+                            return Status.SUCCESS;
+                        }
+                    } else {
+                        return status;
+                    }
+                }
+            }
+        };
+
+        Composite.call(self, params);
+        self.currentChildIndex = -1;
+
+    }
+    return self;
+}
+
+inherits(Sequence, Composite);
+
+module.exports = Sequence;
+
+},{"./core/base":28,"./core/status":30,"assert":85,"inherits":56}],36:[function(require,module,exports){
+'use strict';
+
+module.exports = {
+    /**
+     * A callback for getting the amount of time elapsed
+     * between ticks.
+     *
+     * Time is necessary for certain nodes such as WaitAction.
+     * This callback does not need to be implemented if only
+     * time-independent node types are used.
+     *
+     * This library only provides an interface to the
+     * deltaTime callback, and the actual implementation should
+     * be defined in the user application and set like so:
+     *
+     * bt.Services.deltaTime = function() {
+     * 		var elapsedTime = // calculation
+     * 		return elapsedTime;
+     * }
+     *
+     * The implementation is left to the user application
+     * because time is very application-specific. For example,
+     * games have game loops and already manage a deltaTime
+     * for each frame, while NodeJS applications can calculate elapsed
+     * time with process.hrtime, while  browser applications
+     * would need a different implementation, etc.
+     */
+    deltaTime: function() {
+        console.warn('Please implement the deltaTime callback.');
+        return 0;
+    }
+};
+
+},{}],37:[function(require,module,exports){
+'use strict';
+
+var inherits = require('inherits'),
+    Action = require('./action'),
+    Status = require('./core/status'),
+    Services = require('./services');
+
+function getRandomRange(min, max) {
+    return Math.random() * (max - min) + min;
+}
+
+/**
+ * A leaf node (action) that waits a certain # of
+ * seconds before succeeding.
+ *
+ * Specify only a minWaitTime to get a fixed amount of wait time.
+ *
+ * Specify both a minWaitTime and a maxWaitTime to get
+ * a variable amount of wait time within the range. Actual wait
+ * time will be randomized at the start of each new execution.
+ */
+function WaitAction(minWaitTime, maxWaitTime) {
+    var self = this;
+    if (!(self instanceof WaitAction)) {
+        self = new WaitAction(minWaitTime, maxWaitTime);
+    } else {
+        var params = {
+            start: function() {
+                if (self.useRandomTime) {
+                    self.remainingWaitTime = getRandomRange(self.minWaitTime, self.maxWaitTime);
+                }
+                else {
+                    self.remainingWaitTime = self.minWaitTime;
+                }
+            },
+            update: function() {
+                // Progress time.
+                var deltaTime = Services.deltaTime();
+                self.remainingWaitTime -= deltaTime;
+
+                if (self.remainingWaitTime <= 0.0) {
+                    return Status.SUCCESS;
+                }
+                else {
+                    return Status.RUNNING;
+                }
+            }
+        };
+
+        Action.call(self, params);
+        self.useRandomTime = (typeof maxWaitTime !== 'undefined');
+        self.minWaitTime = minWaitTime;
+        self.maxWaitTime = maxWaitTime;
+        self.remainingWaitTime = 0;
+    }
+    return self;
+}
+
+inherits(WaitAction, Action);
+
+module.exports = WaitAction;
+
+},{"./action":27,"./core/status":30,"./services":36,"inherits":56}],38:[function(require,module,exports){
+module.exports = function archy (obj, prefix, opts) {
+    if (prefix === undefined) prefix = '';
+    if (!opts) opts = {};
+    var chr = function (s) {
+        var chars = {
+            '│' : '|',
+            '└' : '`',
+            '├' : '+',
+            '─' : '-',
+            '┬' : '-'
+        };
+        return opts.unicode === false ? chars[s] : s;
+    };
+    
+    if (typeof obj === 'string') obj = { label : obj };
+    
+    var nodes = obj.nodes || [];
+    var lines = (obj.label || '').split('\n');
+    var splitter = '\n' + prefix + (nodes.length ? chr('│') : ' ') + ' ';
+    
+    return prefix
+        + lines.join(splitter) + '\n'
+        + nodes.map(function (node, ix) {
+            var last = ix === nodes.length - 1;
+            var more = node.nodes && node.nodes.length;
+            var prefix_ = prefix + (last ? ' ' : chr('│')) + ' ';
+            
+            return prefix
+                + (last ? chr('└') : chr('├')) + chr('─')
+                + (more ? chr('┬') : chr('─')) + ' '
+                + archy(node, prefix_, opts).slice(prefix.length + 2)
+            ;
+        }).join('')
+    ;
+};
+
+},{}],39:[function(require,module,exports){
 module.exports = {
     Dun: require('./lib/dun'),
     Til: require('./lib/til'),
@@ -3613,9 +6000,12 @@ module.exports = {
     Sol: require('./lib/sol')
 };
 
-},{"./lib/cel":22,"./lib/cl2":24,"./lib/dun":28,"./lib/min":29,"./lib/pal":30,"./lib/sol":31,"./lib/til":32}],22:[function(require,module,exports){
+},{"./lib/cel":40,"./lib/cl2":42,"./lib/dun":47,"./lib/min":48,"./lib/pal":49,"./lib/sol":50,"./lib/til":51}],40:[function(require,module,exports){
+'use strict';
+
 var cel_decode = require('./cel_decode'),
-    path = require('path');
+    celConfig = require('./config/cel_info'),
+    pathLib = require('path');
 
 /**
  * CEL files hold image data. Similar to GIF images, they
@@ -3626,19 +6016,28 @@ var cel_decode = require('./cel_decode'),
  * CEL types and frames in order to improve data compression, so the
  * decoding of CEL files can be tricky and very specialized.
  */
-function CelFile(frames, path) {
+function CelFile(frames, path, name) {
     this.frames = frames;
     this.path = path;
+    this.name = name;
 }
 
-function getFrameWidth(path) {
-    // TODO:
-    return 32;
+function getFrameDimensions(celName) {
+    var entry = celConfig[celName];
+    if (typeof entry == 'undefined') {
+        return [32, 32];
+    }
+
+    return [entry.w, entry.h];
 }
 
-function getFrameHeight(path) {
-    // TODO:
-    return 32;
+function getFrameHeaderSize(celName) {
+    var entry = celConfig[celName];
+    if (typeof entry == 'undefined') {
+        return 0;
+    }
+
+    return entry.header;
 }
 
 /**
@@ -3647,31 +6046,23 @@ function getFrameHeight(path) {
  * per-frame color data, which is used for rendering.
  */
 CelFile.prototype.decodeFrames = function(palFile) {
-    var celPath = this.path;
-    var frameWidth = getFrameWidth(celPath);
-    var frameHeight = getFrameHeight(celPath);
-
-    // levels/towndata/town.cel -> town
-    var celName = path.basename(celPath, '.cel');
+    var frameDimensions = getFrameDimensions(this.name);
+    var frameWidth = frameDimensions[0];
+    var frameHeight = frameDimensions[1];
 
     // Decode each frame with the appropriate decoder.
     var frames = this.frames;
     var decodedFrames = new Array(frames.length);
     for (var i = 0; i < frames.length; i++) {
         var frameData = frames[i];
-        var frameDecoder = cel_decode.getCelFrameDecoder(celName, frameData, i);
+        var frameDecoder = cel_decode.getCelFrameDecoder(this.name, frameData, i);
         decodedFrames[i] = frameDecoder(frameData, frameWidth, frameHeight, palFile);
     }
 
     return decodedFrames;
 };
 
-function getFrameHeaderSize(path) {
-    // TODO: use LUT/config to get header size based on path
-    return 0;
-}
-
-function _load(buffer, path) {
+function _load(buffer, celPath) {
     var offset = 0;
     var frameCount = buffer.readUInt32LE(offset);
 
@@ -3682,10 +6073,13 @@ function _load(buffer, path) {
         frameOffsets[i] = buffer.readUInt32LE(offset += 4);
     }
 
+    // levels/towndata/town.cel -> town
+    var celName = pathLib.basename(celPath, '.cel');
+
+    var headerSize = getFrameHeaderSize(celName);
+    
     var frames = new Array(frameCount);
     for (i = 0; i < frames.length; i++) {
-        var headerSize = getFrameHeaderSize(path);
-
         var frameStart = frameOffsets[i] + headerSize;
         var frameEnd = frameOffsets[i + 1];
         var frameSize = frameEnd - frameStart;
@@ -3698,14 +6092,16 @@ function _load(buffer, path) {
         frames[i] = frameData;
     }
 
-    return new CelFile(frames, path);
+    return new CelFile(frames, celPath, celName);
 }
 
 module.exports = {
     load: _load
 };
 
-},{"./cel_decode":23,"path":70}],23:[function(require,module,exports){
+},{"./cel_decode":41,"./config/cel_info":43,"path":93}],41:[function(require,module,exports){
+'use strict';
+
 var BYTES_PER_PIXEL = 4;    // RGBA
 var TRANSPARENT_COLOR = { r: 0, g: 0, b: 0, a: 0 };
 
@@ -4291,7 +6687,9 @@ module.exports = {
     getCl2FrameDecoder: _getCl2FrameDecoder
 };
 
-},{}],24:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
+'use strict';
+
 var pathLib = require('path'),
     Cel = require('./cel'),
     cel_decode = require('./cel_decode'),
@@ -4310,7 +6708,6 @@ var ARCHIVE_IMAGE_COUNT = 8;
 function getFrameDimensions(cl2Name) {
     var entry = cl2Config[cl2Name];
     if (typeof entry == 'undefined') {
-        console.warn('Unhandled CL2 file: ' + cl2Name);
         return [96, 96];
     }
 
@@ -4346,7 +6743,7 @@ function _load(buffer, cl2Path) {
         return null;
     }
 
-    var i, j;
+    var i;
     var offset = 0;
 
     // Header offsets.
@@ -4370,27 +6767,35 @@ module.exports = {
     load: _load
 };
 
-},{"./cel":22,"./cel_decode":23,"./config/cl2_info":25,"path":70}],25:[function(require,module,exports){
+},{"./cel":40,"./cel_decode":41,"./config/cl2_info":44,"path":93}],43:[function(require,module,exports){
 module.exports = {
-    'wlsst': {
+    'strytell': {
         w: 96,
-        h: 96
+        h: 96,
+        header: 10
     },
-    'wlswl': {
+    'chest1': {
         w: 96,
-        h: 96
+        h: 96,
+        header: 10
     },
+    'chest2': {
+        w: 96,
+        h: 96,
+        header: 10
+    },
+    'chest3': {
+        w: 96,
+        h: 96,
+        header: 10
+    }
+};
+
+},{}],44:[function(require,module,exports){
+module.exports = {
     'wlsat': {
         w: 128,
         h: 128
-    },
-    'wlsas': {
-        w: 96,
-        h: 96
-    },
-    'wlsaw': {
-        w: 96,
-        h: 96
     },
     'phalla': {
         w: 128,
@@ -4407,10 +6812,14 @@ module.exports = {
     'phalln': {
         w: 128,
         h: 128
+    },
+    'phallw': {
+        w: 128,
+        h: 128
     }
 };
 
-},{}],26:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 /**
  * Start coordinates (column/row) for the DUN files.
  */
@@ -4421,7 +6830,7 @@ module.exports = {
     'sector4s': [0, 0]
 };
 
-},{}],27:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 /**
  * Pillar counts per-pillar for the different files.
  */
@@ -4433,7 +6842,9 @@ module.exports = {
     'town': 16
 };
 
-},{}],28:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
+'use strict';
+
 var path = require('path'),
     Til = require('./til'),
     dunConfig = require('./config/dun_info');
@@ -4446,15 +6857,62 @@ var path = require('path'),
  * In addition, DUN files also provide information regarding dungeon
  * monsters and object ids.
  */
-function DunFile(startCoord, pillarData, dunName) {
+function DunFile(startCoord, rawPillarData, dunName) {
     this.startCol = startCoord[0];
     this.startRow = startCoord[1];
-    this.pillarData = pillarData;
     this.fileName = dunName;
 
-    this.colCount = this.pillarData.length;
-    this.rowCount = (this.colCount > 0) ? this.pillarData[0].length : 0;
+    this.rawPillarData = rawPillarData;
+    this.rawColCount = this.rawPillarData.length;
+    this.rawRowCount = (this.rawColCount > 0) ? this.rawPillarData[0].length : 0;
+
+    this.pillarData = null;     // Initialized during unpack operation.
+    this.colCount = this.rawColCount * 2;
+    this.rowCount = this.rawRowCount * 2;
 }
+
+/**
+ * Unpacks the pillar data of the DUN file using the TIL file to perform
+ * square index lookups. DUN file can be used without unpacking, but
+ * this operation will convert it to an easier to use format.
+ */
+DunFile.prototype.unpack = function(tilFile) {
+    // Already unpacked?
+    if (this.pillarData !== null) {
+        return;
+    }
+
+    // Pre-allocate.
+    this.pillarData = new Array(this.colCount);
+    for (var i = 0; i < this.pillarData.length; i++) {
+        this.pillarData[i] = new Array(this.rowCount);
+    }
+
+    // Parse pillar data.
+    var row = 0;
+    for (i = 0; i < this.rawRowCount; i++) {
+        var col = 0;
+        for (var j = 0; j < this.rawColCount; j++) {
+            var squareIndexPlus1 = this.rawPillarData[j][i];
+            if (squareIndexPlus1 !== 0) {
+                var square = tilFile.squares[squareIndexPlus1 - 1];
+
+                this.pillarData[col][row] = square[Til.SQUARE_TOP];
+                this.pillarData[col + 1][row] = square[Til.SQUARE_RIGHT];
+                this.pillarData[col][row + 1] = square[Til.SQUARE_LEFT];
+                this.pillarData[col + 1][row + 1] = square[Til.SQUARE_BOTTOM];
+            } else {
+                this.pillarData[col][row] = null;
+                this.pillarData[col + 1][row] = null;
+                this.pillarData[col][row + 1] = null;
+                this.pillarData[col + 1][row + 1] = null;
+            }
+
+            col += 2;
+        }
+        row += 2;
+    }
+};
 
 function getStartCoord(dunName) {
     var startCoord = dunConfig[dunName];
@@ -4466,54 +6924,38 @@ function getStartCoord(dunName) {
     return startCoord;
 }
 
-function _load(buffer, dunPath, tilFile) {
+function _load(buffer, dunPath) {
     var offset = 0;
     var colCount = buffer.readUInt16LE(offset);
     var rowCount = buffer.readUInt16LE(offset += 2);
 
     // Pre-allocate.
-    var pillarData = new Array(colCount * 2);
-    for (var i = 0; i < pillarData.length; i++) {
-        pillarData[i] = new Array(rowCount * 2);
+    var rawPillarData = new Array(colCount);
+    for (var i = 0; i < rawPillarData.length; i++) {
+        rawPillarData[i] = new Array(rowCount);
     }
 
     // Parse pillar data.
-    var row = 0;
     for (i = 0; i < rowCount; i++) {
-        var col = 0;
         for (var j = 0; j < colCount; j++) {
-            var squareIndexPlus1 = buffer.readUInt16LE(offset += 2);
-            if (squareIndexPlus1 !== 0) {
-                var square = tilFile.squares[squareIndexPlus1 - 1];
-
-                pillarData[col][row] = square[Til.SQUARE_TOP];
-                pillarData[col + 1][row] = square[Til.SQUARE_RIGHT];
-                pillarData[col][row + 1] = square[Til.SQUARE_LEFT];
-                pillarData[col + 1][row + 1] = square[Til.SQUARE_BOTTOM];
-            } else {
-                pillarData[col][row] = null;
-                pillarData[col + 1][row] = null;
-                pillarData[col][row + 1] = null;
-                pillarData[col + 1][row + 1] = null;
-            }
-
-            col += 2;
+            rawPillarData[j][i] = buffer.readUInt16LE(offset += 2);
         }
-        row += 2;
     }
 
     // levels/towndata/sector1s.dun -> sector1s
     var dunName = path.basename(dunPath, '.dun');
     var startCoord = getStartCoord(dunName);
 
-    return new DunFile(startCoord, pillarData, dunName);
+    return new DunFile(startCoord, rawPillarData, dunName);
 }
 
 module.exports = {
     load: _load
 };
 
-},{"./config/dun_info":26,"./til":32,"path":70}],29:[function(require,module,exports){
+},{"./config/dun_info":45,"./til":51,"path":93}],48:[function(require,module,exports){
+'use strict';
+
 var path = require('path'),
     minConfig = require('./config/min_info');
 
@@ -4605,7 +7047,9 @@ module.exports = {
     load: _load
 };
 
-},{"./config/min_info":27,"path":70}],30:[function(require,module,exports){
+},{"./config/min_info":46,"path":93}],49:[function(require,module,exports){
+'use strict';
+
 /**
  * PAL files are the color palettes used to render images.
  * Partial transparency is not supported.
@@ -4642,25 +7086,33 @@ module.exports = {
     load: _load
 };
 
-},{}],31:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
+'use strict';
+
+var pathLib = require('path');
+
 /**
  * SOL files contain meta information about pillars, such as
  * collision and transparency properties.
  *
  * The usage of some of the bits are currently unknown.
  */
-function SolFile(data) {
+function SolFile(data, path) {
     this.data = data;
+    this.path = path;
+
+    // levels/towndata/town.sol -> town
+    this.name = pathLib.basename(path, '.sol');
 }
 
 var CHECK_COLLISION = 0x01;
-var CHECK_0x02 = 0x02;
+// var CHECK_0x02 = 0x02;
 var CHECK_COLLISION_RANGE = 0x04;
 var CHECK_TRANSPARENCY = 0x08;
-var CHECK_0x10 = 0x10;
-var CHECK_0x20 = 0x20;
-var CHECK_0x40 = 0x40;
-var CHECK_0x80 = 0x80;
+// var CHECK_0x10 = 0x10;
+// var CHECK_0x20 = 0x20;
+// var CHECK_0x40 = 0x40;
+// var CHECK_0x80 = 0x80;
 
 SolFile.prototype = {
     /**
@@ -4694,14 +7146,16 @@ function _load(buffer, path) {
         solData[i] = buffer.readUInt8(offset++);
     }
 
-    return new SolFile(solData);
+    return new SolFile(solData, path);
 }
 
 module.exports = {
     load: _load
 };
 
-},{}],32:[function(require,module,exports){
+},{"path":93}],51:[function(require,module,exports){
+'use strict';
+
 /**
  * TIL files contain indices for rendering the pillars found in the MIN files.
  *
@@ -4757,7 +7211,7 @@ module.exports = {
     SQUARE_BOTTOM: 3
 };
 
-},{}],33:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 var http = module.exports;
 var EventEmitter = require('events').EventEmitter;
 var Request = require('./lib/request');
@@ -4774,8 +7228,15 @@ http.request = function (params, cb) {
     if (!params.host && params.hostname) {
         params.host = params.hostname;
     }
-    
-    if (!params.scheme) params.scheme = window.location.protocol.split(':')[0];
+
+    if (!params.protocol) {
+        if (params.scheme) {
+            params.protocol = params.scheme + ':';
+        } else {
+            params.protocol = window.location.protocol;
+        }
+    }
+
     if (!params.host) {
         params.host = window.location.hostname || window.location.host;
     }
@@ -4785,7 +7246,7 @@ http.request = function (params, cb) {
         }
         params.host = params.host.split(':')[0];
     }
-    if (!params.port) params.port = params.scheme == 'https' ? 443 : 80;
+    if (!params.port) params.port = params.protocol == 'https:' ? 443 : 80;
     
     var req = new Request(new xhrHttp, params);
     if (cb) req.on('response', cb);
@@ -4896,7 +7357,7 @@ http.STATUS_CODES = {
     510 : 'Not Extended',               // RFC 2774
     511 : 'Network Authentication Required' // RFC 6585
 };
-},{"./lib/request":34,"events":68,"url":90}],34:[function(require,module,exports){
+},{"./lib/request":53,"events":90,"url":112}],53:[function(require,module,exports){
 var Stream = require('stream');
 var Response = require('./response');
 var Base64 = require('Base64');
@@ -4907,31 +7368,35 @@ var Request = module.exports = function (xhr, params) {
     self.writable = true;
     self.xhr = xhr;
     self.body = [];
-
-    self.uri = (params.scheme || 'http') + '://'
+    
+    self.uri = (params.protocol || 'http:') + '//'
         + params.host
         + (params.port ? ':' + params.port : '')
         + (params.path || '/')
     ;
-
+    
     if (typeof params.withCredentials === 'undefined') {
         params.withCredentials = true;
     }
 
     try { xhr.withCredentials = params.withCredentials }
     catch (e) {}
-
+    
     if (params.responseType) try { xhr.responseType = params.responseType }
     catch (e) {}
-
+    
     xhr.open(
         params.method || 'GET',
         self.uri,
         true
     );
 
-    self._headers = {};
+    xhr.onerror = function(event) {
+        self.emit('error', new Error('Network error'));
+    };
 
+    self._headers = {};
+    
     if (params.headers) {
         var keys = objectKeys(params.headers);
         for (var i = 0; i < keys.length; i++) {
@@ -4941,7 +7406,7 @@ var Request = module.exports = function (xhr, params) {
             self.setHeader(key, value);
         }
     }
-
+    
     if (params.auth) {
         //basic auth
         this.setHeader('Authorization', 'Basic ' + Base64.btoa(params.auth));
@@ -4951,11 +7416,15 @@ var Request = module.exports = function (xhr, params) {
     res.on('close', function () {
         self.emit('close');
     });
-
+    
     res.on('ready', function () {
         self.emit('response', res);
     });
 
+    res.on('error', function (err) {
+        self.emit('error', err);
+    });
+    
     xhr.onreadystatechange = function () {
         // Fix for IE9 bug
         // SCRIPT575: Could not complete the operation due to error c00c023f
@@ -5024,7 +7493,7 @@ Request.prototype.end = function (s) {
         }
         var body = new(this.body[0].constructor)(len);
         var k = 0;
-
+        
         for (var i = 0; i < this.body.length; i++) {
             var b = this.body[i];
             for (var j = 0; j < b.length; j++) {
@@ -5032,6 +7501,9 @@ Request.prototype.end = function (s) {
             }
         }
         this.xhr.send(body);
+    }
+    else if (isXHR2Compatible(this.body[0])) {
+        this.xhr.send(this.body[0]);
     }
     else {
         var body = '';
@@ -5090,7 +7562,13 @@ var indexOf = function (xs, x) {
     return -1;
 };
 
-},{"./response":35,"Base64":36,"inherits":37,"stream":89}],35:[function(require,module,exports){
+var isXHR2Compatible = function (obj) {
+    if (typeof Blob !== 'undefined' && obj instanceof Blob) return true;
+    if (typeof ArrayBuffer !== 'undefined' && obj instanceof ArrayBuffer) return true;
+    if (typeof FormData !== 'undefined' && obj instanceof FormData) return true;
+};
+
+},{"./response":54,"Base64":55,"inherits":56,"stream":110}],54:[function(require,module,exports){
 var Stream = require('stream');
 var util = require('util');
 
@@ -5212,7 +7690,7 @@ var isArray = Array.isArray || function (xs) {
     return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{"stream":89,"util":92}],36:[function(require,module,exports){
+},{"stream":110,"util":114}],55:[function(require,module,exports){
 ;(function () {
 
   var object = typeof exports != 'undefined' ? exports : this; // #8: web workers
@@ -5274,7 +7752,7 @@ var isArray = Array.isArray || function (xs) {
 
 }());
 
-},{}],37:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -5299,9 +7777,7 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],38:[function(require,module,exports){
-module.exports=require(37)
-},{}],39:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 (function (global){
 /**
  * @license
@@ -12089,24 +14565,24 @@ module.exports=require(37)
   }
 }.call(this));
 
-}).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],40:[function(require,module,exports){
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],58:[function(require,module,exports){
 module.exports = require('./src/PathFinding');
 
-},{"./src/PathFinding":43}],41:[function(require,module,exports){
+},{"./src/PathFinding":61}],59:[function(require,module,exports){
 module.exports = require('./lib/heap');
 
-},{"./lib/heap":42}],42:[function(require,module,exports){
-// Generated by CoffeeScript 1.6.3
+},{"./lib/heap":60}],60:[function(require,module,exports){
+// Generated by CoffeeScript 1.8.0
 (function() {
   var Heap, defaultCmp, floor, heapify, heappop, heappush, heappushpop, heapreplace, insort, min, nlargest, nsmallest, updateItem, _siftdown, _siftup;
 
   floor = Math.floor, min = Math.min;
 
-  /* 
-  Default comparison function to be used
-  */
 
+  /*
+  Default comparison function to be used
+   */
 
   defaultCmp = function(x, y) {
     if (x < y) {
@@ -12118,15 +14594,15 @@ module.exports = require('./lib/heap');
     return 0;
   };
 
-  /* 
+
+  /*
   Insert item x in list a, and keep it sorted assuming a is sorted.
   
   If x is already in a, insert it to the right of the rightmost x.
   
   Optional args lo (default 0) and hi (default a.length) bound the slice
   of a to be searched.
-  */
-
+   */
 
   insort = function(a, x, lo, hi, cmp) {
     var mid;
@@ -12153,10 +14629,10 @@ module.exports = require('./lib/heap');
     return ([].splice.apply(a, [lo, lo - lo].concat(x)), x);
   };
 
+
   /*
   Push item onto heap, maintaining the heap invariant.
-  */
-
+   */
 
   heappush = function(array, item, cmp) {
     if (cmp == null) {
@@ -12166,10 +14642,10 @@ module.exports = require('./lib/heap');
     return _siftdown(array, 0, array.length - 1, cmp);
   };
 
+
   /*
   Pop the smallest item off the heap, maintaining the heap invariant.
-  */
-
+   */
 
   heappop = function(array, cmp) {
     var lastelt, returnitem;
@@ -12187,17 +14663,17 @@ module.exports = require('./lib/heap');
     return returnitem;
   };
 
+
   /*
   Pop and return the current smallest value, and add the new item.
   
-  This is more efficient than heappop() followed by heappush(), and can be 
+  This is more efficient than heappop() followed by heappush(), and can be
   more appropriate when using a fixed size heap. Note that the value
   returned may be larger than item! That constrains reasonable use of
   this routine unless written as part of a conditional replacement:
       if item > array[0]
         item = heapreplace(array, item)
-  */
-
+   */
 
   heapreplace = function(array, item, cmp) {
     var returnitem;
@@ -12210,10 +14686,10 @@ module.exports = require('./lib/heap');
     return returnitem;
   };
 
+
   /*
   Fast version of a heappush followed by a heappop.
-  */
-
+   */
 
   heappushpop = function(array, item, cmp) {
     var _ref;
@@ -12227,10 +14703,10 @@ module.exports = require('./lib/heap');
     return item;
   };
 
+
   /*
   Transform list into a heap, in-place, in O(array.length) time.
-  */
-
+   */
 
   heapify = function(array, cmp) {
     var i, _i, _j, _len, _ref, _ref1, _results, _results1;
@@ -12250,11 +14726,11 @@ module.exports = require('./lib/heap');
     return _results;
   };
 
+
   /*
   Update the position of the given item in the heap.
   This function should be called every time the item is being modified.
-  */
-
+   */
 
   updateItem = function(array, item, cmp) {
     var pos;
@@ -12269,10 +14745,10 @@ module.exports = require('./lib/heap');
     return _siftup(array, pos, cmp);
   };
 
+
   /*
   Find the n largest elements in a dataset.
-  */
-
+   */
 
   nlargest = function(array, n, cmp) {
     var elem, result, _i, _len, _ref;
@@ -12292,10 +14768,10 @@ module.exports = require('./lib/heap');
     return result.sort(cmp).reverse();
   };
 
+
   /*
   Find the n smallest elements in a dataset.
-  */
-
+   */
 
   nsmallest = function(array, n, cmp) {
     var elem, i, los, result, _i, _j, _len, _ref, _ref1, _results;
@@ -12379,6 +14855,8 @@ module.exports = require('./lib/heap');
 
     Heap.heapify = heapify;
 
+    Heap.updateItem = updateItem;
+
     Heap.nlargest = nlargest;
 
     Heap.nsmallest = nsmallest;
@@ -12445,8 +14923,6 @@ module.exports = require('./lib/heap');
 
     Heap.prototype.insert = Heap.prototype.push;
 
-    Heap.prototype.remove = Heap.prototype.pop;
-
     Heap.prototype.top = Heap.prototype.peek;
 
     Heap.prototype.front = Heap.prototype.peek;
@@ -12467,12 +14943,13 @@ module.exports = require('./lib/heap');
 
 }).call(this);
 
-},{}],43:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 module.exports = {
     'Heap'                      : require('heap'),
     'Node'                      : require('./core/Node'),
     'Grid'                      : require('./core/Grid'),
     'Util'                      : require('./core/Util'),
+	'DiagonalMovement'          : require('./core/DiagonalMovement'),
     'Heuristic'                 : require('./core/Heuristic'),
     'AStarFinder'               : require('./finders/AStarFinder'),
     'BestFirstFinder'           : require('./finders/BestFirstFinder'),
@@ -12484,12 +14961,20 @@ module.exports = {
     'BiDijkstraFinder'          : require('./finders/BiDijkstraFinder'),
     'IDAStarFinder'             : require('./finders/IDAStarFinder'),
     'JumpPointFinder'           : require('./finders/JumpPointFinder'),
-    'OrthogonalJumpPointFinder' : require('./finders/OrthogonalJumpPointFinder'),
-    'TraceFinder'               : require('./finders/TraceFinder')
 };
 
-},{"./core/Grid":44,"./core/Heuristic":45,"./core/Node":46,"./core/Util":47,"./finders/AStarFinder":48,"./finders/BestFirstFinder":49,"./finders/BiAStarFinder":50,"./finders/BiBestFirstFinder":51,"./finders/BiBreadthFirstFinder":52,"./finders/BiDijkstraFinder":53,"./finders/BreadthFirstFinder":54,"./finders/DijkstraFinder":55,"./finders/IDAStarFinder":56,"./finders/JumpPointFinder":57,"./finders/OrthogonalJumpPointFinder":58,"./finders/TraceFinder":59,"heap":41}],44:[function(require,module,exports){
+},{"./core/DiagonalMovement":62,"./core/Grid":63,"./core/Heuristic":64,"./core/Node":65,"./core/Util":66,"./finders/AStarFinder":67,"./finders/BestFirstFinder":68,"./finders/BiAStarFinder":69,"./finders/BiBestFirstFinder":70,"./finders/BiBreadthFirstFinder":71,"./finders/BiDijkstraFinder":72,"./finders/BreadthFirstFinder":73,"./finders/DijkstraFinder":74,"./finders/IDAStarFinder":75,"./finders/JumpPointFinder":80,"heap":59}],62:[function(require,module,exports){
+var DiagonalMovement = {
+    Always: 1,
+    Never: 2,
+    IfAtMostOneObstacle: 3,
+    OnlyWhenNoObstacles: 4
+};
+
+module.exports = DiagonalMovement;
+},{}],63:[function(require,module,exports){
 var Node = require('./Node');
+var DiagonalMovement = require('./DiagonalMovement');
 
 /**
  * The Grid class, which serves as the encapsulation of the layout of the nodes.
@@ -12620,10 +15105,9 @@ Grid.prototype.setWalkableAt = function(x, y, walkable) {
  *  diagonalOffsets[i] and
  *  diagonalOffsets[(i + 1) % 4] is valid.
  * @param {Node} node
- * @param {boolean} allowDiagonal
- * @param {boolean} dontCrossCorners
+ * @param {DiagonalMovement} diagonalMovement
  */
-Grid.prototype.getNeighbors = function(node, allowDiagonal, dontCrossCorners) {
+Grid.prototype.getNeighbors = function(node, diagonalMovement) {
     var x = node.x,
         y = node.y,
         neighbors = [],
@@ -12654,20 +15138,27 @@ Grid.prototype.getNeighbors = function(node, allowDiagonal, dontCrossCorners) {
         s3 = true;
     }
 
-    if (!allowDiagonal) {
+    if (diagonalMovement === DiagonalMovement.Never) {
         return neighbors;
     }
 
-    if (dontCrossCorners) {
+    if (diagonalMovement === DiagonalMovement.OnlyWhenNoObstacles) {
         d0 = s3 && s0;
         d1 = s0 && s1;
         d2 = s1 && s2;
         d3 = s2 && s3;
-    } else {
+    } else if (diagonalMovement === DiagonalMovement.IfAtMostOneObstacle) {
         d0 = s3 || s0;
         d1 = s0 || s1;
         d2 = s1 || s2;
         d3 = s2 || s3;
+    } else if (diagonalMovement === DiagonalMovement.Always) {
+        d0 = true;
+        d1 = true;
+        d2 = true;
+        d3 = true;
+    } else {
+        throw new Error('Incorrect value of diagonalMovement');
     }
 
     // ↖
@@ -12720,7 +15211,7 @@ Grid.prototype.clone = function() {
 
 module.exports = Grid;
 
-},{"./Node":46}],45:[function(require,module,exports){
+},{"./DiagonalMovement":62,"./Node":65}],64:[function(require,module,exports){
 /**
  * @namespace PF.Heuristic
  * @description A collection of heuristic functions.
@@ -12748,6 +15239,17 @@ module.exports = {
   },
 
   /**
+   * Octile distance.
+   * @param {number} dx - Difference in x.
+   * @param {number} dy - Difference in y.
+   * @return {number} sqrt(dx * dx + dy * dy) for grids
+   */
+  octile: function(dx, dy) {
+      var F = Math.SQRT2 - 1;
+      return (dx < dy) ? F * dx + dy : F * dy + dx;
+  },
+
+  /**
    * Chebyshev distance.
    * @param {number} dx - Difference in x.
    * @param {number} dy - Difference in y.
@@ -12759,7 +15261,7 @@ module.exports = {
 
 };
 
-},{}],46:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
 /**
  * A node in grid. 
  * This class holds some basic information about a node and custom 
@@ -12785,11 +15287,11 @@ function Node(x, y, walkable) {
      * @type boolean
      */
     this.walkable = (walkable === undefined ? true : walkable);
-};
+}
 
 module.exports = Node;
 
-},{}],47:[function(require,module,exports){
+},{}],66:[function(require,module,exports){
 /**
  * Backtrace according to the parent records and return the path.
  * (including both start and end nodes)
@@ -12933,14 +15435,11 @@ function smoothenPath(grid, path) {
         y1 = path[len - 1][1],  // path end y
         sx, sy,                 // current start coordinate
         ex, ey,                 // current end coordinate
-        lx, ly,                 // last valid end coordinate
         newPath,
         i, j, coord, line, testCoord, blocked;
 
     sx = x0;
     sy = y0;
-    lx = path[1][0];
-    ly = path[1][1];
     newPath = [[sx, sy]];
 
     for (i = 2; i < len; ++i) {
@@ -12955,15 +15454,14 @@ function smoothenPath(grid, path) {
 
             if (!grid.isWalkableAt(testCoord[0], testCoord[1])) {
                 blocked = true;
-                newPath.push([lx, ly]);
-                sx = lx;
-                sy = ly;
                 break;
             }
         }
-        if (!blocked) {
-            lx = ex;
-            ly = ey;
+        if (blocked) {
+            lastValidCoord = path[i - 1];
+            newPath.push(lastValidCoord);
+            sx = lastValidCoord[0];
+            sy = lastValidCoord[1];
         }
     }
     newPath.push([x1, y1]);
@@ -13041,18 +15539,20 @@ function compressPath(path) {
 }
 exports.compressPath = compressPath;
 
-},{}],48:[function(require,module,exports){
+},{}],67:[function(require,module,exports){
 var Heap       = require('heap');
 var Util       = require('../core/Util');
 var Heuristic  = require('../core/Heuristic');
+var DiagonalMovement = require('../core/DiagonalMovement');
 
 /**
  * A* path-finder.
  * based upon https://github.com/bgrins/javascript-astar
  * @constructor
  * @param {object} opt
- * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed.
- * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners.
+ * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed. Deprecated, use diagonalMovement instead.
+ * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners. Deprecated, use diagonalMovement instead.
+ * @param {DiagonalMovement} opt.diagonalMovement Allowed diagonal movement.
  * @param {function} opt.heuristic Heuristic function to estimate the distance
  *     (defaults to manhattan).
  * @param {integer} opt.weight Weight to apply to the heuristic to allow for suboptimal paths, 
@@ -13064,6 +15564,27 @@ function AStarFinder(opt) {
     this.dontCrossCorners = opt.dontCrossCorners;
     this.heuristic = opt.heuristic || Heuristic.manhattan;
     this.weight = opt.weight || 1;
+    this.diagonalMovement = opt.diagonalMovement;
+
+    if (!this.diagonalMovement) {
+        if (!this.allowDiagonal) {
+            this.diagonalMovement = DiagonalMovement.Never;
+        } else {
+            if (this.dontCrossCorners) {
+                this.diagonalMovement = DiagonalMovement.OnlyWhenNoObstacles;
+            } else {
+                this.diagonalMovement = DiagonalMovement.IfAtMostOneObstacle;
+            }
+        }
+    }
+
+    //When diagonal movement is allowed the manhattan heuristic is not admissible
+    //It should be octile instead
+    if (this.diagonalMovement === DiagonalMovement.Never) {
+        this.heuristic = opt.heuristic || Heuristic.manhattan;
+    } else {
+        this.heuristic = opt.heuristic || Heuristic.octile;
+    }
 }
 
 /**
@@ -13078,8 +15599,7 @@ AStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
         startNode = grid.getNodeAt(startX, startY),
         endNode = grid.getNodeAt(endX, endY),
         heuristic = this.heuristic,
-        allowDiagonal = this.allowDiagonal,
-        dontCrossCorners = this.dontCrossCorners,
+        diagonalMovement = this.diagonalMovement,
         weight = this.weight,
         abs = Math.abs, SQRT2 = Math.SQRT2,
         node, neighbors, neighbor, i, l, x, y, ng;
@@ -13104,7 +15624,7 @@ AStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
         }
 
         // get neigbours of the current node
-        neighbors = grid.getNeighbors(node, allowDiagonal, dontCrossCorners);
+        neighbors = grid.getNeighbors(node, diagonalMovement);
         for (i = 0, l = neighbors.length; i < l; ++i) {
             neighbor = neighbors[i];
 
@@ -13146,7 +15666,7 @@ AStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
 
 module.exports = AStarFinder;
 
-},{"../core/Heuristic":45,"../core/Util":47,"heap":41}],49:[function(require,module,exports){
+},{"../core/DiagonalMovement":62,"../core/Heuristic":64,"../core/Util":66,"heap":59}],68:[function(require,module,exports){
 var AStarFinder = require('./AStarFinder');
 
 /**
@@ -13154,8 +15674,9 @@ var AStarFinder = require('./AStarFinder');
  * @constructor
  * @extends AStarFinder
  * @param {object} opt
- * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed.
- * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners.
+ * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed. Deprecated, use diagonalMovement instead.
+ * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners. Deprecated, use diagonalMovement instead.
+ * @param {DiagonalMovement} opt.diagonalMovement Allowed diagonal movement.
  * @param {function} opt.heuristic Heuristic function to estimate the distance
  *     (defaults to manhattan).
  */
@@ -13166,25 +15687,27 @@ function BestFirstFinder(opt) {
     this.heuristic = function(dx, dy) {
         return orig(dx, dy) * 1000000;
     };
-};
+}
 
 BestFirstFinder.prototype = new AStarFinder();
 BestFirstFinder.prototype.constructor = BestFirstFinder;
 
 module.exports = BestFirstFinder;
 
-},{"./AStarFinder":48}],50:[function(require,module,exports){
+},{"./AStarFinder":67}],69:[function(require,module,exports){
 var Heap       = require('heap');
 var Util       = require('../core/Util');
 var Heuristic  = require('../core/Heuristic');
+var DiagonalMovement = require('../core/DiagonalMovement');
 
 /**
  * A* path-finder.
  * based upon https://github.com/bgrins/javascript-astar
  * @constructor
  * @param {object} opt
- * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed.
- * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners.
+ * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed. Deprecated, use diagonalMovement instead.
+ * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners. Deprecated, use diagonalMovement instead.
+ * @param {DiagonalMovement} opt.diagonalMovement Allowed diagonal movement.
  * @param {function} opt.heuristic Heuristic function to estimate the distance
  *     (defaults to manhattan).
  * @param {integer} opt.weight Weight to apply to the heuristic to allow for suboptimal paths, 
@@ -13194,8 +15717,29 @@ function BiAStarFinder(opt) {
     opt = opt || {};
     this.allowDiagonal = opt.allowDiagonal;
     this.dontCrossCorners = opt.dontCrossCorners;
+    this.diagonalMovement = opt.diagonalMovement;
     this.heuristic = opt.heuristic || Heuristic.manhattan;
     this.weight = opt.weight || 1;
+
+    if (!this.diagonalMovement) {
+        if (!this.allowDiagonal) {
+            this.diagonalMovement = DiagonalMovement.Never;
+        } else {
+            if (this.dontCrossCorners) {
+                this.diagonalMovement = DiagonalMovement.OnlyWhenNoObstacles;
+            } else {
+                this.diagonalMovement = DiagonalMovement.IfAtMostOneObstacle;
+            }
+        }
+    }
+
+    //When diagonal movement is allowed the manhattan heuristic is not admissible
+    //It should be octile instead
+    if (this.diagonalMovement === DiagonalMovement.Never) {
+        this.heuristic = opt.heuristic || Heuristic.manhattan;
+    } else {
+        this.heuristic = opt.heuristic || Heuristic.octile;
+    }
 }
 
 /**
@@ -13212,8 +15756,7 @@ BiAStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
         startNode = grid.getNodeAt(startX, startY),
         endNode = grid.getNodeAt(endX, endY),
         heuristic = this.heuristic,
-        allowDiagonal = this.allowDiagonal,
-        dontCrossCorners = this.dontCrossCorners,
+        diagonalMovement = this.diagonalMovement,
         weight = this.weight,
         abs = Math.abs, SQRT2 = Math.SQRT2,
         node, neighbors, neighbor, i, l, x, y, ng,
@@ -13241,7 +15784,7 @@ BiAStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
         node.closed = true;
 
         // get neigbours of the current node
-        neighbors = grid.getNeighbors(node, allowDiagonal, dontCrossCorners);
+        neighbors = grid.getNeighbors(node, diagonalMovement);
         for (i = 0, l = neighbors.length; i < l; ++i) {
             neighbor = neighbors[i];
 
@@ -13285,7 +15828,7 @@ BiAStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
         node.closed = true;
 
         // get neigbours of the current node
-        neighbors = grid.getNeighbors(node, allowDiagonal, dontCrossCorners);
+        neighbors = grid.getNeighbors(node, diagonalMovement);
         for (i = 0, l = neighbors.length; i < l; ++i) {
             neighbor = neighbors[i];
 
@@ -13330,7 +15873,7 @@ BiAStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
 
 module.exports = BiAStarFinder;
 
-},{"../core/Heuristic":45,"../core/Util":47,"heap":41}],51:[function(require,module,exports){
+},{"../core/DiagonalMovement":62,"../core/Heuristic":64,"../core/Util":66,"heap":59}],70:[function(require,module,exports){
 var BiAStarFinder = require('./BiAStarFinder');
 
 /**
@@ -13338,8 +15881,9 @@ var BiAStarFinder = require('./BiAStarFinder');
  * @constructor
  * @extends BiAStarFinder
  * @param {object} opt
- * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed.
- * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners.
+ * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed. Deprecated, use diagonalMovement instead.
+ * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners. Deprecated, use diagonalMovement instead.
+ * @param {DiagonalMovement} opt.diagonalMovement Allowed diagonal movement.
  * @param {function} opt.heuristic Heuristic function to estimate the distance
  *     (defaults to manhattan).
  */
@@ -13357,20 +15901,35 @@ BiBestFirstFinder.prototype.constructor = BiBestFirstFinder;
 
 module.exports = BiBestFirstFinder;
 
-},{"./BiAStarFinder":50}],52:[function(require,module,exports){
+},{"./BiAStarFinder":69}],71:[function(require,module,exports){
 var Util = require('../core/Util');
+var DiagonalMovement = require('../core/DiagonalMovement');
 
 /**
  * Bi-directional Breadth-First-Search path finder.
  * @constructor
  * @param {object} opt
- * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed.
- * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners.
+ * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed. Deprecated, use diagonalMovement instead.
+ * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners. Deprecated, use diagonalMovement instead.
+ * @param {DiagonalMovement} opt.diagonalMovement Allowed diagonal movement.
  */
 function BiBreadthFirstFinder(opt) {
     opt = opt || {};
     this.allowDiagonal = opt.allowDiagonal;
     this.dontCrossCorners = opt.dontCrossCorners;
+    this.diagonalMovement = opt.diagonalMovement;
+
+    if (!this.diagonalMovement) {
+        if (!this.allowDiagonal) {
+            this.diagonalMovement = DiagonalMovement.Never;
+        } else {
+            if (this.dontCrossCorners) {
+                this.diagonalMovement = DiagonalMovement.OnlyWhenNoObstacles;
+            } else {
+                this.diagonalMovement = DiagonalMovement.IfAtMostOneObstacle;
+            }
+        }
+    }
 }
 
 
@@ -13384,8 +15943,7 @@ BiBreadthFirstFinder.prototype.findPath = function(startX, startY, endX, endY, g
         endNode = grid.getNodeAt(endX, endY),
         startOpenList = [], endOpenList = [],
         neighbors, neighbor, node,
-        allowDiagonal = this.allowDiagonal,
-        dontCrossCorners = this.dontCrossCorners,
+        diagonalMovement = this.diagonalMovement,
         BY_START = 0, BY_END = 1,
         i, l;
 
@@ -13406,7 +15964,7 @@ BiBreadthFirstFinder.prototype.findPath = function(startX, startY, endX, endY, g
         node = startOpenList.shift();
         node.closed = true;
 
-        neighbors = grid.getNeighbors(node, allowDiagonal, dontCrossCorners);
+        neighbors = grid.getNeighbors(node, diagonalMovement);
         for (i = 0, l = neighbors.length; i < l; ++i) {
             neighbor = neighbors[i];
 
@@ -13432,7 +15990,7 @@ BiBreadthFirstFinder.prototype.findPath = function(startX, startY, endX, endY, g
         node = endOpenList.shift();
         node.closed = true;
 
-        neighbors = grid.getNeighbors(node, allowDiagonal, dontCrossCorners);
+        neighbors = grid.getNeighbors(node, diagonalMovement);
         for (i = 0, l = neighbors.length; i < l; ++i) {
             neighbor = neighbors[i];
 
@@ -13458,7 +16016,7 @@ BiBreadthFirstFinder.prototype.findPath = function(startX, startY, endX, endY, g
 
 module.exports = BiBreadthFirstFinder;
 
-},{"../core/Util":47}],53:[function(require,module,exports){
+},{"../core/DiagonalMovement":62,"../core/Util":66}],72:[function(require,module,exports){
 var BiAStarFinder = require('./BiAStarFinder');
 
 /**
@@ -13466,8 +16024,9 @@ var BiAStarFinder = require('./BiAStarFinder');
  * @constructor
  * @extends BiAStarFinder
  * @param {object} opt
- * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed.
- * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners.
+ * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed. Deprecated, use diagonalMovement instead.
+ * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners. Deprecated, use diagonalMovement instead.
+ * @param {DiagonalMovement} opt.diagonalMovement Allowed diagonal movement.
  */
 function BiDijkstraFinder(opt) {
     BiAStarFinder.call(this, opt);
@@ -13481,20 +16040,35 @@ BiDijkstraFinder.prototype.constructor = BiDijkstraFinder;
 
 module.exports = BiDijkstraFinder;
 
-},{"./BiAStarFinder":50}],54:[function(require,module,exports){
+},{"./BiAStarFinder":69}],73:[function(require,module,exports){
 var Util = require('../core/Util');
+var DiagonalMovement = require('../core/DiagonalMovement');
 
 /**
  * Breadth-First-Search path finder.
  * @constructor
  * @param {object} opt
- * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed.
- * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners.
+ * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed. Deprecated, use diagonalMovement instead.
+ * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners. Deprecated, use diagonalMovement instead.
+ * @param {DiagonalMovement} opt.diagonalMovement Allowed diagonal movement.
  */
 function BreadthFirstFinder(opt) {
     opt = opt || {};
     this.allowDiagonal = opt.allowDiagonal;
     this.dontCrossCorners = opt.dontCrossCorners;
+    this.diagonalMovement = opt.diagonalMovement;
+
+    if (!this.diagonalMovement) {
+        if (!this.allowDiagonal) {
+            this.diagonalMovement = DiagonalMovement.Never;
+        } else {
+            if (this.dontCrossCorners) {
+                this.diagonalMovement = DiagonalMovement.OnlyWhenNoObstacles;
+            } else {
+                this.diagonalMovement = DiagonalMovement.IfAtMostOneObstacle;
+            }
+        }
+    }
 }
 
 /**
@@ -13504,8 +16078,7 @@ function BreadthFirstFinder(opt) {
  */
 BreadthFirstFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
     var openList = [],
-        allowDiagonal = this.allowDiagonal,
-        dontCrossCorners = this.dontCrossCorners,
+        diagonalMovement = this.diagonalMovement,
         startNode = grid.getNodeAt(startX, startY),
         endNode = grid.getNodeAt(endX, endY),
         neighbors, neighbor, node, i, l;
@@ -13525,7 +16098,7 @@ BreadthFirstFinder.prototype.findPath = function(startX, startY, endX, endY, gri
             return Util.backtrace(endNode);
         }
 
-        neighbors = grid.getNeighbors(node, allowDiagonal, dontCrossCorners);
+        neighbors = grid.getNeighbors(node, diagonalMovement);
         for (i = 0, l = neighbors.length; i < l; ++i) {
             neighbor = neighbors[i];
 
@@ -13546,7 +16119,7 @@ BreadthFirstFinder.prototype.findPath = function(startX, startY, endX, endY, gri
 
 module.exports = BreadthFirstFinder;
 
-},{"../core/Util":47}],55:[function(require,module,exports){
+},{"../core/DiagonalMovement":62,"../core/Util":66}],74:[function(require,module,exports){
 var AStarFinder = require('./AStarFinder');
 
 /**
@@ -13554,8 +16127,9 @@ var AStarFinder = require('./AStarFinder');
  * @constructor
  * @extends AStarFinder
  * @param {object} opt
- * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed.
- * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners.
+ * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed. Deprecated, use diagonalMovement instead.
+ * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners. Deprecated, use diagonalMovement instead.
+ * @param {DiagonalMovement} opt.diagonalMovement Allowed diagonal movement.
  */
 function DijkstraFinder(opt) {
     AStarFinder.call(this, opt);
@@ -13569,10 +16143,11 @@ DijkstraFinder.prototype.constructor = DijkstraFinder;
 
 module.exports = DijkstraFinder;
 
-},{"./AStarFinder":48}],56:[function(require,module,exports){
+},{"./AStarFinder":67}],75:[function(require,module,exports){
 var Util       = require('../core/Util');
 var Heuristic  = require('../core/Heuristic');
 var Node       = require('../core/Node');
+var DiagonalMovement = require('../core/DiagonalMovement');
 
 /**
  * Iterative Deeping A Star (IDA*) path-finder.
@@ -13589,8 +16164,9 @@ var Node       = require('../core/Node');
  *
  * @constructor
  * @param {object} opt
- * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed.
- * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners.
+ * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed. Deprecated, use diagonalMovement instead.
+ * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners. Deprecated, use diagonalMovement instead.
+ * @param {DiagonalMovement} opt.diagonalMovement Allowed diagonal movement.
  * @param {function} opt.heuristic Heuristic function to estimate the distance
  *     (defaults to manhattan).
  * @param {integer} opt.weight Weight to apply to the heuristic to allow for suboptimal paths,
@@ -13603,10 +16179,31 @@ function IDAStarFinder(opt) {
     opt = opt || {};
     this.allowDiagonal = opt.allowDiagonal;
     this.dontCrossCorners = opt.dontCrossCorners;
+    this.diagonalMovement = opt.diagonalMovement;
     this.heuristic = opt.heuristic || Heuristic.manhattan;
     this.weight = opt.weight || 1;
     this.trackRecursion = opt.trackRecursion || false;
     this.timeLimit = opt.timeLimit || Infinity; // Default: no time limit.
+
+    if (!this.diagonalMovement) {
+        if (!this.allowDiagonal) {
+            this.diagonalMovement = DiagonalMovement.Never;
+        } else {
+            if (this.dontCrossCorners) {
+                this.diagonalMovement = DiagonalMovement.OnlyWhenNoObstacles;
+            } else {
+                this.diagonalMovement = DiagonalMovement.IfAtMostOneObstacle;
+            }
+        }
+    }
+
+    //When diagonal movement is allowed the manhattan heuristic is not admissible
+    //It should be octile instead
+    if (this.diagonalMovement === DiagonalMovement.Never) {
+        this.heuristic = opt.heuristic || Heuristic.manhattan;
+    } else {
+        this.heuristic = opt.heuristic || Heuristic.octile;
+    }
 }
 
 /**
@@ -13668,7 +16265,7 @@ IDAStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
 
         var min, t, k, neighbour;
 
-        var neighbours = grid.getNeighbors(node, this.allowDiagonal, this.dontCrossCorners);
+        var neighbours = grid.getNeighbors(node, this.diagonalMovement);
 
         // Sort the neighbours, gives nicer paths. But, this deviates
         // from the original algorithm - so I left it out.
@@ -13676,8 +16273,10 @@ IDAStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
         //    return h(a, end) - h(b, end);
         //});
 
+        
+        /*jshint -W084 *///Disable warning: Expected a conditional expression and instead saw an assignment
         for(k = 0, min = Infinity; neighbour = neighbours[k]; ++k) {
-
+        /*jshint +W084 *///Enable warning: Expected a conditional expression and instead saw an assignment
             if(this.trackRecursion) {
                 // Retain a copy for visualisation. Due to recursion, this
                 // node may be part of other paths too.
@@ -13754,118 +16353,23 @@ IDAStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
 
 module.exports = IDAStarFinder;
 
-},{"../core/Heuristic":45,"../core/Node":46,"../core/Util":47}],57:[function(require,module,exports){
+},{"../core/DiagonalMovement":62,"../core/Heuristic":64,"../core/Node":65,"../core/Util":66}],76:[function(require,module,exports){
 /**
- * @author aniero / https://github.com/aniero
+ * @author imor / https://github.com/imor
  */
-var Heap       = require('heap');
-var Util       = require('../core/Util');
-var Heuristic  = require('../core/Heuristic');
+var JumpPointFinderBase = require('./JumpPointFinderBase');
+var DiagonalMovement = require('../core/DiagonalMovement');
 
 /**
- * Path finder using the Jump Point Search algorithm
- * @param {object} opt
- * @param {function} opt.heuristic Heuristic function to estimate the distance
- *     (defaults to manhattan).
+ * Path finder using the Jump Point Search algorithm which always moves
+ * diagonally irrespective of the number of obstacles.
  */
-function JumpPointFinder(opt) {
-    opt = opt || {};
-    this.heuristic = opt.heuristic || Heuristic.manhattan;
-    this.trackJumpRecursion = opt.trackJumpRecursion || false;
+function JPFAlwaysMoveDiagonally(opt) {
+    JumpPointFinderBase.call(this, opt);
 }
 
-/**
- * Find and return the path.
- * @return {Array.<[number, number]>} The path, including both start and
- *     end positions.
- */
-JumpPointFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
-    var openList = this.openList = new Heap(function(nodeA, nodeB) {
-            return nodeA.f - nodeB.f;
-        }),
-        startNode = this.startNode = grid.getNodeAt(startX, startY),
-        endNode = this.endNode = grid.getNodeAt(endX, endY), node;
-
-    this.grid = grid;
-
-
-    // set the `g` and `f` value of the start node to be 0
-    startNode.g = 0;
-    startNode.f = 0;
-
-    // push the start node into the open list
-    openList.push(startNode);
-    startNode.opened = true;
-
-    // while the open list is not empty
-    while (!openList.empty()) {
-        // pop the position of node which has the minimum `f` value.
-        node = openList.pop();
-        node.closed = true;
-
-        if (node === endNode) {
-            return Util.expandPath(Util.backtrace(endNode));
-        }
-
-        this._identifySuccessors(node);
-    }
-
-    // fail to find the path
-    return [];
-};
-
-/**
- * Identify successors for the given node. Runs a jump point search in the
- * direction of each available neighbor, adding any points found to the open
- * list.
- * @protected
- */
-JumpPointFinder.prototype._identifySuccessors = function(node) {
-    var grid = this.grid,
-        heuristic = this.heuristic,
-        openList = this.openList,
-        endX = this.endNode.x,
-        endY = this.endNode.y,
-        neighbors, neighbor,
-        jumpPoint, i, l,
-        x = node.x, y = node.y,
-        jx, jy, dx, dy, d, ng, jumpNode,
-        abs = Math.abs, max = Math.max;
-
-    neighbors = this._findNeighbors(node);
-    for(i = 0, l = neighbors.length; i < l; ++i) {
-        neighbor = neighbors[i];
-        jumpPoint = this._jump(neighbor[0], neighbor[1], x, y);
-        if (jumpPoint) {
-
-            jx = jumpPoint[0];
-            jy = jumpPoint[1];
-            jumpNode = grid.getNodeAt(jx, jy);
-
-            if (jumpNode.closed) {
-                continue;
-            }
-
-            // include distance, as parent may not be immediately adjacent:
-            d = Heuristic.euclidean(abs(jx - x), abs(jy - y));
-            ng = node.g + d; // next `g` value
-
-            if (!jumpNode.opened || ng < jumpNode.g) {
-                jumpNode.g = ng;
-                jumpNode.h = jumpNode.h || heuristic(abs(jx - endX), abs(jy - endY));
-                jumpNode.f = jumpNode.g + jumpNode.h;
-                jumpNode.parent = node;
-
-                if (!jumpNode.opened) {
-                    openList.push(jumpNode);
-                    jumpNode.opened = true;
-                } else {
-                    openList.updateItem(jumpNode);
-                }
-            }
-        }
-    }
-};
+JPFAlwaysMoveDiagonally.prototype = new JumpPointFinderBase();
+JPFAlwaysMoveDiagonally.prototype.constructor = JPFAlwaysMoveDiagonally;
 
 /**
  * Search recursively in the direction (parent -> child), stopping only when a
@@ -13874,7 +16378,7 @@ JumpPointFinder.prototype._identifySuccessors = function(node) {
  * @return {Array.<[number, number]>} The x, y coordinate of the jump point
  *     found, or null if not found
  */
-JumpPointFinder.prototype._jump = function(x, y, px, py) {
+JPFAlwaysMoveDiagonally.prototype._jump = function(x, y, px, py) {
     var grid = this.grid,
         dx = x - px, dy = y - py;
 
@@ -13897,6 +16401,10 @@ JumpPointFinder.prototype._jump = function(x, y, px, py) {
             (grid.isWalkableAt(x + dx, y - dy) && !grid.isWalkableAt(x, y - dy))) {
             return [x, y];
         }
+        // when moving diagonally, must check for vertical/horizontal jump points
+        if (this._jump(x + dx, y, x, y) || this._jump(x, y + dy, x, y)) {
+            return [x, y];
+        }
     }
     // horizontally/vertically
     else {
@@ -13914,10 +16422,154 @@ JumpPointFinder.prototype._jump = function(x, y, px, py) {
         }
     }
 
-    // when moving diagonally, must check for vertical/horizontal jump points
+    return this._jump(x + dx, y + dy, x, y);
+};
+
+/**
+ * Find the neighbors for the given node. If the node has a parent,
+ * prune the neighbors based on the jump point search algorithm, otherwise
+ * return all available neighbors.
+ * @return {Array.<[number, number]>} The neighbors found.
+ */
+JPFAlwaysMoveDiagonally.prototype._findNeighbors = function(node) {
+    var parent = node.parent,
+        x = node.x, y = node.y,
+        grid = this.grid,
+        px, py, nx, ny, dx, dy,
+        neighbors = [], neighborNodes, neighborNode, i, l;
+
+    // directed pruning: can ignore most neighbors, unless forced.
+    if (parent) {
+        px = parent.x;
+        py = parent.y;
+        // get the normalized direction of travel
+        dx = (x - px) / Math.max(Math.abs(x - px), 1);
+        dy = (y - py) / Math.max(Math.abs(y - py), 1);
+
+        // search diagonally
+        if (dx !== 0 && dy !== 0) {
+            if (grid.isWalkableAt(x, y + dy)) {
+                neighbors.push([x, y + dy]);
+            }
+            if (grid.isWalkableAt(x + dx, y)) {
+                neighbors.push([x + dx, y]);
+            }
+            if (grid.isWalkableAt(x + dx, y + dy)) {
+                neighbors.push([x + dx, y + dy]);
+            }
+            if (!grid.isWalkableAt(x - dx, y)) {
+                neighbors.push([x - dx, y + dy]);
+            }
+            if (!grid.isWalkableAt(x, y - dy)) {
+                neighbors.push([x + dx, y - dy]);
+            }
+        }
+        // search horizontally/vertically
+        else {
+            if(dx === 0) {
+                if (grid.isWalkableAt(x, y + dy)) {
+                    neighbors.push([x, y + dy]);
+                }
+                if (!grid.isWalkableAt(x + 1, y)) {
+                    neighbors.push([x + 1, y + dy]);
+                }
+                if (!grid.isWalkableAt(x - 1, y)) {
+                    neighbors.push([x - 1, y + dy]);
+                }
+            }
+            else {
+                if (grid.isWalkableAt(x + dx, y)) {
+                    neighbors.push([x + dx, y]);
+                }
+                if (!grid.isWalkableAt(x, y + 1)) {
+                    neighbors.push([x + dx, y + 1]);
+                }
+                if (!grid.isWalkableAt(x, y - 1)) {
+                    neighbors.push([x + dx, y - 1]);
+                }
+            }
+        }
+    }
+    // return all neighbors
+    else {
+        neighborNodes = grid.getNeighbors(node, DiagonalMovement.Always);
+        for (i = 0, l = neighborNodes.length; i < l; ++i) {
+            neighborNode = neighborNodes[i];
+            neighbors.push([neighborNode.x, neighborNode.y]);
+        }
+    }
+
+    return neighbors;
+};
+
+module.exports = JPFAlwaysMoveDiagonally;
+
+},{"../core/DiagonalMovement":62,"./JumpPointFinderBase":81}],77:[function(require,module,exports){
+/**
+ * @author imor / https://github.com/imor
+ */
+var JumpPointFinderBase = require('./JumpPointFinderBase');
+var DiagonalMovement = require('../core/DiagonalMovement');
+
+/**
+ * Path finder using the Jump Point Search algorithm which moves
+ * diagonally only when there is at most one obstacle.
+ */
+function JPFMoveDiagonallyIfAtMostOneObstacle(opt) {
+    JumpPointFinderBase.call(this, opt);
+}
+
+JPFMoveDiagonallyIfAtMostOneObstacle.prototype = new JumpPointFinderBase();
+JPFMoveDiagonallyIfAtMostOneObstacle.prototype.constructor = JPFMoveDiagonallyIfAtMostOneObstacle;
+
+/**
+ * Search recursively in the direction (parent -> child), stopping only when a
+ * jump point is found.
+ * @protected
+ * @return {Array.<[number, number]>} The x, y coordinate of the jump point
+ *     found, or null if not found
+ */
+JPFMoveDiagonallyIfAtMostOneObstacle.prototype._jump = function(x, y, px, py) {
+    var grid = this.grid,
+        dx = x - px, dy = y - py;
+
+    if (!grid.isWalkableAt(x, y)) {
+        return null;
+    }
+
+    if(this.trackJumpRecursion === true) {
+        grid.getNodeAt(x, y).tested = true;
+    }
+
+    if (grid.getNodeAt(x, y) === this.endNode) {
+        return [x, y];
+    }
+
+    // check for forced neighbors
+    // along the diagonal
     if (dx !== 0 && dy !== 0) {
+        if ((grid.isWalkableAt(x - dx, y + dy) && !grid.isWalkableAt(x - dx, y)) ||
+            (grid.isWalkableAt(x + dx, y - dy) && !grid.isWalkableAt(x, y - dy))) {
+            return [x, y];
+        }
+        // when moving diagonally, must check for vertical/horizontal jump points
         if (this._jump(x + dx, y, x, y) || this._jump(x, y + dy, x, y)) {
             return [x, y];
+        }
+    }
+    // horizontally/vertically
+    else {
+        if( dx !== 0 ) { // moving along x
+            if((grid.isWalkableAt(x + dx, y + 1) && !grid.isWalkableAt(x, y + 1)) ||
+               (grid.isWalkableAt(x + dx, y - 1) && !grid.isWalkableAt(x, y - 1))) {
+                return [x, y];
+            }
+        }
+        else {
+            if((grid.isWalkableAt(x + 1, y + dy) && !grid.isWalkableAt(x + 1, y)) ||
+               (grid.isWalkableAt(x - 1, y + dy) && !grid.isWalkableAt(x - 1, y))) {
+                return [x, y];
+            }
         }
     }
 
@@ -13936,7 +16588,7 @@ JumpPointFinder.prototype._jump = function(x, y, px, py) {
  * return all available neighbors.
  * @return {Array.<[number, number]>} The neighbors found.
  */
-JumpPointFinder.prototype._findNeighbors = function(node) {
+JPFMoveDiagonallyIfAtMostOneObstacle.prototype._findNeighbors = function(node) {
     var parent = node.parent,
         x = node.x, y = node.y,
         grid = this.grid,
@@ -13997,7 +16649,7 @@ JumpPointFinder.prototype._findNeighbors = function(node) {
     }
     // return all neighbors
     else {
-        neighborNodes = grid.getNeighbors(node, true);
+        neighborNodes = grid.getNeighbors(node, DiagonalMovement.IfAtMostOneObstacle);
         for (i = 0, l = neighborNodes.length; i < l; ++i) {
             neighborNode = neighborNodes[i];
             neighbors.push([neighborNode.x, neighborNode.y]);
@@ -14007,30 +16659,25 @@ JumpPointFinder.prototype._findNeighbors = function(node) {
     return neighbors;
 };
 
-module.exports = JumpPointFinder;
+module.exports = JPFMoveDiagonallyIfAtMostOneObstacle;
 
-},{"../core/Heuristic":45,"../core/Util":47,"heap":41}],58:[function(require,module,exports){
+},{"../core/DiagonalMovement":62,"./JumpPointFinderBase":81}],78:[function(require,module,exports){
 /**
  * @author imor / https://github.com/imor
  */
-var Heuristic  = require('../core/Heuristic');
-var JumpPointFinder = require('./JumpPointFinder');
+var JumpPointFinderBase = require('./JumpPointFinderBase');
+var DiagonalMovement = require('../core/DiagonalMovement');
 
 /**
- * Path finder using the Jump Point Search algorithm allowing only horizontal
- * or vertical movements.
- * @param {object} opt
- * @param {function} opt.heuristic Heuristic function to estimate the distance
- *     (defaults to manhattan).
+ * Path finder using the Jump Point Search algorithm which moves
+ * diagonally only when there are no obstacles.
  */
-function OrthogonalJumpPointFinder(opt) {
-    JumpPointFinder.call(this, opt);
-    opt = opt || {};
-    this.heuristic = opt.heuristic || Heuristic.manhattan;
+function JPFMoveDiagonallyIfNoObstacles(opt) {
+    JumpPointFinderBase.call(this, opt);
 }
 
-OrthogonalJumpPointFinder.prototype = new JumpPointFinder();
-OrthogonalJumpPointFinder.prototype.constructor = OrthogonalJumpPointFinder;
+JPFMoveDiagonallyIfNoObstacles.prototype = new JumpPointFinderBase();
+JPFMoveDiagonallyIfNoObstacles.prototype.constructor = JPFMoveDiagonallyIfNoObstacles;
 
 /**
  * Search recursively in the direction (parent -> child), stopping only when a
@@ -14039,7 +16686,183 @@ OrthogonalJumpPointFinder.prototype.constructor = OrthogonalJumpPointFinder;
  * @return {Array.<[number, number]>} The x, y coordinate of the jump point
  *     found, or null if not found
  */
-OrthogonalJumpPointFinder.prototype._jump = function(x, y, px, py) {
+JPFMoveDiagonallyIfNoObstacles.prototype._jump = function(x, y, px, py) {
+    var grid = this.grid,
+        dx = x - px, dy = y - py;
+
+    if (!grid.isWalkableAt(x, y)) {
+        return null;
+    }
+
+    if(this.trackJumpRecursion === true) {
+        grid.getNodeAt(x, y).tested = true;
+    }
+
+    if (grid.getNodeAt(x, y) === this.endNode) {
+        return [x, y];
+    }
+
+    // check for forced neighbors
+    // along the diagonal
+    if (dx !== 0 && dy !== 0) {
+        // if ((grid.isWalkableAt(x - dx, y + dy) && !grid.isWalkableAt(x - dx, y)) ||
+            // (grid.isWalkableAt(x + dx, y - dy) && !grid.isWalkableAt(x, y - dy))) {
+            // return [x, y];
+        // }
+        // when moving diagonally, must check for vertical/horizontal jump points
+        if (this._jump(x + dx, y, x, y) || this._jump(x, y + dy, x, y)) {
+            return [x, y];
+        }
+    }
+    // horizontally/vertically
+    else {
+        if (dx !== 0) {
+            if ((grid.isWalkableAt(x, y - 1) && !grid.isWalkableAt(x - dx, y - 1)) ||
+                (grid.isWalkableAt(x, y + 1) && !grid.isWalkableAt(x - dx, y + 1))) {
+                return [x, y];
+            }
+        }
+        else if (dy !== 0) {
+            if ((grid.isWalkableAt(x - 1, y) && !grid.isWalkableAt(x - 1, y - dy)) ||
+                (grid.isWalkableAt(x + 1, y) && !grid.isWalkableAt(x + 1, y - dy))) {
+                return [x, y];
+            }
+            // When moving vertically, must check for horizontal jump points
+            // if (this._jump(x + 1, y, x, y) || this._jump(x - 1, y, x, y)) {
+                // return [x, y];
+            // }
+        }
+    }
+
+    // moving diagonally, must make sure one of the vertical/horizontal
+    // neighbors is open to allow the path
+    if (grid.isWalkableAt(x + dx, y) && grid.isWalkableAt(x, y + dy)) {
+        return this._jump(x + dx, y + dy, x, y);
+    } else {
+        return null;
+    }
+};
+
+/**
+ * Find the neighbors for the given node. If the node has a parent,
+ * prune the neighbors based on the jump point search algorithm, otherwise
+ * return all available neighbors.
+ * @return {Array.<[number, number]>} The neighbors found.
+ */
+JPFMoveDiagonallyIfNoObstacles.prototype._findNeighbors = function(node) {
+    var parent = node.parent,
+        x = node.x, y = node.y,
+        grid = this.grid,
+        px, py, nx, ny, dx, dy,
+        neighbors = [], neighborNodes, neighborNode, i, l;
+
+    // directed pruning: can ignore most neighbors, unless forced.
+    if (parent) {
+        px = parent.x;
+        py = parent.y;
+        // get the normalized direction of travel
+        dx = (x - px) / Math.max(Math.abs(x - px), 1);
+        dy = (y - py) / Math.max(Math.abs(y - py), 1);
+
+        // search diagonally
+        if (dx !== 0 && dy !== 0) {
+            if (grid.isWalkableAt(x, y + dy)) {
+                neighbors.push([x, y + dy]);
+            }
+            if (grid.isWalkableAt(x + dx, y)) {
+                neighbors.push([x + dx, y]);
+            }
+            if (grid.isWalkableAt(x, y + dy) && grid.isWalkableAt(x + dx, y)) {
+                neighbors.push([x + dx, y + dy]);
+            }
+        }
+        // search horizontally/vertically
+        else {
+            var isNextWalkable;
+            if (dx !== 0) {
+                isNextWalkable = grid.isWalkableAt(x + dx, y);
+                var isTopWalkable = grid.isWalkableAt(x, y + 1);
+                var isBottomWalkable = grid.isWalkableAt(x, y - 1);
+
+                if (isNextWalkable) {
+                    neighbors.push([x + dx, y]);
+                    if (isTopWalkable) {
+                        neighbors.push([x + dx, y + 1]);
+                    }
+                    if (isBottomWalkable) {
+                        neighbors.push([x + dx, y - 1]);
+                    }
+                }
+                if (isTopWalkable) {
+                    neighbors.push([x, y + 1]);
+                }
+                if (isBottomWalkable) {
+                    neighbors.push([x, y - 1]);
+                }
+            }
+            else if (dy !== 0) {
+                isNextWalkable = grid.isWalkableAt(x, y + dy);
+                var isRightWalkable = grid.isWalkableAt(x + 1, y);
+                var isLeftWalkable = grid.isWalkableAt(x - 1, y);
+
+                if (isNextWalkable) {
+                    neighbors.push([x, y + dy]);
+                    if (isRightWalkable) {
+                        neighbors.push([x + 1, y + dy]);
+                    }
+                    if (isLeftWalkable) {
+                        neighbors.push([x - 1, y + dy]);
+                    }
+                }
+                if (isRightWalkable) {
+                    neighbors.push([x + 1, y]);
+                }
+                if (isLeftWalkable) {
+                    neighbors.push([x - 1, y]);
+                }
+            }
+        }
+    }
+    // return all neighbors
+    else {
+        neighborNodes = grid.getNeighbors(node, DiagonalMovement.OnlyWhenNoObstacles);
+        for (i = 0, l = neighborNodes.length; i < l; ++i) {
+            neighborNode = neighborNodes[i];
+            neighbors.push([neighborNode.x, neighborNode.y]);
+        }
+    }
+
+    return neighbors;
+};
+
+module.exports = JPFMoveDiagonallyIfNoObstacles;
+
+},{"../core/DiagonalMovement":62,"./JumpPointFinderBase":81}],79:[function(require,module,exports){
+/**
+ * @author imor / https://github.com/imor
+ */
+var JumpPointFinderBase = require('./JumpPointFinderBase');
+var DiagonalMovement = require('../core/DiagonalMovement');
+
+/**
+ * Path finder using the Jump Point Search algorithm allowing only horizontal
+ * or vertical movements.
+ */
+function JPFNeverMoveDiagonally(opt) {
+    JumpPointFinderBase.call(this, opt);
+}
+
+JPFNeverMoveDiagonally.prototype = new JumpPointFinderBase();
+JPFNeverMoveDiagonally.prototype.constructor = JPFNeverMoveDiagonally;
+
+/**
+ * Search recursively in the direction (parent -> child), stopping only when a
+ * jump point is found.
+ * @protected
+ * @return {Array.<[number, number]>} The x, y coordinate of the jump point
+ *     found, or null if not found
+ */
+JPFNeverMoveDiagonally.prototype._jump = function(x, y, px, py) {
     var grid = this.grid,
         dx = x - px, dy = y - py;
 
@@ -14084,7 +16907,7 @@ OrthogonalJumpPointFinder.prototype._jump = function(x, y, px, py) {
  * return all available neighbors.
  * @return {Array.<[number, number]>} The neighbors found.
  */
-OrthogonalJumpPointFinder.prototype._findNeighbors = function(node) {
+JPFNeverMoveDiagonally.prototype._findNeighbors = function(node) {
     var parent = node.parent,
         x = node.x, y = node.y,
         grid = this.grid,
@@ -14124,7 +16947,7 @@ OrthogonalJumpPointFinder.prototype._findNeighbors = function(node) {
     }
     // return all neighbors
     else {
-        neighborNodes = grid.getNeighbors(node, false);
+        neighborNodes = grid.getNeighbors(node, DiagonalMovement.Never);
         for (i = 0, l = neighborNodes.length; i < l; ++i) {
             neighborNode = neighborNodes[i];
             neighbors.push([neighborNode.x, neighborNode.y]);
@@ -14134,49 +16957,76 @@ OrthogonalJumpPointFinder.prototype._findNeighbors = function(node) {
     return neighbors;
 };
 
-module.exports = OrthogonalJumpPointFinder;
+module.exports = JPFNeverMoveDiagonally;
 
-},{"../core/Heuristic":45,"./JumpPointFinder":57}],59:[function(require,module,exports){
+},{"../core/DiagonalMovement":62,"./JumpPointFinderBase":81}],80:[function(require,module,exports){
+/**
+ * @author aniero / https://github.com/aniero
+ */
+var DiagonalMovement = require('../core/DiagonalMovement');
+var JPFNeverMoveDiagonally = require('./JPFNeverMoveDiagonally');
+var JPFAlwaysMoveDiagonally = require('./JPFAlwaysMoveDiagonally');
+var JPFMoveDiagonallyIfNoObstacles = require('./JPFMoveDiagonallyIfNoObstacles');
+var JPFMoveDiagonallyIfAtMostOneObstacle = require('./JPFMoveDiagonallyIfAtMostOneObstacle');
+
+/**
+ * Path finder using the Jump Point Search algorithm
+ * @param {object} opt
+ * @param {function} opt.heuristic Heuristic function to estimate the distance
+ *     (defaults to manhattan).
+ * @param {DiagonalMovement} opt.diagonalMovement Condition under which diagonal
+ *      movement will be allowed.
+ */
+function JumpPointFinder(opt) {
+    opt = opt || {};
+    if (opt.diagonalMovement === DiagonalMovement.Never) {
+        return new JPFNeverMoveDiagonally(opt);
+    } else if (opt.diagonalMovement === DiagonalMovement.Always) {
+        return new JPFAlwaysMoveDiagonally(opt);
+    } else if (opt.diagonalMovement === DiagonalMovement.OnlyWhenNoObstacles) {
+        return new JPFMoveDiagonallyIfNoObstacles(opt);
+    } else {
+        return new JPFMoveDiagonallyIfAtMostOneObstacle(opt);
+    }
+}
+
+module.exports = JumpPointFinder;
+
+},{"../core/DiagonalMovement":62,"./JPFAlwaysMoveDiagonally":76,"./JPFMoveDiagonallyIfAtMostOneObstacle":77,"./JPFMoveDiagonallyIfNoObstacles":78,"./JPFNeverMoveDiagonally":79}],81:[function(require,module,exports){
+/**
+ * @author imor / https://github.com/imor
+ */
 var Heap       = require('heap');
 var Util       = require('../core/Util');
 var Heuristic  = require('../core/Heuristic');
+var DiagonalMovement = require('../core/DiagonalMovement');
 
 /**
- * A* path-finder.
- * based upon https://github.com/bgrins/javascript-astar
- * @constructor
+ * Base class for the Jump Point Search algorithm
  * @param {object} opt
- * @param {boolean} opt.allowDiagonal Whether diagonal movement is allowed.
- * @param {boolean} opt.dontCrossCorners Disallow diagonal movement touching block corners.
  * @param {function} opt.heuristic Heuristic function to estimate the distance
  *     (defaults to manhattan).
- * @param {integer} opt.weight Weight to apply to the heuristic to allow for suboptimal paths,
- *     in order to speed up the search.
  */
-function TraceFinder(opt) {
+function JumpPointFinderBase(opt) {
     opt = opt || {};
-    this.allowDiagonal = opt.allowDiagonal;
-    this.dontCrossCorners = opt.dontCrossCorners;
     this.heuristic = opt.heuristic || Heuristic.manhattan;
+    this.trackJumpRecursion = opt.trackJumpRecursion || false;
 }
 
 /**
- * Find and return the the path.
+ * Find and return the path.
  * @return {Array.<[number, number]>} The path, including both start and
  *     end positions.
  */
-TraceFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
-
-    var openList = new Heap(function(nodeA, nodeB) {
+JumpPointFinderBase.prototype.findPath = function(startX, startY, endX, endY, grid) {
+    var openList = this.openList = new Heap(function(nodeA, nodeB) {
             return nodeA.f - nodeB.f;
         }),
-        startNode = grid.getNodeAt(startX, startY),
-        endNode = grid.getNodeAt(endX, endY),
-        heuristic = this.heuristic,
-        allowDiagonal = this.allowDiagonal,
-        dontCrossCorners = this.dontCrossCorners,
-        abs = Math.abs, SQRT2 = Math.SQRT2,
-        node, neighbors, neighbor, i, l, x, y, ng;
+        startNode = this.startNode = grid.getNodeAt(startX, startY),
+        endNode = this.endNode = grid.getNodeAt(endX, endY), node;
+
+    this.grid = grid;
+
 
     // set the `g` and `f` value of the start node to be 0
     startNode.g = 0;
@@ -14192,61 +17042,373 @@ TraceFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
         node = openList.pop();
         node.closed = true;
 
-        // if reached the end position, construct the path and return it
         if (node === endNode) {
-            return Util.backtrace(endNode);
+            return Util.expandPath(Util.backtrace(endNode));
         }
 
-        // get neigbours of the current node
-        neighbors = grid.getNeighbors(node, allowDiagonal, dontCrossCorners);
-
-        var ar = neighbors.length;
-
-        for (i = 0, l = neighbors.length; i < l; ++i) {
-            neighbor = neighbors[i];
-
-            if (neighbor.closed) {
-                continue;
-            }
-
-            x = neighbor.x;
-            y = neighbor.y;
-
-            // get the distance between current node and the neighbor
-            // and calculate the next g score
-            ng = node.g + ((x - node.x === 0 || y - node.y === 0) ? 1 : SQRT2);
-
-            // check if the neighbor has not been inspected yet, or
-            // can be reached with smaller cost from the current node
-            if (!neighbor.opened || ng < neighbor.g) {
-                neighbor.g = ng * ar/9; //the trace magic
-                neighbor.h = neighbor.h || heuristic(abs(x - endX), abs(y - endY));
-                neighbor.f = neighbor.g + neighbor.h;
-                neighbor.parent = node;
-
-                if (!neighbor.opened) {
-                    //openList.push(neighbor);
-                    openList.push(neighbor);
-                    neighbor.opened = true;
-                } else {
-                    // the neighbor can be reached with smaller cost.
-                    // Since its f value has been updated, we have to
-                    // update its position in the open list
-
-                    //openList.updateItem(neighbor);
-                    openList.updateItem(neighbor);
-                }
-            }
-        } // end for each neighbor
-    } // end while not open list empty
+        this._identifySuccessors(node);
+    }
 
     // fail to find the path
     return [];
 };
 
-module.exports = TraceFinder;
+/**
+ * Identify successors for the given node. Runs a jump point search in the
+ * direction of each available neighbor, adding any points found to the open
+ * list.
+ * @protected
+ */
+JumpPointFinderBase.prototype._identifySuccessors = function(node) {
+    var grid = this.grid,
+        heuristic = this.heuristic,
+        openList = this.openList,
+        endX = this.endNode.x,
+        endY = this.endNode.y,
+        neighbors, neighbor,
+        jumpPoint, i, l,
+        x = node.x, y = node.y,
+        jx, jy, dx, dy, d, ng, jumpNode,
+        abs = Math.abs, max = Math.max;
 
-},{"../core/Heuristic":45,"../core/Util":47,"heap":41}],60:[function(require,module,exports){
+    neighbors = this._findNeighbors(node);
+    for(i = 0, l = neighbors.length; i < l; ++i) {
+        neighbor = neighbors[i];
+        jumpPoint = this._jump(neighbor[0], neighbor[1], x, y);
+        if (jumpPoint) {
+
+            jx = jumpPoint[0];
+            jy = jumpPoint[1];
+            jumpNode = grid.getNodeAt(jx, jy);
+
+            if (jumpNode.closed) {
+                continue;
+            }
+
+            // include distance, as parent may not be immediately adjacent:
+            d = Heuristic.octile(abs(jx - x), abs(jy - y));
+            ng = node.g + d; // next `g` value
+
+            if (!jumpNode.opened || ng < jumpNode.g) {
+                jumpNode.g = ng;
+                jumpNode.h = jumpNode.h || heuristic(abs(jx - endX), abs(jy - endY));
+                jumpNode.f = jumpNode.g + jumpNode.h;
+                jumpNode.parent = node;
+
+                if (!jumpNode.opened) {
+                    openList.push(jumpNode);
+                    jumpNode.opened = true;
+                } else {
+                    openList.updateItem(jumpNode);
+                }
+            }
+        }
+    }
+};
+
+module.exports = JumpPointFinderBase;
+
+},{"../core/DiagonalMovement":62,"../core/Heuristic":64,"../core/Util":66,"heap":59}],82:[function(require,module,exports){
+/*
+ * Stately.js: A JavaScript based finite-state machine (FSM) engine.
+ *
+ * Copyright (c) 2012 Florian Schäfer (florian.schaefer@gmail.com)
+ * Released under MIT license.
+ *
+ * Version: 1.2.0
+ *
+ */
+(function (root, factory) {
+    if (typeof exports === 'object') {
+        module.exports = factory();
+    } else if (typeof define === 'function' && define.amd) {
+        define(factory);
+    } else {
+        root.Stately = factory();
+    }
+})(this, function () {
+
+    var
+        toString = Object.prototype.toString,
+
+        InvalidStateError = (function () {
+
+            function InvalidStateError(message) {
+
+                this.name = 'InvalidStateError';
+
+                this.message = message;
+            }
+
+            InvalidStateError.prototype = new Error();
+
+            InvalidStateError.prototype.constructor = InvalidStateError;
+
+            return InvalidStateError;
+        })();
+
+    function Stately(statesObject, initialStateName) {
+
+        if (typeof statesObject === 'function') {
+
+            statesObject = statesObject();
+        }
+
+        if (toString.call(statesObject) !== '[object Object]') {
+
+            throw new InvalidStateError('Stately.js: Invalid states object: `' + statesObject + '`.');
+        }
+
+        var
+            currentState,
+
+            notificationStore = [],
+
+            notify = function () {
+
+                var notifications = notificationStore.slice();
+
+                for (var i = 0, l = notifications.length; i < l; i++) {
+
+                    notifications[i].apply(this, arguments);
+                }
+            },
+
+            stateStore = {
+
+                getMachineState: function getMachineState() {
+
+                    return currentState.name;
+                },
+
+                setMachineState: function setMachineState(nextState /*, eventName */) {
+
+                    var
+                        eventName = arguments[1],
+
+                        onBeforeState,
+
+                        onEnterState,
+
+                        onLeaveState,
+
+                        lastState = currentState;
+
+                    if (!nextState || !nextState.name || !stateStore[nextState.name]) {
+
+                        throw new InvalidStateError('Stately.js: Transitioned into invalid state: `' + setMachineState.caller + '`.');
+                    }
+
+                    currentState = nextState;
+
+                    onBeforeState = stateMachine['onbefore' + currentState.name];
+
+                    if (onBeforeState && typeof onBeforeState === 'function') {
+
+                        onBeforeState.call(stateStore, eventName, lastState.name, nextState.name);
+                    }
+
+                    onEnterState = stateMachine['onenter' + currentState.name] || stateMachine['on' + currentState.name];
+
+                    if (onEnterState && typeof onEnterState === 'function') {
+
+                        onEnterState.call(stateStore, eventName, lastState.name, nextState.name);
+                    }
+
+                    onLeaveState = stateMachine['onleave' + lastState.name];
+
+                    if (onLeaveState && typeof onLeaveState === 'function') {
+
+                        onLeaveState.call(stateStore, eventName, lastState.name, nextState.name);
+                    }
+
+                    notify.call(stateStore, eventName, lastState.name, nextState.name);
+
+                    return this;
+                },
+
+                getMachineEvents: function getMachineEvents() {
+
+                    var events = [];
+
+                    for (var property in currentState) {
+
+                        if (currentState.hasOwnProperty(property)) {
+
+                            if (typeof currentState[property] === 'function') {
+
+                                events.push(property);
+                            }
+                        }
+                    }
+
+                    return events;
+                }
+
+            },
+
+            stateMachine = {
+
+                getMachineState: stateStore.getMachineState,
+
+                getMachineEvents: stateStore.getMachineEvents,
+
+                bind: function bind(callback) {
+
+                    if (callback) {
+
+                        notificationStore.push(callback);
+                    }
+
+                    return this;
+                },
+
+                unbind: function unbind(callback) {
+
+                    if (!callback) {
+
+                        notificationStore = [];
+
+                    } else {
+
+                        for (var i = 0, l = notificationStore.length; i < l; i++) {
+
+                            if (notificationStore[i] === callback) {
+
+                                notificationStore.splice(i, 1);
+                            }
+                        }
+                    }
+
+                    return this;
+                }
+            },
+
+            transition = function transition(stateName, eventName, nextEvent) {
+
+                return function event() {
+
+                    var
+                        onBeforeEvent,
+
+                        onAfterEvent,
+
+                        nextState,
+
+                        eventValue = stateMachine;
+
+                    if (stateStore[stateName] !== currentState) {
+
+                        if (nextEvent) {
+
+                            eventValue = nextEvent.apply(stateStore, arguments);
+                        }
+
+                        return eventValue;
+                    }
+
+                    onBeforeEvent = stateMachine['onbefore' + eventName];
+
+                    if (onBeforeEvent && typeof onBeforeEvent === 'function') {
+
+                        onBeforeEvent.call(stateStore, eventName, currentState.name, currentState.name);
+                    }
+
+                    eventValue = stateStore[stateName][eventName].apply(stateStore, arguments);
+
+                    if (typeof eventValue === 'undefined') {
+
+                        nextState = currentState;
+
+                        eventValue = stateMachine;
+
+                    } else if (toString.call(eventValue) === '[object Object]') {
+
+                        nextState = (eventValue === stateStore ? currentState : eventValue);
+
+                        eventValue = stateMachine;
+
+                    } else if (toString.call(eventValue) === '[object Array]' && eventValue.length >= 1) {
+
+                        nextState = eventValue[0];
+
+                        eventValue = eventValue[1];
+                    }
+
+                    onAfterEvent = stateMachine['onafter' + eventName] || stateMachine['on' + eventName];
+
+                    if (onAfterEvent && typeof onAfterEvent === 'function') {
+
+                        onAfterEvent.call(stateStore, eventName, currentState.name, nextState.name);
+                    }
+
+                    stateStore.setMachineState(nextState, eventName);
+
+                    return eventValue;
+                };
+            };
+
+        for (var stateName in statesObject) {
+
+            if (statesObject.hasOwnProperty(stateName)) {
+
+                stateStore[stateName] = statesObject[stateName];
+
+                for (var eventName in stateStore[stateName]) {
+
+                    if (stateStore[stateName].hasOwnProperty(eventName)) {
+
+                        if (typeof stateStore[stateName][eventName] === 'string') {
+
+                            stateStore[stateName][eventName] = (function (stateName) {
+
+                                return function event() {
+
+                                    return this[stateName];
+                                };
+
+                            })(stateStore[stateName][eventName]);
+                        }
+
+                        if (typeof stateStore[stateName][eventName] === 'function') {
+
+                            stateMachine[eventName] = transition(stateName, eventName, stateMachine[eventName]);
+                        }
+                    }
+                }
+
+                stateStore[stateName].name = stateName;
+
+                if (!currentState) {
+
+                    currentState = stateStore[stateName];
+                }
+            }
+        }
+
+        if (typeof stateStore[initialStateName] !== 'undefined') {
+            currentState = stateStore[initialStateName];
+        }
+
+        if (!currentState) {
+
+            throw new InvalidStateError('Stately.js: Invalid initial state.');
+        }
+
+        return stateMachine;
+    }
+
+    Stately.machine = function machine(statesObject, initialStateName) {
+        return new Stately(statesObject, initialStateName);
+    };
+
+    Stately.InvalidStateError = InvalidStateError;
+
+    return Stately;
+
+});
+
+},{}],83:[function(require,module,exports){
 module.exports = function(THREE) {
     var renderer = require('./lib/renderer')(THREE),
         Primitive = renderer.Primitive;
@@ -14478,7 +17640,7 @@ module.exports = function(THREE) {
     };
 };
 
-},{"./lib/renderer":61}],61:[function(require,module,exports){
+},{"./lib/renderer":84}],84:[function(require,module,exports){
 var activePrimitives = [];
 var activeMesh = null;
 
@@ -14560,7 +17722,7 @@ module.exports = function(THREE) {
     };
 };
 
-},{}],62:[function(require,module,exports){
+},{}],85:[function(require,module,exports){
 // http://wiki.commonjs.org/wiki/Unit_Testing/1.0
 //
 // THIS IS NOT TESTED NOR LIKELY TO WORK OUTSIDE V8!
@@ -14649,7 +17811,7 @@ function replacer(key, value) {
   if (util.isUndefined(value)) {
     return '' + value;
   }
-  if (util.isNumber(value) && (isNaN(value) || !isFinite(value))) {
+  if (util.isNumber(value) && !isFinite(value)) {
     return value.toString();
   }
   if (util.isFunction(value) || util.isRegExp(value)) {
@@ -14788,23 +17950,22 @@ function objEquiv(a, b) {
     return false;
   // an identical 'prototype' property.
   if (a.prototype !== b.prototype) return false;
-  //~~~I've managed to break Object.keys through screwy arguments passing.
-  //   Converting to array solves the problem.
-  if (isArguments(a)) {
-    if (!isArguments(b)) {
-      return false;
-    }
+  // if one is a primitive, the other must be same
+  if (util.isPrimitive(a) || util.isPrimitive(b)) {
+    return a === b;
+  }
+  var aIsArgs = isArguments(a),
+      bIsArgs = isArguments(b);
+  if ((aIsArgs && !bIsArgs) || (!aIsArgs && bIsArgs))
+    return false;
+  if (aIsArgs) {
     a = pSlice.call(a);
     b = pSlice.call(b);
     return _deepEqual(a, b);
   }
-  try {
-    var ka = objectKeys(a),
-        kb = objectKeys(b),
-        key, i;
-  } catch (e) {//happens when one is a string literal and the other isn't
-    return false;
-  }
+  var ka = objectKeys(a),
+      kb = objectKeys(b),
+      key, i;
   // having the same number of owned properties (keys incorporates
   // hasOwnProperty)
   if (ka.length != kb.length)
@@ -14922,604 +18083,7 @@ var objectKeys = Object.keys || function (obj) {
   return keys;
 };
 
-},{"util/":64}],63:[function(require,module,exports){
-module.exports = function isBuffer(arg) {
-  return arg && typeof arg === 'object'
-    && typeof arg.copy === 'function'
-    && typeof arg.fill === 'function'
-    && typeof arg.readUInt8 === 'function';
-}
-},{}],64:[function(require,module,exports){
-(function (process,global){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-var formatRegExp = /%[sdj%]/g;
-exports.format = function(f) {
-  if (!isString(f)) {
-    var objects = [];
-    for (var i = 0; i < arguments.length; i++) {
-      objects.push(inspect(arguments[i]));
-    }
-    return objects.join(' ');
-  }
-
-  var i = 1;
-  var args = arguments;
-  var len = args.length;
-  var str = String(f).replace(formatRegExp, function(x) {
-    if (x === '%%') return '%';
-    if (i >= len) return x;
-    switch (x) {
-      case '%s': return String(args[i++]);
-      case '%d': return Number(args[i++]);
-      case '%j':
-        try {
-          return JSON.stringify(args[i++]);
-        } catch (_) {
-          return '[Circular]';
-        }
-      default:
-        return x;
-    }
-  });
-  for (var x = args[i]; i < len; x = args[++i]) {
-    if (isNull(x) || !isObject(x)) {
-      str += ' ' + x;
-    } else {
-      str += ' ' + inspect(x);
-    }
-  }
-  return str;
-};
-
-
-// Mark that a method should not be used.
-// Returns a modified function which warns once by default.
-// If --no-deprecation is set, then it is a no-op.
-exports.deprecate = function(fn, msg) {
-  // Allow for deprecating things in the process of starting up.
-  if (isUndefined(global.process)) {
-    return function() {
-      return exports.deprecate(fn, msg).apply(this, arguments);
-    };
-  }
-
-  if (process.noDeprecation === true) {
-    return fn;
-  }
-
-  var warned = false;
-  function deprecated() {
-    if (!warned) {
-      if (process.throwDeprecation) {
-        throw new Error(msg);
-      } else if (process.traceDeprecation) {
-        console.trace(msg);
-      } else {
-        console.error(msg);
-      }
-      warned = true;
-    }
-    return fn.apply(this, arguments);
-  }
-
-  return deprecated;
-};
-
-
-var debugs = {};
-var debugEnviron;
-exports.debuglog = function(set) {
-  if (isUndefined(debugEnviron))
-    debugEnviron = process.env.NODE_DEBUG || '';
-  set = set.toUpperCase();
-  if (!debugs[set]) {
-    if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
-      var pid = process.pid;
-      debugs[set] = function() {
-        var msg = exports.format.apply(exports, arguments);
-        console.error('%s %d: %s', set, pid, msg);
-      };
-    } else {
-      debugs[set] = function() {};
-    }
-  }
-  return debugs[set];
-};
-
-
-/**
- * Echos the value of a value. Trys to print the value out
- * in the best way possible given the different types.
- *
- * @param {Object} obj The object to print out.
- * @param {Object} opts Optional options object that alters the output.
- */
-/* legacy: obj, showHidden, depth, colors*/
-function inspect(obj, opts) {
-  // default options
-  var ctx = {
-    seen: [],
-    stylize: stylizeNoColor
-  };
-  // legacy...
-  if (arguments.length >= 3) ctx.depth = arguments[2];
-  if (arguments.length >= 4) ctx.colors = arguments[3];
-  if (isBoolean(opts)) {
-    // legacy...
-    ctx.showHidden = opts;
-  } else if (opts) {
-    // got an "options" object
-    exports._extend(ctx, opts);
-  }
-  // set default options
-  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
-  if (isUndefined(ctx.depth)) ctx.depth = 2;
-  if (isUndefined(ctx.colors)) ctx.colors = false;
-  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
-  if (ctx.colors) ctx.stylize = stylizeWithColor;
-  return formatValue(ctx, obj, ctx.depth);
-}
-exports.inspect = inspect;
-
-
-// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
-inspect.colors = {
-  'bold' : [1, 22],
-  'italic' : [3, 23],
-  'underline' : [4, 24],
-  'inverse' : [7, 27],
-  'white' : [37, 39],
-  'grey' : [90, 39],
-  'black' : [30, 39],
-  'blue' : [34, 39],
-  'cyan' : [36, 39],
-  'green' : [32, 39],
-  'magenta' : [35, 39],
-  'red' : [31, 39],
-  'yellow' : [33, 39]
-};
-
-// Don't use 'blue' not visible on cmd.exe
-inspect.styles = {
-  'special': 'cyan',
-  'number': 'yellow',
-  'boolean': 'yellow',
-  'undefined': 'grey',
-  'null': 'bold',
-  'string': 'green',
-  'date': 'magenta',
-  // "name": intentionally not styling
-  'regexp': 'red'
-};
-
-
-function stylizeWithColor(str, styleType) {
-  var style = inspect.styles[styleType];
-
-  if (style) {
-    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
-           '\u001b[' + inspect.colors[style][1] + 'm';
-  } else {
-    return str;
-  }
-}
-
-
-function stylizeNoColor(str, styleType) {
-  return str;
-}
-
-
-function arrayToHash(array) {
-  var hash = {};
-
-  array.forEach(function(val, idx) {
-    hash[val] = true;
-  });
-
-  return hash;
-}
-
-
-function formatValue(ctx, value, recurseTimes) {
-  // Provide a hook for user-specified inspect functions.
-  // Check that value is an object with an inspect function on it
-  if (ctx.customInspect &&
-      value &&
-      isFunction(value.inspect) &&
-      // Filter out the util module, it's inspect function is special
-      value.inspect !== exports.inspect &&
-      // Also filter out any prototype objects using the circular check.
-      !(value.constructor && value.constructor.prototype === value)) {
-    var ret = value.inspect(recurseTimes, ctx);
-    if (!isString(ret)) {
-      ret = formatValue(ctx, ret, recurseTimes);
-    }
-    return ret;
-  }
-
-  // Primitive types cannot have properties
-  var primitive = formatPrimitive(ctx, value);
-  if (primitive) {
-    return primitive;
-  }
-
-  // Look up the keys of the object.
-  var keys = Object.keys(value);
-  var visibleKeys = arrayToHash(keys);
-
-  if (ctx.showHidden) {
-    keys = Object.getOwnPropertyNames(value);
-  }
-
-  // IE doesn't make error fields non-enumerable
-  // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
-  if (isError(value)
-      && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
-    return formatError(value);
-  }
-
-  // Some type of object without properties can be shortcutted.
-  if (keys.length === 0) {
-    if (isFunction(value)) {
-      var name = value.name ? ': ' + value.name : '';
-      return ctx.stylize('[Function' + name + ']', 'special');
-    }
-    if (isRegExp(value)) {
-      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
-    }
-    if (isDate(value)) {
-      return ctx.stylize(Date.prototype.toString.call(value), 'date');
-    }
-    if (isError(value)) {
-      return formatError(value);
-    }
-  }
-
-  var base = '', array = false, braces = ['{', '}'];
-
-  // Make Array say that they are Array
-  if (isArray(value)) {
-    array = true;
-    braces = ['[', ']'];
-  }
-
-  // Make functions say that they are functions
-  if (isFunction(value)) {
-    var n = value.name ? ': ' + value.name : '';
-    base = ' [Function' + n + ']';
-  }
-
-  // Make RegExps say that they are RegExps
-  if (isRegExp(value)) {
-    base = ' ' + RegExp.prototype.toString.call(value);
-  }
-
-  // Make dates with properties first say the date
-  if (isDate(value)) {
-    base = ' ' + Date.prototype.toUTCString.call(value);
-  }
-
-  // Make error with message first say the error
-  if (isError(value)) {
-    base = ' ' + formatError(value);
-  }
-
-  if (keys.length === 0 && (!array || value.length == 0)) {
-    return braces[0] + base + braces[1];
-  }
-
-  if (recurseTimes < 0) {
-    if (isRegExp(value)) {
-      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
-    } else {
-      return ctx.stylize('[Object]', 'special');
-    }
-  }
-
-  ctx.seen.push(value);
-
-  var output;
-  if (array) {
-    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
-  } else {
-    output = keys.map(function(key) {
-      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
-    });
-  }
-
-  ctx.seen.pop();
-
-  return reduceToSingleString(output, base, braces);
-}
-
-
-function formatPrimitive(ctx, value) {
-  if (isUndefined(value))
-    return ctx.stylize('undefined', 'undefined');
-  if (isString(value)) {
-    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
-                                             .replace(/'/g, "\\'")
-                                             .replace(/\\"/g, '"') + '\'';
-    return ctx.stylize(simple, 'string');
-  }
-  if (isNumber(value))
-    return ctx.stylize('' + value, 'number');
-  if (isBoolean(value))
-    return ctx.stylize('' + value, 'boolean');
-  // For some reason typeof null is "object", so special case here.
-  if (isNull(value))
-    return ctx.stylize('null', 'null');
-}
-
-
-function formatError(value) {
-  return '[' + Error.prototype.toString.call(value) + ']';
-}
-
-
-function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
-  var output = [];
-  for (var i = 0, l = value.length; i < l; ++i) {
-    if (hasOwnProperty(value, String(i))) {
-      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
-          String(i), true));
-    } else {
-      output.push('');
-    }
-  }
-  keys.forEach(function(key) {
-    if (!key.match(/^\d+$/)) {
-      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
-          key, true));
-    }
-  });
-  return output;
-}
-
-
-function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
-  var name, str, desc;
-  desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] };
-  if (desc.get) {
-    if (desc.set) {
-      str = ctx.stylize('[Getter/Setter]', 'special');
-    } else {
-      str = ctx.stylize('[Getter]', 'special');
-    }
-  } else {
-    if (desc.set) {
-      str = ctx.stylize('[Setter]', 'special');
-    }
-  }
-  if (!hasOwnProperty(visibleKeys, key)) {
-    name = '[' + key + ']';
-  }
-  if (!str) {
-    if (ctx.seen.indexOf(desc.value) < 0) {
-      if (isNull(recurseTimes)) {
-        str = formatValue(ctx, desc.value, null);
-      } else {
-        str = formatValue(ctx, desc.value, recurseTimes - 1);
-      }
-      if (str.indexOf('\n') > -1) {
-        if (array) {
-          str = str.split('\n').map(function(line) {
-            return '  ' + line;
-          }).join('\n').substr(2);
-        } else {
-          str = '\n' + str.split('\n').map(function(line) {
-            return '   ' + line;
-          }).join('\n');
-        }
-      }
-    } else {
-      str = ctx.stylize('[Circular]', 'special');
-    }
-  }
-  if (isUndefined(name)) {
-    if (array && key.match(/^\d+$/)) {
-      return str;
-    }
-    name = JSON.stringify('' + key);
-    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
-      name = name.substr(1, name.length - 2);
-      name = ctx.stylize(name, 'name');
-    } else {
-      name = name.replace(/'/g, "\\'")
-                 .replace(/\\"/g, '"')
-                 .replace(/(^"|"$)/g, "'");
-      name = ctx.stylize(name, 'string');
-    }
-  }
-
-  return name + ': ' + str;
-}
-
-
-function reduceToSingleString(output, base, braces) {
-  var numLinesEst = 0;
-  var length = output.reduce(function(prev, cur) {
-    numLinesEst++;
-    if (cur.indexOf('\n') >= 0) numLinesEst++;
-    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
-  }, 0);
-
-  if (length > 60) {
-    return braces[0] +
-           (base === '' ? '' : base + '\n ') +
-           ' ' +
-           output.join(',\n  ') +
-           ' ' +
-           braces[1];
-  }
-
-  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
-}
-
-
-// NOTE: These type checking functions intentionally don't use `instanceof`
-// because it is fragile and can be easily faked with `Object.create()`.
-function isArray(ar) {
-  return Array.isArray(ar);
-}
-exports.isArray = isArray;
-
-function isBoolean(arg) {
-  return typeof arg === 'boolean';
-}
-exports.isBoolean = isBoolean;
-
-function isNull(arg) {
-  return arg === null;
-}
-exports.isNull = isNull;
-
-function isNullOrUndefined(arg) {
-  return arg == null;
-}
-exports.isNullOrUndefined = isNullOrUndefined;
-
-function isNumber(arg) {
-  return typeof arg === 'number';
-}
-exports.isNumber = isNumber;
-
-function isString(arg) {
-  return typeof arg === 'string';
-}
-exports.isString = isString;
-
-function isSymbol(arg) {
-  return typeof arg === 'symbol';
-}
-exports.isSymbol = isSymbol;
-
-function isUndefined(arg) {
-  return arg === void 0;
-}
-exports.isUndefined = isUndefined;
-
-function isRegExp(re) {
-  return isObject(re) && objectToString(re) === '[object RegExp]';
-}
-exports.isRegExp = isRegExp;
-
-function isObject(arg) {
-  return typeof arg === 'object' && arg !== null;
-}
-exports.isObject = isObject;
-
-function isDate(d) {
-  return isObject(d) && objectToString(d) === '[object Date]';
-}
-exports.isDate = isDate;
-
-function isError(e) {
-  return isObject(e) &&
-      (objectToString(e) === '[object Error]' || e instanceof Error);
-}
-exports.isError = isError;
-
-function isFunction(arg) {
-  return typeof arg === 'function';
-}
-exports.isFunction = isFunction;
-
-function isPrimitive(arg) {
-  return arg === null ||
-         typeof arg === 'boolean' ||
-         typeof arg === 'number' ||
-         typeof arg === 'string' ||
-         typeof arg === 'symbol' ||  // ES6 symbol
-         typeof arg === 'undefined';
-}
-exports.isPrimitive = isPrimitive;
-
-exports.isBuffer = require('./support/isBuffer');
-
-function objectToString(o) {
-  return Object.prototype.toString.call(o);
-}
-
-
-function pad(n) {
-  return n < 10 ? '0' + n.toString(10) : n.toString(10);
-}
-
-
-var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-              'Oct', 'Nov', 'Dec'];
-
-// 26 Feb 16:19:34
-function timestamp() {
-  var d = new Date();
-  var time = [pad(d.getHours()),
-              pad(d.getMinutes()),
-              pad(d.getSeconds())].join(':');
-  return [d.getDate(), months[d.getMonth()], time].join(' ');
-}
-
-
-// log is just a thin wrapper to console.log that prepends a timestamp
-exports.log = function() {
-  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
-};
-
-
-/**
- * Inherit the prototype methods from one constructor into another.
- *
- * The Function.prototype.inherits from lang.js rewritten as a standalone
- * function (not on Function.prototype). NOTE: If this file is to be loaded
- * during bootstrapping this function needs to be rewritten using some native
- * functions as prototype setup using normal JavaScript does not work as
- * expected during bootstrapping (see mirror.js in r114903).
- *
- * @param {function} ctor Constructor function which needs to inherit the
- *     prototype.
- * @param {function} superCtor Constructor function to inherit prototype from.
- */
-exports.inherits = require('inherits');
-
-exports._extend = function(origin, add) {
-  // Don't do anything if add isn't an object
-  if (!add || !isObject(add)) return origin;
-
-  var keys = Object.keys(add);
-  var i = keys.length;
-  while (i--) {
-    origin[keys[i]] = add[keys[i]];
-  }
-  return origin;
-};
-
-function hasOwnProperty(obj, prop) {
-  return Object.prototype.hasOwnProperty.call(obj, prop);
-}
-
-}).call(this,require("q+64fw"),typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":63,"inherits":69,"q+64fw":71}],65:[function(require,module,exports){
+},{"util/":114}],86:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -15529,29 +18093,46 @@ function hasOwnProperty(obj, prop) {
 
 var base64 = require('base64-js')
 var ieee754 = require('ieee754')
+var isArray = require('is-array')
 
 exports.Buffer = Buffer
-exports.SlowBuffer = Buffer
+exports.SlowBuffer = SlowBuffer
 exports.INSPECT_MAX_BYTES = 50
-Buffer.poolSize = 8192
+Buffer.poolSize = 8192 // not used by this implementation
+
+var kMaxLength = 0x3fffffff
+var rootParent = {}
 
 /**
- * If `Buffer._useTypedArrays`:
+ * If `Buffer.TYPED_ARRAY_SUPPORT`:
  *   === true    Use Uint8Array implementation (fastest)
- *   === false   Use Object implementation (compatible down to IE6)
+ *   === false   Use Object implementation (most compatible, even IE6)
+ *
+ * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
+ * Opera 11.6+, iOS 4.2+.
+ *
+ * Note:
+ *
+ * - Implementation must support adding new properties to `Uint8Array` instances.
+ *   Firefox 4-29 lacked support, fixed in Firefox 30+.
+ *   See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
+ *
+ *  - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
+ *
+ *  - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
+ *    incorrect length in some situations.
+ *
+ * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they will
+ * get the Object implementation, which is slower but will work correctly.
  */
-Buffer._useTypedArrays = (function () {
-  // Detect if browser supports Typed Arrays. Supported browsers are IE 10+, Firefox 4+,
-  // Chrome 7+, Safari 5.1+, Opera 11.6+, iOS 4.2+. If the browser does not support adding
-  // properties to `Uint8Array` instances, then that's the same as no `Uint8Array` support
-  // because we need to be able to add all the node Buffer API methods. This is an issue
-  // in Firefox 4-29. Now fixed: https://bugzilla.mozilla.org/show_bug.cgi?id=695438
+Buffer.TYPED_ARRAY_SUPPORT = (function () {
   try {
     var buf = new ArrayBuffer(0)
     var arr = new Uint8Array(buf)
     arr.foo = function () { return 42 }
-    return 42 === arr.foo() &&
-        typeof arr.subarray === 'function' // Chrome 9-10 lack `subarray`
+    return 42 === arr.foo() && // typed array instances can be augmented
+        typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
+        new Uint8Array(1).subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
   } catch (e) {
     return false
   }
@@ -15575,28 +18156,25 @@ function Buffer (subject, encoding, noZero) {
 
   var type = typeof subject
 
-  // Workaround: node's base64 implementation allows for non-padded strings
-  // while base64-js does not.
-  if (encoding === 'base64' && type === 'string') {
-    subject = stringtrim(subject)
-    while (subject.length % 4 !== 0) {
-      subject = subject + '='
-    }
-  }
-
   // Find the length
   var length
   if (type === 'number')
-    length = coerce(subject)
-  else if (type === 'string')
+    length = subject > 0 ? subject >>> 0 : 0
+  else if (type === 'string') {
     length = Buffer.byteLength(subject, encoding)
-  else if (type === 'object')
-    length = coerce(subject.length) // assume that object is array-like
-  else
-    throw new Error('First argument needs to be a number, array or string.')
+  } else if (type === 'object' && subject !== null) { // assume object is array-like
+    if (subject.type === 'Buffer' && isArray(subject.data))
+      subject = subject.data
+    length = +subject.length > 0 ? Math.floor(+subject.length) : 0
+  } else
+    throw new TypeError('must start with number, buffer, array or string')
+
+  if (length > kMaxLength)
+    throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
+      'size: 0x' + kMaxLength.toString(16) + ' bytes')
 
   var buf
-  if (Buffer._useTypedArrays) {
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
     // Preferred: Return an augmented `Uint8Array` instance for best performance
     buf = Buffer._augment(new Uint8Array(length))
   } else {
@@ -15607,7 +18185,7 @@ function Buffer (subject, encoding, noZero) {
   }
 
   var i
-  if (Buffer._useTypedArrays && typeof subject.byteLength === 'number') {
+  if (Buffer.TYPED_ARRAY_SUPPORT && typeof subject.byteLength === 'number') {
     // Speed optimization -- use set if we're copying from a typed array
     buf._set(subject)
   } else if (isArrayish(subject)) {
@@ -15621,17 +18199,46 @@ function Buffer (subject, encoding, noZero) {
     }
   } else if (type === 'string') {
     buf.write(subject, 0, encoding)
-  } else if (type === 'number' && !Buffer._useTypedArrays && !noZero) {
+  } else if (type === 'number' && !Buffer.TYPED_ARRAY_SUPPORT && !noZero) {
     for (i = 0; i < length; i++) {
       buf[i] = 0
     }
   }
 
+  if (length > 0 && length <= Buffer.poolSize)
+    buf.parent = rootParent
+
   return buf
 }
 
-// STATIC METHODS
-// ==============
+function SlowBuffer(subject, encoding, noZero) {
+  if (!(this instanceof SlowBuffer))
+    return new SlowBuffer(subject, encoding, noZero)
+
+  var buf = new Buffer(subject, encoding, noZero)
+  delete buf.parent
+  return buf
+}
+
+Buffer.isBuffer = function (b) {
+  return !!(b != null && b._isBuffer)
+}
+
+Buffer.compare = function (a, b) {
+  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b))
+    throw new TypeError('Arguments must be Buffers')
+
+  var x = a.length
+  var y = b.length
+  for (var i = 0, len = Math.min(x, y); i < len && a[i] === b[i]; i++) {}
+  if (i !== len) {
+    x = a[i]
+    y = b[i]
+  }
+  if (x < y) return -1
+  if (y < x) return 1
+  return 0
+}
 
 Buffer.isEncoding = function (encoding) {
   switch (String(encoding).toLowerCase()) {
@@ -15652,43 +18259,8 @@ Buffer.isEncoding = function (encoding) {
   }
 }
 
-Buffer.isBuffer = function (b) {
-  return !!(b !== null && b !== undefined && b._isBuffer)
-}
-
-Buffer.byteLength = function (str, encoding) {
-  var ret
-  str = str.toString()
-  switch (encoding || 'utf8') {
-    case 'hex':
-      ret = str.length / 2
-      break
-    case 'utf8':
-    case 'utf-8':
-      ret = utf8ToBytes(str).length
-      break
-    case 'ascii':
-    case 'binary':
-    case 'raw':
-      ret = str.length
-      break
-    case 'base64':
-      ret = base64ToBytes(str).length
-      break
-    case 'ucs2':
-    case 'ucs-2':
-    case 'utf16le':
-    case 'utf-16le':
-      ret = str.length * 2
-      break
-    default:
-      throw new Error('Unknown encoding')
-  }
-  return ret
-}
-
 Buffer.concat = function (list, totalLength) {
-  assert(isArray(list), 'Usage: Buffer.concat(list[, length])')
+  if (!isArray(list)) throw new TypeError('Usage: Buffer.concat(list[, length])')
 
   if (list.length === 0) {
     return new Buffer(0)
@@ -15714,26 +18286,118 @@ Buffer.concat = function (list, totalLength) {
   return buf
 }
 
-Buffer.compare = function (a, b) {
-  assert(Buffer.isBuffer(a) && Buffer.isBuffer(b), 'Arguments must be Buffers')
-  var x = a.length
-  var y = b.length
-  for (var i = 0, len = Math.min(x, y); i < len && a[i] === b[i]; i++) {}
-  if (i !== len) {
-    x = a[i]
-    y = b[i]
+Buffer.byteLength = function (str, encoding) {
+  var ret
+  str = str + ''
+  switch (encoding || 'utf8') {
+    case 'ascii':
+    case 'binary':
+    case 'raw':
+      ret = str.length
+      break
+    case 'ucs2':
+    case 'ucs-2':
+    case 'utf16le':
+    case 'utf-16le':
+      ret = str.length * 2
+      break
+    case 'hex':
+      ret = str.length >>> 1
+      break
+    case 'utf8':
+    case 'utf-8':
+      ret = utf8ToBytes(str).length
+      break
+    case 'base64':
+      ret = base64ToBytes(str).length
+      break
+    default:
+      ret = str.length
   }
-  if (x < y) {
-    return -1
-  }
-  if (y < x) {
-    return 1
-  }
-  return 0
+  return ret
 }
 
-// BUFFER INSTANCE METHODS
-// =======================
+// pre-set for values that may exist in the future
+Buffer.prototype.length = undefined
+Buffer.prototype.parent = undefined
+
+// toString(encoding, start=0, end=buffer.length)
+Buffer.prototype.toString = function (encoding, start, end) {
+  var loweredCase = false
+
+  start = start >>> 0
+  end = end === undefined || end === Infinity ? this.length : end >>> 0
+
+  if (!encoding) encoding = 'utf8'
+  if (start < 0) start = 0
+  if (end > this.length) end = this.length
+  if (end <= start) return ''
+
+  while (true) {
+    switch (encoding) {
+      case 'hex':
+        return hexSlice(this, start, end)
+
+      case 'utf8':
+      case 'utf-8':
+        return utf8Slice(this, start, end)
+
+      case 'ascii':
+        return asciiSlice(this, start, end)
+
+      case 'binary':
+        return binarySlice(this, start, end)
+
+      case 'base64':
+        return base64Slice(this, start, end)
+
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return utf16leSlice(this, start, end)
+
+      default:
+        if (loweredCase)
+          throw new TypeError('Unknown encoding: ' + encoding)
+        encoding = (encoding + '').toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+
+Buffer.prototype.equals = function (b) {
+  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
+  return Buffer.compare(this, b) === 0
+}
+
+Buffer.prototype.inspect = function () {
+  var str = ''
+  var max = exports.INSPECT_MAX_BYTES
+  if (this.length > 0) {
+    str = this.toString('hex', 0, max).match(/.{2}/g).join(' ')
+    if (this.length > max)
+      str += ' ... '
+  }
+  return '<Buffer ' + str + '>'
+}
+
+Buffer.prototype.compare = function (b) {
+  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
+  return Buffer.compare(this, b)
+}
+
+// `get` will be removed in Node 0.13+
+Buffer.prototype.get = function (offset) {
+  console.log('.get() is deprecated. Access using array indexes instead.')
+  return this.readUInt8(offset)
+}
+
+// `set` will be removed in Node 0.13+
+Buffer.prototype.set = function (v, offset) {
+  console.log('.set() is deprecated. Access using array indexes instead.')
+  return this.writeUInt8(v, offset)
+}
 
 function hexWrite (buf, string, offset, length) {
   offset = Number(offset) || 0
@@ -15749,21 +18413,21 @@ function hexWrite (buf, string, offset, length) {
 
   // must be an even number of digits
   var strLen = string.length
-  assert(strLen % 2 === 0, 'Invalid hex string')
+  if (strLen % 2 !== 0) throw new Error('Invalid hex string')
 
   if (length > strLen / 2) {
     length = strLen / 2
   }
   for (var i = 0; i < length; i++) {
     var byte = parseInt(string.substr(i * 2, 2), 16)
-    assert(!isNaN(byte), 'Invalid hex string')
+    if (isNaN(byte)) throw new Error('Invalid hex string')
     buf[offset + i] = byte
   }
   return i
 }
 
 function utf8Write (buf, string, offset, length) {
-  var charsWritten = blitBuffer(utf8ToBytes(string), buf, offset, length)
+  var charsWritten = blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
   return charsWritten
 }
 
@@ -15782,7 +18446,7 @@ function base64Write (buf, string, offset, length) {
 }
 
 function utf16leWrite (buf, string, offset, length) {
-  var charsWritten = blitBuffer(utf16leToBytes(string), buf, offset, length)
+  var charsWritten = blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length, 2)
   return charsWritten
 }
 
@@ -15802,6 +18466,10 @@ Buffer.prototype.write = function (string, offset, length, encoding) {
   }
 
   offset = Number(offset) || 0
+
+  if (length < 0 || offset < 0 || offset > this.length)
+    throw new RangeError('attempt to write outside buffer bounds');
+
   var remaining = this.length - offset
   if (!length) {
     length = remaining
@@ -15838,48 +18506,7 @@ Buffer.prototype.write = function (string, offset, length, encoding) {
       ret = utf16leWrite(this, string, offset, length)
       break
     default:
-      throw new Error('Unknown encoding')
-  }
-  return ret
-}
-
-Buffer.prototype.toString = function (encoding, start, end) {
-  var self = this
-
-  encoding = String(encoding || 'utf8').toLowerCase()
-  start = Number(start) || 0
-  end = (end === undefined) ? self.length : Number(end)
-
-  // Fastpath empty strings
-  if (end === start)
-    return ''
-
-  var ret
-  switch (encoding) {
-    case 'hex':
-      ret = hexSlice(self, start, end)
-      break
-    case 'utf8':
-    case 'utf-8':
-      ret = utf8Slice(self, start, end)
-      break
-    case 'ascii':
-      ret = asciiSlice(self, start, end)
-      break
-    case 'binary':
-      ret = binarySlice(self, start, end)
-      break
-    case 'base64':
-      ret = base64Slice(self, start, end)
-      break
-    case 'ucs2':
-    case 'ucs-2':
-    case 'utf16le':
-    case 'utf-16le':
-      ret = utf16leSlice(self, start, end)
-      break
-    default:
-      throw new Error('Unknown encoding')
+      throw new TypeError('Unknown encoding: ' + encoding)
   }
   return ret
 }
@@ -15888,52 +18515,6 @@ Buffer.prototype.toJSON = function () {
   return {
     type: 'Buffer',
     data: Array.prototype.slice.call(this._arr || this, 0)
-  }
-}
-
-Buffer.prototype.equals = function (b) {
-  assert(Buffer.isBuffer(b), 'Argument must be a Buffer')
-  return Buffer.compare(this, b) === 0
-}
-
-Buffer.prototype.compare = function (b) {
-  assert(Buffer.isBuffer(b), 'Argument must be a Buffer')
-  return Buffer.compare(this, b)
-}
-
-// copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
-Buffer.prototype.copy = function (target, target_start, start, end) {
-  var source = this
-
-  if (!start) start = 0
-  if (!end && end !== 0) end = this.length
-  if (!target_start) target_start = 0
-
-  // Copy 0 bytes; we're done
-  if (end === start) return
-  if (target.length === 0 || source.length === 0) return
-
-  // Fatal error conditions
-  assert(end >= start, 'sourceEnd < sourceStart')
-  assert(target_start >= 0 && target_start < target.length,
-      'targetStart out of bounds')
-  assert(start >= 0 && start < source.length, 'sourceStart out of bounds')
-  assert(end >= 0 && end <= source.length, 'sourceEnd out of bounds')
-
-  // Are we oob?
-  if (end > this.length)
-    end = this.length
-  if (target.length - target_start < end - start)
-    end = target.length - target_start + start
-
-  var len = end - start
-
-  if (len < 100 || !Buffer._useTypedArrays) {
-    for (var i = 0; i < len; i++) {
-      target[i + target_start] = this[i + start]
-    }
-  } else {
-    target._set(this.subarray(start, start + len), target_start)
   }
 }
 
@@ -15967,13 +18548,19 @@ function asciiSlice (buf, start, end) {
   end = Math.min(buf.length, end)
 
   for (var i = start; i < end; i++) {
-    ret += String.fromCharCode(buf[i])
+    ret += String.fromCharCode(buf[i] & 0x7F)
   }
   return ret
 }
 
 function binarySlice (buf, start, end) {
-  return asciiSlice(buf, start, end)
+  var ret = ''
+  end = Math.min(buf.length, end)
+
+  for (var i = start; i < end; i++) {
+    ret += String.fromCharCode(buf[i])
+  }
+  return ret
 }
 
 function hexSlice (buf, start, end) {
@@ -16000,380 +18587,458 @@ function utf16leSlice (buf, start, end) {
 
 Buffer.prototype.slice = function (start, end) {
   var len = this.length
-  start = clamp(start, len, 0)
-  end = clamp(end, len, len)
+  start = ~~start
+  end = end === undefined ? len : ~~end
 
-  if (Buffer._useTypedArrays) {
-    return Buffer._augment(this.subarray(start, end))
+  if (start < 0) {
+    start += len;
+    if (start < 0)
+      start = 0
+  } else if (start > len) {
+    start = len
+  }
+
+  if (end < 0) {
+    end += len
+    if (end < 0)
+      end = 0
+  } else if (end > len) {
+    end = len
+  }
+
+  if (end < start)
+    end = start
+
+  var newBuf
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    newBuf = Buffer._augment(this.subarray(start, end))
   } else {
     var sliceLen = end - start
-    var newBuf = new Buffer(sliceLen, undefined, true)
+    newBuf = new Buffer(sliceLen, undefined, true)
     for (var i = 0; i < sliceLen; i++) {
       newBuf[i] = this[i + start]
     }
-    return newBuf
   }
+
+  if (newBuf.length)
+    newBuf.parent = this.parent || this
+
+  return newBuf
 }
 
-// `get` will be removed in Node 0.13+
-Buffer.prototype.get = function (offset) {
-  console.log('.get() is deprecated. Access using array indexes instead.')
-  return this.readUInt8(offset)
+/*
+ * Need to make sure that buffer isn't trying to write out of bounds.
+ */
+function checkOffset (offset, ext, length) {
+  if ((offset % 1) !== 0 || offset < 0)
+    throw new RangeError('offset is not uint')
+  if (offset + ext > length)
+    throw new RangeError('Trying to access beyond buffer length')
 }
 
-// `set` will be removed in Node 0.13+
-Buffer.prototype.set = function (v, offset) {
-  console.log('.set() is deprecated. Access using array indexes instead.')
-  return this.writeUInt8(v, offset)
+Buffer.prototype.readUIntLE = function (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert)
+    checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset]
+  var mul = 1
+  var i = 0
+  while (++i < byteLength && (mul *= 0x100))
+    val += this[offset + i] * mul
+
+  return val
+}
+
+Buffer.prototype.readUIntBE = function (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert)
+    checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset + --byteLength]
+  var mul = 1
+  while (byteLength > 0 && (mul *= 0x100))
+    val += this[offset + --byteLength] * mul;
+
+  return val
 }
 
 Buffer.prototype.readUInt8 = function (offset, noAssert) {
-  if (!noAssert) {
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset < this.length, 'Trying to read beyond buffer length')
-  }
-
-  if (offset >= this.length)
-    return
-
+  if (!noAssert)
+    checkOffset(offset, 1, this.length)
   return this[offset]
 }
 
-function readUInt16 (buf, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset + 1 < buf.length, 'Trying to read beyond buffer length')
-  }
-
-  var len = buf.length
-  if (offset >= len)
-    return
-
-  var val
-  if (littleEndian) {
-    val = buf[offset]
-    if (offset + 1 < len)
-      val |= buf[offset + 1] << 8
-  } else {
-    val = buf[offset] << 8
-    if (offset + 1 < len)
-      val |= buf[offset + 1]
-  }
-  return val
-}
-
 Buffer.prototype.readUInt16LE = function (offset, noAssert) {
-  return readUInt16(this, offset, true, noAssert)
+  if (!noAssert)
+    checkOffset(offset, 2, this.length)
+  return this[offset] | (this[offset + 1] << 8)
 }
 
 Buffer.prototype.readUInt16BE = function (offset, noAssert) {
-  return readUInt16(this, offset, false, noAssert)
-}
-
-function readUInt32 (buf, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset + 3 < buf.length, 'Trying to read beyond buffer length')
-  }
-
-  var len = buf.length
-  if (offset >= len)
-    return
-
-  var val
-  if (littleEndian) {
-    if (offset + 2 < len)
-      val = buf[offset + 2] << 16
-    if (offset + 1 < len)
-      val |= buf[offset + 1] << 8
-    val |= buf[offset]
-    if (offset + 3 < len)
-      val = val + (buf[offset + 3] << 24 >>> 0)
-  } else {
-    if (offset + 1 < len)
-      val = buf[offset + 1] << 16
-    if (offset + 2 < len)
-      val |= buf[offset + 2] << 8
-    if (offset + 3 < len)
-      val |= buf[offset + 3]
-    val = val + (buf[offset] << 24 >>> 0)
-  }
-  return val
+  if (!noAssert)
+    checkOffset(offset, 2, this.length)
+  return (this[offset] << 8) | this[offset + 1]
 }
 
 Buffer.prototype.readUInt32LE = function (offset, noAssert) {
-  return readUInt32(this, offset, true, noAssert)
+  if (!noAssert)
+    checkOffset(offset, 4, this.length)
+
+  return ((this[offset]) |
+      (this[offset + 1] << 8) |
+      (this[offset + 2] << 16)) +
+      (this[offset + 3] * 0x1000000)
 }
 
 Buffer.prototype.readUInt32BE = function (offset, noAssert) {
-  return readUInt32(this, offset, false, noAssert)
+  if (!noAssert)
+    checkOffset(offset, 4, this.length)
+
+  return (this[offset] * 0x1000000) +
+      ((this[offset + 1] << 16) |
+      (this[offset + 2] << 8) |
+      this[offset + 3])
+}
+
+Buffer.prototype.readIntLE = function (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert)
+    checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset]
+  var mul = 1
+  var i = 0
+  while (++i < byteLength && (mul *= 0x100))
+    val += this[offset + i] * mul
+  mul *= 0x80
+
+  if (val >= mul)
+    val -= Math.pow(2, 8 * byteLength)
+
+  return val
+}
+
+Buffer.prototype.readIntBE = function (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert)
+    checkOffset(offset, byteLength, this.length)
+
+  var i = byteLength
+  var mul = 1
+  var val = this[offset + --i]
+  while (i > 0 && (mul *= 0x100))
+    val += this[offset + --i] * mul
+  mul *= 0x80
+
+  if (val >= mul)
+    val -= Math.pow(2, 8 * byteLength)
+
+  return val
 }
 
 Buffer.prototype.readInt8 = function (offset, noAssert) {
-  if (!noAssert) {
-    assert(offset !== undefined && offset !== null,
-        'missing offset')
-    assert(offset < this.length, 'Trying to read beyond buffer length')
-  }
-
-  if (offset >= this.length)
-    return
-
-  var neg = this[offset] & 0x80
-  if (neg)
-    return (0xff - this[offset] + 1) * -1
-  else
-    return this[offset]
-}
-
-function readInt16 (buf, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset + 1 < buf.length, 'Trying to read beyond buffer length')
-  }
-
-  var len = buf.length
-  if (offset >= len)
-    return
-
-  var val = readUInt16(buf, offset, littleEndian, true)
-  var neg = val & 0x8000
-  if (neg)
-    return (0xffff - val + 1) * -1
-  else
-    return val
+  if (!noAssert)
+    checkOffset(offset, 1, this.length)
+  if (!(this[offset] & 0x80))
+    return (this[offset])
+  return ((0xff - this[offset] + 1) * -1)
 }
 
 Buffer.prototype.readInt16LE = function (offset, noAssert) {
-  return readInt16(this, offset, true, noAssert)
+  if (!noAssert)
+    checkOffset(offset, 2, this.length)
+  var val = this[offset] | (this[offset + 1] << 8)
+  return (val & 0x8000) ? val | 0xFFFF0000 : val
 }
 
 Buffer.prototype.readInt16BE = function (offset, noAssert) {
-  return readInt16(this, offset, false, noAssert)
-}
-
-function readInt32 (buf, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset + 3 < buf.length, 'Trying to read beyond buffer length')
-  }
-
-  var len = buf.length
-  if (offset >= len)
-    return
-
-  var val = readUInt32(buf, offset, littleEndian, true)
-  var neg = val & 0x80000000
-  if (neg)
-    return (0xffffffff - val + 1) * -1
-  else
-    return val
+  if (!noAssert)
+    checkOffset(offset, 2, this.length)
+  var val = this[offset + 1] | (this[offset] << 8)
+  return (val & 0x8000) ? val | 0xFFFF0000 : val
 }
 
 Buffer.prototype.readInt32LE = function (offset, noAssert) {
-  return readInt32(this, offset, true, noAssert)
+  if (!noAssert)
+    checkOffset(offset, 4, this.length)
+
+  return (this[offset]) |
+      (this[offset + 1] << 8) |
+      (this[offset + 2] << 16) |
+      (this[offset + 3] << 24)
 }
 
 Buffer.prototype.readInt32BE = function (offset, noAssert) {
-  return readInt32(this, offset, false, noAssert)
-}
+  if (!noAssert)
+    checkOffset(offset, 4, this.length)
 
-function readFloat (buf, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
-    assert(offset + 3 < buf.length, 'Trying to read beyond buffer length')
-  }
-
-  return ieee754.read(buf, offset, littleEndian, 23, 4)
+  return (this[offset] << 24) |
+      (this[offset + 1] << 16) |
+      (this[offset + 2] << 8) |
+      (this[offset + 3])
 }
 
 Buffer.prototype.readFloatLE = function (offset, noAssert) {
-  return readFloat(this, offset, true, noAssert)
+  if (!noAssert)
+    checkOffset(offset, 4, this.length)
+  return ieee754.read(this, offset, true, 23, 4)
 }
 
 Buffer.prototype.readFloatBE = function (offset, noAssert) {
-  return readFloat(this, offset, false, noAssert)
-}
-
-function readDouble (buf, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
-    assert(offset + 7 < buf.length, 'Trying to read beyond buffer length')
-  }
-
-  return ieee754.read(buf, offset, littleEndian, 52, 8)
+  if (!noAssert)
+    checkOffset(offset, 4, this.length)
+  return ieee754.read(this, offset, false, 23, 4)
 }
 
 Buffer.prototype.readDoubleLE = function (offset, noAssert) {
-  return readDouble(this, offset, true, noAssert)
+  if (!noAssert)
+    checkOffset(offset, 8, this.length)
+  return ieee754.read(this, offset, true, 52, 8)
 }
 
 Buffer.prototype.readDoubleBE = function (offset, noAssert) {
-  return readDouble(this, offset, false, noAssert)
+  if (!noAssert)
+    checkOffset(offset, 8, this.length)
+  return ieee754.read(this, offset, false, 52, 8)
+}
+
+function checkInt (buf, value, offset, ext, max, min) {
+  if (!Buffer.isBuffer(buf)) throw new TypeError('buffer must be a Buffer instance')
+  if (value > max || value < min) throw new RangeError('value is out of bounds')
+  if (offset + ext > buf.length) throw new RangeError('index out of range')
+}
+
+Buffer.prototype.writeUIntLE = function (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, byteLength, Math.pow(2, 8 * byteLength), 0)
+
+  var mul = 1
+  var i = 0
+  this[offset] = value & 0xFF
+  while (++i < byteLength && (mul *= 0x100))
+    this[offset + i] = (value / mul) >>> 0 & 0xFF
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeUIntBE = function (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, byteLength, Math.pow(2, 8 * byteLength), 0)
+
+  var i = byteLength - 1
+  var mul = 1
+  this[offset + i] = value & 0xFF
+  while (--i >= 0 && (mul *= 0x100))
+    this[offset + i] = (value / mul) >>> 0 & 0xFF
+
+  return offset + byteLength
 }
 
 Buffer.prototype.writeUInt8 = function (value, offset, noAssert) {
-  if (!noAssert) {
-    assert(value !== undefined && value !== null, 'missing value')
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset < this.length, 'trying to write beyond buffer length')
-    verifuint(value, 0xff)
-  }
-
-  if (offset >= this.length) return
-
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, 1, 0xff, 0)
+  if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
   this[offset] = value
   return offset + 1
 }
 
-function writeUInt16 (buf, value, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    assert(value !== undefined && value !== null, 'missing value')
-    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset + 1 < buf.length, 'trying to write beyond buffer length')
-    verifuint(value, 0xffff)
+function objectWriteUInt16 (buf, value, offset, littleEndian) {
+  if (value < 0) value = 0xffff + value + 1
+  for (var i = 0, j = Math.min(buf.length - offset, 2); i < j; i++) {
+    buf[offset + i] = (value & (0xff << (8 * (littleEndian ? i : 1 - i)))) >>>
+      (littleEndian ? i : 1 - i) * 8
   }
-
-  var len = buf.length
-  if (offset >= len)
-    return
-
-  for (var i = 0, j = Math.min(len - offset, 2); i < j; i++) {
-    buf[offset + i] =
-        (value & (0xff << (8 * (littleEndian ? i : 1 - i)))) >>>
-            (littleEndian ? i : 1 - i) * 8
-  }
-  return offset + 2
 }
 
 Buffer.prototype.writeUInt16LE = function (value, offset, noAssert) {
-  return writeUInt16(this, value, offset, true, noAssert)
-}
-
-Buffer.prototype.writeUInt16BE = function (value, offset, noAssert) {
-  return writeUInt16(this, value, offset, false, noAssert)
-}
-
-function writeUInt32 (buf, value, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    assert(value !== undefined && value !== null, 'missing value')
-    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset + 3 < buf.length, 'trying to write beyond buffer length')
-    verifuint(value, 0xffffffff)
-  }
-
-  var len = buf.length
-  if (offset >= len)
-    return
-
-  for (var i = 0, j = Math.min(len - offset, 4); i < j; i++) {
-    buf[offset + i] =
-        (value >>> (littleEndian ? i : 3 - i) * 8) & 0xff
-  }
-  return offset + 4
-}
-
-Buffer.prototype.writeUInt32LE = function (value, offset, noAssert) {
-  return writeUInt32(this, value, offset, true, noAssert)
-}
-
-Buffer.prototype.writeUInt32BE = function (value, offset, noAssert) {
-  return writeUInt32(this, value, offset, false, noAssert)
-}
-
-Buffer.prototype.writeInt8 = function (value, offset, noAssert) {
-  if (!noAssert) {
-    assert(value !== undefined && value !== null, 'missing value')
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset < this.length, 'Trying to write beyond buffer length')
-    verifsint(value, 0x7f, -0x80)
-  }
-
-  if (offset >= this.length)
-    return
-
-  if (value >= 0)
-    this.writeUInt8(value, offset, noAssert)
-  else
-    this.writeUInt8(0xff + value + 1, offset, noAssert)
-  return offset + 1
-}
-
-function writeInt16 (buf, value, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    assert(value !== undefined && value !== null, 'missing value')
-    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset + 1 < buf.length, 'Trying to write beyond buffer length')
-    verifsint(value, 0x7fff, -0x8000)
-  }
-
-  var len = buf.length
-  if (offset >= len)
-    return
-
-  if (value >= 0)
-    writeUInt16(buf, value, offset, littleEndian, noAssert)
-  else
-    writeUInt16(buf, 0xffff + value + 1, offset, littleEndian, noAssert)
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, 2, 0xffff, 0)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = value
+    this[offset + 1] = (value >>> 8)
+  } else objectWriteUInt16(this, value, offset, true)
   return offset + 2
 }
 
-Buffer.prototype.writeInt16LE = function (value, offset, noAssert) {
-  return writeInt16(this, value, offset, true, noAssert)
+Buffer.prototype.writeUInt16BE = function (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, 2, 0xffff, 0)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = (value >>> 8)
+    this[offset + 1] = value
+  } else objectWriteUInt16(this, value, offset, false)
+  return offset + 2
 }
 
-Buffer.prototype.writeInt16BE = function (value, offset, noAssert) {
-  return writeInt16(this, value, offset, false, noAssert)
-}
-
-function writeInt32 (buf, value, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    assert(value !== undefined && value !== null, 'missing value')
-    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset + 3 < buf.length, 'Trying to write beyond buffer length')
-    verifsint(value, 0x7fffffff, -0x80000000)
+function objectWriteUInt32 (buf, value, offset, littleEndian) {
+  if (value < 0) value = 0xffffffff + value + 1
+  for (var i = 0, j = Math.min(buf.length - offset, 4); i < j; i++) {
+    buf[offset + i] = (value >>> (littleEndian ? i : 3 - i) * 8) & 0xff
   }
+}
 
-  var len = buf.length
-  if (offset >= len)
-    return
-
-  if (value >= 0)
-    writeUInt32(buf, value, offset, littleEndian, noAssert)
-  else
-    writeUInt32(buf, 0xffffffff + value + 1, offset, littleEndian, noAssert)
+Buffer.prototype.writeUInt32LE = function (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, 4, 0xffffffff, 0)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset + 3] = (value >>> 24)
+    this[offset + 2] = (value >>> 16)
+    this[offset + 1] = (value >>> 8)
+    this[offset] = value
+  } else objectWriteUInt32(this, value, offset, true)
   return offset + 4
 }
 
+Buffer.prototype.writeUInt32BE = function (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, 4, 0xffffffff, 0)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = (value >>> 24)
+    this[offset + 1] = (value >>> 16)
+    this[offset + 2] = (value >>> 8)
+    this[offset + 3] = value
+  } else objectWriteUInt32(this, value, offset, false)
+  return offset + 4
+}
+
+Buffer.prototype.writeIntLE = function (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    checkInt(this,
+             value,
+             offset,
+             byteLength,
+             Math.pow(2, 8 * byteLength - 1) - 1,
+             -Math.pow(2, 8 * byteLength - 1))
+  }
+
+  var i = 0
+  var mul = 1
+  var sub = value < 0 ? 1 : 0
+  this[offset] = value & 0xFF
+  while (++i < byteLength && (mul *= 0x100))
+    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeIntBE = function (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    checkInt(this,
+             value,
+             offset,
+             byteLength,
+             Math.pow(2, 8 * byteLength - 1) - 1,
+             -Math.pow(2, 8 * byteLength - 1))
+  }
+
+  var i = byteLength - 1
+  var mul = 1
+  var sub = value < 0 ? 1 : 0
+  this[offset + i] = value & 0xFF
+  while (--i >= 0 && (mul *= 0x100))
+    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeInt8 = function (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, 1, 0x7f, -0x80)
+  if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
+  if (value < 0) value = 0xff + value + 1
+  this[offset] = value
+  return offset + 1
+}
+
+Buffer.prototype.writeInt16LE = function (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, 2, 0x7fff, -0x8000)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = value
+    this[offset + 1] = (value >>> 8)
+  } else objectWriteUInt16(this, value, offset, true)
+  return offset + 2
+}
+
+Buffer.prototype.writeInt16BE = function (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, 2, 0x7fff, -0x8000)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = (value >>> 8)
+    this[offset + 1] = value
+  } else objectWriteUInt16(this, value, offset, false)
+  return offset + 2
+}
+
 Buffer.prototype.writeInt32LE = function (value, offset, noAssert) {
-  return writeInt32(this, value, offset, true, noAssert)
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = value
+    this[offset + 1] = (value >>> 8)
+    this[offset + 2] = (value >>> 16)
+    this[offset + 3] = (value >>> 24)
+  } else objectWriteUInt32(this, value, offset, true)
+  return offset + 4
 }
 
 Buffer.prototype.writeInt32BE = function (value, offset, noAssert) {
-  return writeInt32(this, value, offset, false, noAssert)
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert)
+    checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
+  if (value < 0) value = 0xffffffff + value + 1
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = (value >>> 24)
+    this[offset + 1] = (value >>> 16)
+    this[offset + 2] = (value >>> 8)
+    this[offset + 3] = value
+  } else objectWriteUInt32(this, value, offset, false)
+  return offset + 4
+}
+
+function checkIEEE754 (buf, value, offset, ext, max, min) {
+  if (value > max || value < min) throw new RangeError('value is out of bounds')
+  if (offset + ext > buf.length) throw new RangeError('index out of range')
+  if (offset < 0) throw new RangeError('index out of range')
 }
 
 function writeFloat (buf, value, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    assert(value !== undefined && value !== null, 'missing value')
-    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset + 3 < buf.length, 'Trying to write beyond buffer length')
-    verifIEEE754(value, 3.4028234663852886e+38, -3.4028234663852886e+38)
-  }
-
-  var len = buf.length
-  if (offset >= len)
-    return
-
+  if (!noAssert)
+    checkIEEE754(buf, value, offset, 4, 3.4028234663852886e+38, -3.4028234663852886e+38)
   ieee754.write(buf, value, offset, littleEndian, 23, 4)
   return offset + 4
 }
@@ -16387,19 +19052,8 @@ Buffer.prototype.writeFloatBE = function (value, offset, noAssert) {
 }
 
 function writeDouble (buf, value, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    assert(value !== undefined && value !== null, 'missing value')
-    assert(typeof littleEndian === 'boolean', 'missing or invalid endian')
-    assert(offset !== undefined && offset !== null, 'missing offset')
-    assert(offset + 7 < buf.length,
-        'Trying to write beyond buffer length')
-    verifIEEE754(value, 1.7976931348623157E+308, -1.7976931348623157E+308)
-  }
-
-  var len = buf.length
-  if (offset >= len)
-    return
-
+  if (!noAssert)
+    checkIEEE754(buf, value, offset, 8, 1.7976931348623157E+308, -1.7976931348623157E+308)
   ieee754.write(buf, value, offset, littleEndian, 52, 8)
   return offset + 8
 }
@@ -16412,20 +19066,59 @@ Buffer.prototype.writeDoubleBE = function (value, offset, noAssert) {
   return writeDouble(this, value, offset, false, noAssert)
 }
 
+// copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
+Buffer.prototype.copy = function (target, target_start, start, end) {
+  var source = this
+
+  if (!start) start = 0
+  if (!end && end !== 0) end = this.length
+  if (target_start >= target.length) target_start = target.length
+  if (!target_start) target_start = 0
+  if (end > 0 && end < start) end = start
+
+  // Copy 0 bytes; we're done
+  if (end === start) return 0
+  if (target.length === 0 || source.length === 0) return 0
+
+  // Fatal error conditions
+  if (target_start < 0)
+    throw new RangeError('targetStart out of bounds')
+  if (start < 0 || start >= source.length) throw new RangeError('sourceStart out of bounds')
+  if (end < 0) throw new RangeError('sourceEnd out of bounds')
+
+  // Are we oob?
+  if (end > this.length)
+    end = this.length
+  if (target.length - target_start < end - start)
+    end = target.length - target_start + start
+
+  var len = end - start
+
+  if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
+    for (var i = 0; i < len; i++) {
+      target[i + target_start] = this[i + start]
+    }
+  } else {
+    target._set(this.subarray(start, start + len), target_start)
+  }
+
+  return len
+}
+
 // fill(value, start=0, end=buffer.length)
 Buffer.prototype.fill = function (value, start, end) {
   if (!value) value = 0
   if (!start) start = 0
   if (!end) end = this.length
 
-  assert(end >= start, 'end < start')
+  if (end < start) throw new RangeError('end < start')
 
   // Fill 0 bytes; we're done
   if (end === start) return
   if (this.length === 0) return
 
-  assert(start >= 0 && start < this.length, 'start out of bounds')
-  assert(end >= 0 && end <= this.length, 'end out of bounds')
+  if (start < 0 || start >= this.length) throw new RangeError('start out of bounds')
+  if (end < 0 || end > this.length) throw new RangeError('end out of bounds')
 
   var i
   if (typeof value === 'number') {
@@ -16443,26 +19136,13 @@ Buffer.prototype.fill = function (value, start, end) {
   return this
 }
 
-Buffer.prototype.inspect = function () {
-  var out = []
-  var len = this.length
-  for (var i = 0; i < len; i++) {
-    out[i] = toHex(this[i])
-    if (i === exports.INSPECT_MAX_BYTES) {
-      out[i + 1] = '...'
-      break
-    }
-  }
-  return '<Buffer ' + out.join(' ') + '>'
-}
-
 /**
  * Creates a new `ArrayBuffer` with the *copied* memory of the buffer instance.
  * Added in Node 0.12. Only available in browsers that support ArrayBuffer.
  */
 Buffer.prototype.toArrayBuffer = function () {
   if (typeof Uint8Array !== 'undefined') {
-    if (Buffer._useTypedArrays) {
+    if (Buffer.TYPED_ARRAY_SUPPORT) {
       return (new Buffer(this)).buffer
     } else {
       var buf = new Uint8Array(this.length)
@@ -16472,7 +19152,7 @@ Buffer.prototype.toArrayBuffer = function () {
       return buf.buffer
     }
   } else {
-    throw new Error('Buffer.toArrayBuffer not supported in this browser')
+    throw new TypeError('Buffer.toArrayBuffer not supported in this browser')
   }
 }
 
@@ -16485,6 +19165,7 @@ var BP = Buffer.prototype
  * Augment a Uint8Array *instance* (not the Uint8Array class!) with Buffer methods
  */
 Buffer._augment = function (arr) {
+  arr.constructor = Buffer
   arr._isBuffer = true
 
   // save reference to original Uint8Array get/set methods before overwriting
@@ -16503,11 +19184,15 @@ Buffer._augment = function (arr) {
   arr.compare = BP.compare
   arr.copy = BP.copy
   arr.slice = BP.slice
+  arr.readUIntLE = BP.readUIntLE
+  arr.readUIntBE = BP.readUIntBE
   arr.readUInt8 = BP.readUInt8
   arr.readUInt16LE = BP.readUInt16LE
   arr.readUInt16BE = BP.readUInt16BE
   arr.readUInt32LE = BP.readUInt32LE
   arr.readUInt32BE = BP.readUInt32BE
+  arr.readIntLE = BP.readIntLE
+  arr.readIntBE = BP.readIntBE
   arr.readInt8 = BP.readInt8
   arr.readInt16LE = BP.readInt16LE
   arr.readInt16BE = BP.readInt16BE
@@ -16518,10 +19203,14 @@ Buffer._augment = function (arr) {
   arr.readDoubleLE = BP.readDoubleLE
   arr.readDoubleBE = BP.readDoubleBE
   arr.writeUInt8 = BP.writeUInt8
+  arr.writeUIntLE = BP.writeUIntLE
+  arr.writeUIntBE = BP.writeUIntBE
   arr.writeUInt16LE = BP.writeUInt16LE
   arr.writeUInt16BE = BP.writeUInt16BE
   arr.writeUInt32LE = BP.writeUInt32LE
   arr.writeUInt32BE = BP.writeUInt32BE
+  arr.writeIntLE = BP.writeIntLE
+  arr.writeIntBE = BP.writeIntBE
   arr.writeInt8 = BP.writeInt8
   arr.writeInt16LE = BP.writeInt16LE
   arr.writeInt16BE = BP.writeInt16BE
@@ -16538,34 +19227,23 @@ Buffer._augment = function (arr) {
   return arr
 }
 
+var INVALID_BASE64_RE = /[^+\/0-9A-z\-]/g
+
+function base64clean (str) {
+  // Node strips out invalid characters like \n and \t from the string, base64-js does not
+  str = stringtrim(str).replace(INVALID_BASE64_RE, '')
+  // Node converts strings with length < 2 to ''
+  if (str.length < 2) return ''
+  // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
+  while (str.length % 4 !== 0) {
+    str = str + '='
+  }
+  return str
+}
+
 function stringtrim (str) {
   if (str.trim) return str.trim()
   return str.replace(/^\s+|\s+$/g, '')
-}
-
-// slice(start, end)
-function clamp (index, len, defaultValue) {
-  if (typeof index !== 'number') return defaultValue
-  index = ~~index;  // Coerce to integer.
-  if (index >= len) return len
-  if (index >= 0) return index
-  index += len
-  if (index >= 0) return index
-  return 0
-}
-
-function coerce (length) {
-  // Coerce length to a number (possibly NaN), round up
-  // in case it's fractional (e.g. 123.456) then do a
-  // double negate to coerce a NaN to 0. Easy, right?
-  length = ~~Math.ceil(+length)
-  return length < 0 ? 0 : length
-}
-
-function isArray (subject) {
-  return (Array.isArray || function (subject) {
-    return Object.prototype.toString.call(subject) === '[object Array]'
-  })(subject)
 }
 
 function isArrayish (subject) {
@@ -16579,22 +19257,100 @@ function toHex (n) {
   return n.toString(16)
 }
 
-function utf8ToBytes (str) {
-  var byteArray = []
-  for (var i = 0; i < str.length; i++) {
-    var b = str.charCodeAt(i)
-    if (b <= 0x7F) {
-      byteArray.push(b)
-    } else {
-      var start = i
-      if (b >= 0xD800 && b <= 0xDFFF) i++
-      var h = encodeURIComponent(str.slice(start, i+1)).substr(1).split('%')
-      for (var j = 0; j < h.length; j++) {
-        byteArray.push(parseInt(h[j], 16))
+function utf8ToBytes(string, units) {
+  var codePoint, length = string.length
+  var leadSurrogate = null
+  units = units || Infinity
+  var bytes = []
+  var i = 0
+
+  for (; i<length; i++) {
+    codePoint = string.charCodeAt(i)
+
+    // is surrogate component
+    if (codePoint > 0xD7FF && codePoint < 0xE000) {
+
+      // last char was a lead
+      if (leadSurrogate) {
+
+        // 2 leads in a row
+        if (codePoint < 0xDC00) {
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          leadSurrogate = codePoint
+          continue
+        }
+
+        // valid surrogate pair
+        else {
+          codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
+          leadSurrogate = null
+        }
+      }
+
+      // no lead yet
+      else {
+
+        // unexpected trail
+        if (codePoint > 0xDBFF) {
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          continue
+        }
+
+        // unpaired lead
+        else if (i + 1 === length) {
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          continue
+        }
+
+        // valid lead
+        else {
+          leadSurrogate = codePoint
+          continue
+        }
       }
     }
+
+    // valid bmp char, but last char was a lead
+    else if (leadSurrogate) {
+      if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+      leadSurrogate = null
+    }
+
+    // encode utf8
+    if (codePoint < 0x80) {
+      if ((units -= 1) < 0) break
+      bytes.push(codePoint)
+    }
+    else if (codePoint < 0x800) {
+      if ((units -= 2) < 0) break
+      bytes.push(
+        codePoint >> 0x6 | 0xC0,
+        codePoint & 0x3F | 0x80
+      );
+    }
+    else if (codePoint < 0x10000) {
+      if ((units -= 3) < 0) break
+      bytes.push(
+        codePoint >> 0xC | 0xE0,
+        codePoint >> 0x6 & 0x3F | 0x80,
+        codePoint & 0x3F | 0x80
+      );
+    }
+    else if (codePoint < 0x200000) {
+      if ((units -= 4) < 0) break
+      bytes.push(
+        codePoint >> 0x12 | 0xF0,
+        codePoint >> 0xC & 0x3F | 0x80,
+        codePoint >> 0x6 & 0x3F | 0x80,
+        codePoint & 0x3F | 0x80
+      );
+    }
+    else {
+      throw new Error('Invalid code point')
+    }
   }
-  return byteArray
+
+  return bytes
 }
 
 function asciiToBytes (str) {
@@ -16606,10 +19362,13 @@ function asciiToBytes (str) {
   return byteArray
 }
 
-function utf16leToBytes (str) {
+function utf16leToBytes (str, units) {
   var c, hi, lo
   var byteArray = []
   for (var i = 0; i < str.length; i++) {
+
+    if ((units -= 2) < 0) break
+
     c = str.charCodeAt(i)
     hi = c >> 8
     lo = c % 256
@@ -16621,10 +19380,11 @@ function utf16leToBytes (str) {
 }
 
 function base64ToBytes (str) {
-  return base64.toByteArray(str)
+  return base64.toByteArray(base64clean(str))
 }
 
-function blitBuffer (src, dst, offset, length) {
+function blitBuffer (src, dst, offset, length, unitSize) {
+  if (unitSize) length -= length % unitSize;
   for (var i = 0; i < length; i++) {
     if ((i + offset >= dst.length) || (i >= src.length))
       break
@@ -16641,36 +19401,7 @@ function decodeUtf8Char (str) {
   }
 }
 
-/*
- * We have to make sure that the value is a valid integer. This means that it
- * is non-negative. It has no fractional component and that it does not
- * exceed the maximum allowed value.
- */
-function verifuint (value, max) {
-  assert(typeof value === 'number', 'cannot write a non-number as a number')
-  assert(value >= 0, 'specified a negative value for writing an unsigned value')
-  assert(value <= max, 'value is larger than maximum value for type')
-  assert(Math.floor(value) === value, 'value has a fractional component')
-}
-
-function verifsint (value, max, min) {
-  assert(typeof value === 'number', 'cannot write a non-number as a number')
-  assert(value <= max, 'value larger than maximum allowed value')
-  assert(value >= min, 'value smaller than minimum allowed value')
-  assert(Math.floor(value) === value, 'value has a fractional component')
-}
-
-function verifIEEE754 (value, max, min) {
-  assert(typeof value === 'number', 'cannot write a non-number as a number')
-  assert(value <= max, 'value larger than maximum allowed value')
-  assert(value >= min, 'value smaller than minimum allowed value')
-}
-
-function assert (test, message) {
-  if (!test) throw new Error(message || 'Failed assertion')
-}
-
-},{"base64-js":66,"ieee754":67}],66:[function(require,module,exports){
+},{"base64-js":87,"ieee754":88,"is-array":89}],87:[function(require,module,exports){
 var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 ;(function (exports) {
@@ -16685,12 +19416,16 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	var NUMBER = '0'.charCodeAt(0)
 	var LOWER  = 'a'.charCodeAt(0)
 	var UPPER  = 'A'.charCodeAt(0)
+	var PLUS_URL_SAFE = '-'.charCodeAt(0)
+	var SLASH_URL_SAFE = '_'.charCodeAt(0)
 
 	function decode (elt) {
 		var code = elt.charCodeAt(0)
-		if (code === PLUS)
+		if (code === PLUS ||
+		    code === PLUS_URL_SAFE)
 			return 62 // '+'
-		if (code === SLASH)
+		if (code === SLASH ||
+		    code === SLASH_URL_SAFE)
 			return 63 // '/'
 		if (code < NUMBER)
 			return -1 //no match
@@ -16792,7 +19527,7 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	exports.fromByteArray = uint8ToBase64
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
-},{}],67:[function(require,module,exports){
+},{}],88:[function(require,module,exports){
 exports.read = function(buffer, offset, isLE, mLen, nBytes) {
   var e, m,
       eLen = nBytes * 8 - mLen - 1,
@@ -16878,7 +19613,42 @@ exports.write = function(buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128;
 };
 
-},{}],68:[function(require,module,exports){
+},{}],89:[function(require,module,exports){
+
+/**
+ * isArray
+ */
+
+var isArray = Array.isArray;
+
+/**
+ * toString
+ */
+
+var str = Object.prototype.toString;
+
+/**
+ * Whether or not the given `val`
+ * is an array.
+ *
+ * example:
+ *
+ *        isArray([]);
+ *        // > true
+ *        isArray(arguments);
+ *        // > false
+ *        isArray('');
+ *        // > false
+ *
+ * @param {mixed} val
+ * @return {bool}
+ */
+
+module.exports = isArray || function (val) {
+  return !! val && '[object Array]' == str.call(val);
+};
+
+},{}],90:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -16938,10 +19708,8 @@ EventEmitter.prototype.emit = function(type) {
       er = arguments[1];
       if (er instanceof Error) {
         throw er; // Unhandled 'error' event
-      } else {
-        throw TypeError('Uncaught, unspecified "error" event.');
       }
-      return false;
+      throw TypeError('Uncaught, unspecified "error" event.');
     }
   }
 
@@ -17183,9 +19951,14 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],69:[function(require,module,exports){
-module.exports=require(37)
-},{}],70:[function(require,module,exports){
+},{}],91:[function(require,module,exports){
+arguments[4][56][0].apply(exports,arguments)
+},{"dup":56}],92:[function(require,module,exports){
+module.exports = Array.isArray || function (arr) {
+  return Object.prototype.toString.call(arr) == '[object Array]';
+};
+
+},{}],93:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -17412,51 +20185,44 @@ var substr = 'ab'.substr(-1) === 'b'
     }
 ;
 
-}).call(this,require("q+64fw"))
-},{"q+64fw":71}],71:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"_process":94}],94:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
+var queue = [];
+var draining = false;
 
-process.nextTick = (function () {
-    var canSetImmediate = typeof window !== 'undefined'
-    && window.setImmediate;
-    var canPost = typeof window !== 'undefined'
-    && window.postMessage && window.addEventListener
-    ;
-
-    if (canSetImmediate) {
-        return function (f) { return window.setImmediate(f) };
+function drainQueue() {
+    if (draining) {
+        return;
     }
-
-    if (canPost) {
-        var queue = [];
-        window.addEventListener('message', function (ev) {
-            var source = ev.source;
-            if ((source === window || source === null) && ev.data === 'process-tick') {
-                ev.stopPropagation();
-                if (queue.length > 0) {
-                    var fn = queue.shift();
-                    fn();
-                }
-            }
-        }, true);
-
-        return function nextTick(fn) {
-            queue.push(fn);
-            window.postMessage('process-tick', '*');
-        };
+    draining = true;
+    var currentQueue;
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        var i = -1;
+        while (++i < len) {
+            currentQueue[i]();
+        }
+        len = queue.length;
     }
-
-    return function nextTick(fn) {
-        setTimeout(fn, 0);
-    };
-})();
+    draining = false;
+}
+process.nextTick = function (fun) {
+    queue.push(fun);
+    if (!draining) {
+        setTimeout(drainQueue, 0);
+    }
+};
 
 process.title = 'browser';
 process.browser = true;
 process.env = {};
 process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
 
 function noop() {}
 
@@ -17470,15 +20236,16 @@ process.emit = noop;
 
 process.binding = function (name) {
     throw new Error('process.binding is not supported');
-}
+};
 
 // TODO(shtylman)
 process.cwd = function () { return '/' };
 process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
+process.umask = function() { return 0; };
 
-},{}],72:[function(require,module,exports){
+},{}],95:[function(require,module,exports){
 (function (global){
 /*! http://mths.be/punycode v1.2.4 by @mathias */
 ;(function(root) {
@@ -17988,8 +20755,8 @@ process.chdir = function (dir) {
 
 }(this));
 
-}).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],73:[function(require,module,exports){
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],96:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -18075,7 +20842,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],74:[function(require,module,exports){
+},{}],97:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -18162,16 +20929,16 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],75:[function(require,module,exports){
+},{}],98:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":73,"./encode":74}],76:[function(require,module,exports){
+},{"./decode":96,"./encode":97}],99:[function(require,module,exports){
 module.exports = require("./lib/_stream_duplex.js")
 
-},{"./lib/_stream_duplex.js":77}],77:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":100}],100:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -18263,8 +21030,8 @@ function forEach (xs, f) {
   }
 }
 
-}).call(this,require("q+64fw"))
-},{"./_stream_readable":79,"./_stream_writable":81,"core-util-is":82,"inherits":69,"q+64fw":71}],78:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"./_stream_readable":102,"./_stream_writable":104,"_process":94,"core-util-is":105,"inherits":91}],101:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -18312,7 +21079,7 @@ PassThrough.prototype._transform = function(chunk, encoding, cb) {
   cb(null, chunk);
 };
 
-},{"./_stream_transform":80,"core-util-is":82,"inherits":69}],79:[function(require,module,exports){
+},{"./_stream_transform":103,"core-util-is":105,"inherits":91}],102:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -18556,7 +21323,7 @@ function howMuchToRead(n, state) {
   if (state.objectMode)
     return n === 0 ? 0 : 1;
 
-  if (isNaN(n) || n === null) {
+  if (n === null || isNaN(n)) {
     // only flow one buffer at a time
     if (state.flowing && state.buffer.length)
       return state.buffer[0].length;
@@ -18591,6 +21358,7 @@ Readable.prototype.read = function(n) {
   var state = this._readableState;
   state.calledRead = true;
   var nOrig = n;
+  var ret;
 
   if (typeof n !== 'number' || n > 0)
     state.emittedReadable = false;
@@ -18609,9 +21377,28 @@ Readable.prototype.read = function(n) {
 
   // if we've ended, and we're now clear, then finish it up.
   if (n === 0 && state.ended) {
+    ret = null;
+
+    // In cases where the decoder did not receive enough data
+    // to produce a full chunk, then immediately received an
+    // EOF, state.buffer will contain [<Buffer >, <Buffer 00 ...>].
+    // howMuchToRead will see this and coerce the amount to
+    // read to zero (because it's looking at the length of the
+    // first <Buffer > in state.buffer), and we'll end up here.
+    //
+    // This can only happen via state.decoder -- no other venue
+    // exists for pushing a zero-length chunk into state.buffer
+    // and triggering this behavior. In this case, we return our
+    // remaining data and end the stream, if appropriate.
+    if (state.length > 0 && state.decoder) {
+      ret = fromList(n, state);
+      state.length -= ret.length;
+    }
+
     if (state.length === 0)
       endReadable(this);
-    return null;
+
+    return ret;
   }
 
   // All the actual chunk generation logic needs to be
@@ -18665,7 +21452,6 @@ Readable.prototype.read = function(n) {
   if (doRead && !state.reading)
     n = howMuchToRead(nOrig, state);
 
-  var ret;
   if (n > 0)
     ret = fromList(n, state);
   else
@@ -18698,8 +21484,7 @@ function chunkInvalid(state, chunk) {
       'string' !== typeof chunk &&
       chunk !== null &&
       chunk !== undefined &&
-      !state.objectMode &&
-      !er) {
+      !state.objectMode) {
     er = new TypeError('Invalid non-string/buffer chunk');
   }
   return er;
@@ -19130,7 +21915,12 @@ Readable.prototype.wrap = function(stream) {
   stream.on('data', function(chunk) {
     if (state.decoder)
       chunk = state.decoder.write(chunk);
-    if (!chunk || !state.objectMode && !chunk.length)
+
+    // don't skip over falsy values in objectMode
+    //if (state.objectMode && util.isNullOrUndefined(chunk))
+    if (state.objectMode && (chunk === null || chunk === undefined))
+      return;
+    else if (!state.objectMode && (!chunk || !chunk.length))
       return;
 
     var ret = self.push(chunk);
@@ -19274,8 +22064,8 @@ function indexOf (xs, x) {
   return -1;
 }
 
-}).call(this,require("q+64fw"))
-},{"buffer":65,"core-util-is":82,"events":68,"inherits":69,"isarray":83,"q+64fw":71,"stream":89,"string_decoder/":84}],80:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"_process":94,"buffer":86,"core-util-is":105,"events":90,"inherits":91,"isarray":92,"stream":110,"string_decoder/":111}],103:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -19487,7 +22277,7 @@ function done(stream, er) {
   return stream.push(null);
 }
 
-},{"./_stream_duplex":77,"core-util-is":82,"inherits":69}],81:[function(require,module,exports){
+},{"./_stream_duplex":100,"core-util-is":105,"inherits":91}],104:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -19527,7 +22317,6 @@ Writable.WritableState = WritableState;
 var util = require('core-util-is');
 util.inherits = require('inherits');
 /*</replacement>*/
-
 
 var Stream = require('stream');
 
@@ -19877,8 +22666,8 @@ function endWritable(stream, state, cb) {
   state.ended = true;
 }
 
-}).call(this,require("q+64fw"))
-},{"./_stream_duplex":77,"buffer":65,"core-util-is":82,"inherits":69,"q+64fw":71,"stream":89}],82:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"./_stream_duplex":100,"_process":94,"buffer":86,"core-util-is":105,"inherits":91,"stream":110}],105:[function(require,module,exports){
 (function (Buffer){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -19988,231 +22777,26 @@ function objectToString(o) {
   return Object.prototype.toString.call(o);
 }
 }).call(this,require("buffer").Buffer)
-},{"buffer":65}],83:[function(require,module,exports){
-module.exports = Array.isArray || function (arr) {
-  return Object.prototype.toString.call(arr) == '[object Array]';
-};
-
-},{}],84:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-var Buffer = require('buffer').Buffer;
-
-var isBufferEncoding = Buffer.isEncoding
-  || function(encoding) {
-       switch (encoding && encoding.toLowerCase()) {
-         case 'hex': case 'utf8': case 'utf-8': case 'ascii': case 'binary': case 'base64': case 'ucs2': case 'ucs-2': case 'utf16le': case 'utf-16le': case 'raw': return true;
-         default: return false;
-       }
-     }
-
-
-function assertEncoding(encoding) {
-  if (encoding && !isBufferEncoding(encoding)) {
-    throw new Error('Unknown encoding: ' + encoding);
-  }
-}
-
-var StringDecoder = exports.StringDecoder = function(encoding) {
-  this.encoding = (encoding || 'utf8').toLowerCase().replace(/[-_]/, '');
-  assertEncoding(encoding);
-  switch (this.encoding) {
-    case 'utf8':
-      // CESU-8 represents each of Surrogate Pair by 3-bytes
-      this.surrogateSize = 3;
-      break;
-    case 'ucs2':
-    case 'utf16le':
-      // UTF-16 represents each of Surrogate Pair by 2-bytes
-      this.surrogateSize = 2;
-      this.detectIncompleteChar = utf16DetectIncompleteChar;
-      break;
-    case 'base64':
-      // Base-64 stores 3 bytes in 4 chars, and pads the remainder.
-      this.surrogateSize = 3;
-      this.detectIncompleteChar = base64DetectIncompleteChar;
-      break;
-    default:
-      this.write = passThroughWrite;
-      return;
-  }
-
-  this.charBuffer = new Buffer(6);
-  this.charReceived = 0;
-  this.charLength = 0;
-};
-
-
-StringDecoder.prototype.write = function(buffer) {
-  var charStr = '';
-  var offset = 0;
-
-  // if our last write ended with an incomplete multibyte character
-  while (this.charLength) {
-    // determine how many remaining bytes this buffer has to offer for this char
-    var i = (buffer.length >= this.charLength - this.charReceived) ?
-                this.charLength - this.charReceived :
-                buffer.length;
-
-    // add the new bytes to the char buffer
-    buffer.copy(this.charBuffer, this.charReceived, offset, i);
-    this.charReceived += (i - offset);
-    offset = i;
-
-    if (this.charReceived < this.charLength) {
-      // still not enough chars in this buffer? wait for more ...
-      return '';
-    }
-
-    // get the character that was split
-    charStr = this.charBuffer.slice(0, this.charLength).toString(this.encoding);
-
-    // lead surrogate (D800-DBFF) is also the incomplete character
-    var charCode = charStr.charCodeAt(charStr.length - 1);
-    if (charCode >= 0xD800 && charCode <= 0xDBFF) {
-      this.charLength += this.surrogateSize;
-      charStr = '';
-      continue;
-    }
-    this.charReceived = this.charLength = 0;
-
-    // if there are no more bytes in this buffer, just emit our char
-    if (i == buffer.length) return charStr;
-
-    // otherwise cut off the characters end from the beginning of this buffer
-    buffer = buffer.slice(i, buffer.length);
-    break;
-  }
-
-  var lenIncomplete = this.detectIncompleteChar(buffer);
-
-  var end = buffer.length;
-  if (this.charLength) {
-    // buffer the incomplete character bytes we got
-    buffer.copy(this.charBuffer, 0, buffer.length - lenIncomplete, end);
-    this.charReceived = lenIncomplete;
-    end -= lenIncomplete;
-  }
-
-  charStr += buffer.toString(this.encoding, 0, end);
-
-  var end = charStr.length - 1;
-  var charCode = charStr.charCodeAt(end);
-  // lead surrogate (D800-DBFF) is also the incomplete character
-  if (charCode >= 0xD800 && charCode <= 0xDBFF) {
-    var size = this.surrogateSize;
-    this.charLength += size;
-    this.charReceived += size;
-    this.charBuffer.copy(this.charBuffer, size, 0, size);
-    this.charBuffer.write(charStr.charAt(charStr.length - 1), this.encoding);
-    return charStr.substring(0, end);
-  }
-
-  // or just emit the charStr
-  return charStr;
-};
-
-StringDecoder.prototype.detectIncompleteChar = function(buffer) {
-  // determine how many bytes we have to check at the end of this buffer
-  var i = (buffer.length >= 3) ? 3 : buffer.length;
-
-  // Figure out if one of the last i bytes of our buffer announces an
-  // incomplete char.
-  for (; i > 0; i--) {
-    var c = buffer[buffer.length - i];
-
-    // See http://en.wikipedia.org/wiki/UTF-8#Description
-
-    // 110XXXXX
-    if (i == 1 && c >> 5 == 0x06) {
-      this.charLength = 2;
-      break;
-    }
-
-    // 1110XXXX
-    if (i <= 2 && c >> 4 == 0x0E) {
-      this.charLength = 3;
-      break;
-    }
-
-    // 11110XXX
-    if (i <= 3 && c >> 3 == 0x1E) {
-      this.charLength = 4;
-      break;
-    }
-  }
-
-  return i;
-};
-
-StringDecoder.prototype.end = function(buffer) {
-  var res = '';
-  if (buffer && buffer.length)
-    res = this.write(buffer);
-
-  if (this.charReceived) {
-    var cr = this.charReceived;
-    var buf = this.charBuffer;
-    var enc = this.encoding;
-    res += buf.slice(0, cr).toString(enc);
-  }
-
-  return res;
-};
-
-function passThroughWrite(buffer) {
-  return buffer.toString(this.encoding);
-}
-
-function utf16DetectIncompleteChar(buffer) {
-  var incomplete = this.charReceived = buffer.length % 2;
-  this.charLength = incomplete ? 2 : 0;
-  return incomplete;
-}
-
-function base64DetectIncompleteChar(buffer) {
-  var incomplete = this.charReceived = buffer.length % 3;
-  this.charLength = incomplete ? 3 : 0;
-  return incomplete;
-}
-
-},{"buffer":65}],85:[function(require,module,exports){
+},{"buffer":86}],106:[function(require,module,exports){
 module.exports = require("./lib/_stream_passthrough.js")
 
-},{"./lib/_stream_passthrough.js":78}],86:[function(require,module,exports){
+},{"./lib/_stream_passthrough.js":101}],107:[function(require,module,exports){
+var Stream = require('stream'); // hack to fix a circular dependency issue when used with browserify
 exports = module.exports = require('./lib/_stream_readable.js');
+exports.Stream = Stream;
 exports.Readable = exports;
 exports.Writable = require('./lib/_stream_writable.js');
 exports.Duplex = require('./lib/_stream_duplex.js');
 exports.Transform = require('./lib/_stream_transform.js');
 exports.PassThrough = require('./lib/_stream_passthrough.js');
 
-},{"./lib/_stream_duplex.js":77,"./lib/_stream_passthrough.js":78,"./lib/_stream_readable.js":79,"./lib/_stream_transform.js":80,"./lib/_stream_writable.js":81}],87:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":100,"./lib/_stream_passthrough.js":101,"./lib/_stream_readable.js":102,"./lib/_stream_transform.js":103,"./lib/_stream_writable.js":104,"stream":110}],108:[function(require,module,exports){
 module.exports = require("./lib/_stream_transform.js")
 
-},{"./lib/_stream_transform.js":80}],88:[function(require,module,exports){
+},{"./lib/_stream_transform.js":103}],109:[function(require,module,exports){
 module.exports = require("./lib/_stream_writable.js")
 
-},{"./lib/_stream_writable.js":81}],89:[function(require,module,exports){
+},{"./lib/_stream_writable.js":104}],110:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -20341,7 +22925,230 @@ Stream.prototype.pipe = function(dest, options) {
   return dest;
 };
 
-},{"events":68,"inherits":69,"readable-stream/duplex.js":76,"readable-stream/passthrough.js":85,"readable-stream/readable.js":86,"readable-stream/transform.js":87,"readable-stream/writable.js":88}],90:[function(require,module,exports){
+},{"events":90,"inherits":91,"readable-stream/duplex.js":99,"readable-stream/passthrough.js":106,"readable-stream/readable.js":107,"readable-stream/transform.js":108,"readable-stream/writable.js":109}],111:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var Buffer = require('buffer').Buffer;
+
+var isBufferEncoding = Buffer.isEncoding
+  || function(encoding) {
+       switch (encoding && encoding.toLowerCase()) {
+         case 'hex': case 'utf8': case 'utf-8': case 'ascii': case 'binary': case 'base64': case 'ucs2': case 'ucs-2': case 'utf16le': case 'utf-16le': case 'raw': return true;
+         default: return false;
+       }
+     }
+
+
+function assertEncoding(encoding) {
+  if (encoding && !isBufferEncoding(encoding)) {
+    throw new Error('Unknown encoding: ' + encoding);
+  }
+}
+
+// StringDecoder provides an interface for efficiently splitting a series of
+// buffers into a series of JS strings without breaking apart multi-byte
+// characters. CESU-8 is handled as part of the UTF-8 encoding.
+//
+// @TODO Handling all encodings inside a single object makes it very difficult
+// to reason about this code, so it should be split up in the future.
+// @TODO There should be a utf8-strict encoding that rejects invalid UTF-8 code
+// points as used by CESU-8.
+var StringDecoder = exports.StringDecoder = function(encoding) {
+  this.encoding = (encoding || 'utf8').toLowerCase().replace(/[-_]/, '');
+  assertEncoding(encoding);
+  switch (this.encoding) {
+    case 'utf8':
+      // CESU-8 represents each of Surrogate Pair by 3-bytes
+      this.surrogateSize = 3;
+      break;
+    case 'ucs2':
+    case 'utf16le':
+      // UTF-16 represents each of Surrogate Pair by 2-bytes
+      this.surrogateSize = 2;
+      this.detectIncompleteChar = utf16DetectIncompleteChar;
+      break;
+    case 'base64':
+      // Base-64 stores 3 bytes in 4 chars, and pads the remainder.
+      this.surrogateSize = 3;
+      this.detectIncompleteChar = base64DetectIncompleteChar;
+      break;
+    default:
+      this.write = passThroughWrite;
+      return;
+  }
+
+  // Enough space to store all bytes of a single character. UTF-8 needs 4
+  // bytes, but CESU-8 may require up to 6 (3 bytes per surrogate).
+  this.charBuffer = new Buffer(6);
+  // Number of bytes received for the current incomplete multi-byte character.
+  this.charReceived = 0;
+  // Number of bytes expected for the current incomplete multi-byte character.
+  this.charLength = 0;
+};
+
+
+// write decodes the given buffer and returns it as JS string that is
+// guaranteed to not contain any partial multi-byte characters. Any partial
+// character found at the end of the buffer is buffered up, and will be
+// returned when calling write again with the remaining bytes.
+//
+// Note: Converting a Buffer containing an orphan surrogate to a String
+// currently works, but converting a String to a Buffer (via `new Buffer`, or
+// Buffer#write) will replace incomplete surrogates with the unicode
+// replacement character. See https://codereview.chromium.org/121173009/ .
+StringDecoder.prototype.write = function(buffer) {
+  var charStr = '';
+  // if our last write ended with an incomplete multibyte character
+  while (this.charLength) {
+    // determine how many remaining bytes this buffer has to offer for this char
+    var available = (buffer.length >= this.charLength - this.charReceived) ?
+        this.charLength - this.charReceived :
+        buffer.length;
+
+    // add the new bytes to the char buffer
+    buffer.copy(this.charBuffer, this.charReceived, 0, available);
+    this.charReceived += available;
+
+    if (this.charReceived < this.charLength) {
+      // still not enough chars in this buffer? wait for more ...
+      return '';
+    }
+
+    // remove bytes belonging to the current character from the buffer
+    buffer = buffer.slice(available, buffer.length);
+
+    // get the character that was split
+    charStr = this.charBuffer.slice(0, this.charLength).toString(this.encoding);
+
+    // CESU-8: lead surrogate (D800-DBFF) is also the incomplete character
+    var charCode = charStr.charCodeAt(charStr.length - 1);
+    if (charCode >= 0xD800 && charCode <= 0xDBFF) {
+      this.charLength += this.surrogateSize;
+      charStr = '';
+      continue;
+    }
+    this.charReceived = this.charLength = 0;
+
+    // if there are no more bytes in this buffer, just emit our char
+    if (buffer.length === 0) {
+      return charStr;
+    }
+    break;
+  }
+
+  // determine and set charLength / charReceived
+  this.detectIncompleteChar(buffer);
+
+  var end = buffer.length;
+  if (this.charLength) {
+    // buffer the incomplete character bytes we got
+    buffer.copy(this.charBuffer, 0, buffer.length - this.charReceived, end);
+    end -= this.charReceived;
+  }
+
+  charStr += buffer.toString(this.encoding, 0, end);
+
+  var end = charStr.length - 1;
+  var charCode = charStr.charCodeAt(end);
+  // CESU-8: lead surrogate (D800-DBFF) is also the incomplete character
+  if (charCode >= 0xD800 && charCode <= 0xDBFF) {
+    var size = this.surrogateSize;
+    this.charLength += size;
+    this.charReceived += size;
+    this.charBuffer.copy(this.charBuffer, size, 0, size);
+    buffer.copy(this.charBuffer, 0, 0, size);
+    return charStr.substring(0, end);
+  }
+
+  // or just emit the charStr
+  return charStr;
+};
+
+// detectIncompleteChar determines if there is an incomplete UTF-8 character at
+// the end of the given buffer. If so, it sets this.charLength to the byte
+// length that character, and sets this.charReceived to the number of bytes
+// that are available for this character.
+StringDecoder.prototype.detectIncompleteChar = function(buffer) {
+  // determine how many bytes we have to check at the end of this buffer
+  var i = (buffer.length >= 3) ? 3 : buffer.length;
+
+  // Figure out if one of the last i bytes of our buffer announces an
+  // incomplete char.
+  for (; i > 0; i--) {
+    var c = buffer[buffer.length - i];
+
+    // See http://en.wikipedia.org/wiki/UTF-8#Description
+
+    // 110XXXXX
+    if (i == 1 && c >> 5 == 0x06) {
+      this.charLength = 2;
+      break;
+    }
+
+    // 1110XXXX
+    if (i <= 2 && c >> 4 == 0x0E) {
+      this.charLength = 3;
+      break;
+    }
+
+    // 11110XXX
+    if (i <= 3 && c >> 3 == 0x1E) {
+      this.charLength = 4;
+      break;
+    }
+  }
+  this.charReceived = i;
+};
+
+StringDecoder.prototype.end = function(buffer) {
+  var res = '';
+  if (buffer && buffer.length)
+    res = this.write(buffer);
+
+  if (this.charReceived) {
+    var cr = this.charReceived;
+    var buf = this.charBuffer;
+    var enc = this.encoding;
+    res += buf.slice(0, cr).toString(enc);
+  }
+
+  return res;
+};
+
+function passThroughWrite(buffer) {
+  return buffer.toString(this.encoding);
+}
+
+function utf16DetectIncompleteChar(buffer) {
+  this.charReceived = buffer.length % 2;
+  this.charLength = this.charReceived ? 2 : 0;
+}
+
+function base64DetectIncompleteChar(buffer) {
+  this.charReceived = buffer.length % 3;
+  this.charLength = this.charReceived ? 3 : 0;
+}
+
+},{"buffer":86}],112:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -21050,8 +23857,601 @@ function isNullOrUndefined(arg) {
   return  arg == null;
 }
 
-},{"punycode":72,"querystring":75}],91:[function(require,module,exports){
-module.exports=require(63)
-},{}],92:[function(require,module,exports){
-module.exports=require(64)
-},{"./support/isBuffer":91,"inherits":69,"q+64fw":71}]},{},[1])
+},{"punycode":95,"querystring":98}],113:[function(require,module,exports){
+module.exports = function isBuffer(arg) {
+  return arg && typeof arg === 'object'
+    && typeof arg.copy === 'function'
+    && typeof arg.fill === 'function'
+    && typeof arg.readUInt8 === 'function';
+}
+},{}],114:[function(require,module,exports){
+(function (process,global){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var formatRegExp = /%[sdj%]/g;
+exports.format = function(f) {
+  if (!isString(f)) {
+    var objects = [];
+    for (var i = 0; i < arguments.length; i++) {
+      objects.push(inspect(arguments[i]));
+    }
+    return objects.join(' ');
+  }
+
+  var i = 1;
+  var args = arguments;
+  var len = args.length;
+  var str = String(f).replace(formatRegExp, function(x) {
+    if (x === '%%') return '%';
+    if (i >= len) return x;
+    switch (x) {
+      case '%s': return String(args[i++]);
+      case '%d': return Number(args[i++]);
+      case '%j':
+        try {
+          return JSON.stringify(args[i++]);
+        } catch (_) {
+          return '[Circular]';
+        }
+      default:
+        return x;
+    }
+  });
+  for (var x = args[i]; i < len; x = args[++i]) {
+    if (isNull(x) || !isObject(x)) {
+      str += ' ' + x;
+    } else {
+      str += ' ' + inspect(x);
+    }
+  }
+  return str;
+};
+
+
+// Mark that a method should not be used.
+// Returns a modified function which warns once by default.
+// If --no-deprecation is set, then it is a no-op.
+exports.deprecate = function(fn, msg) {
+  // Allow for deprecating things in the process of starting up.
+  if (isUndefined(global.process)) {
+    return function() {
+      return exports.deprecate(fn, msg).apply(this, arguments);
+    };
+  }
+
+  if (process.noDeprecation === true) {
+    return fn;
+  }
+
+  var warned = false;
+  function deprecated() {
+    if (!warned) {
+      if (process.throwDeprecation) {
+        throw new Error(msg);
+      } else if (process.traceDeprecation) {
+        console.trace(msg);
+      } else {
+        console.error(msg);
+      }
+      warned = true;
+    }
+    return fn.apply(this, arguments);
+  }
+
+  return deprecated;
+};
+
+
+var debugs = {};
+var debugEnviron;
+exports.debuglog = function(set) {
+  if (isUndefined(debugEnviron))
+    debugEnviron = process.env.NODE_DEBUG || '';
+  set = set.toUpperCase();
+  if (!debugs[set]) {
+    if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
+      var pid = process.pid;
+      debugs[set] = function() {
+        var msg = exports.format.apply(exports, arguments);
+        console.error('%s %d: %s', set, pid, msg);
+      };
+    } else {
+      debugs[set] = function() {};
+    }
+  }
+  return debugs[set];
+};
+
+
+/**
+ * Echos the value of a value. Trys to print the value out
+ * in the best way possible given the different types.
+ *
+ * @param {Object} obj The object to print out.
+ * @param {Object} opts Optional options object that alters the output.
+ */
+/* legacy: obj, showHidden, depth, colors*/
+function inspect(obj, opts) {
+  // default options
+  var ctx = {
+    seen: [],
+    stylize: stylizeNoColor
+  };
+  // legacy...
+  if (arguments.length >= 3) ctx.depth = arguments[2];
+  if (arguments.length >= 4) ctx.colors = arguments[3];
+  if (isBoolean(opts)) {
+    // legacy...
+    ctx.showHidden = opts;
+  } else if (opts) {
+    // got an "options" object
+    exports._extend(ctx, opts);
+  }
+  // set default options
+  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
+  if (isUndefined(ctx.depth)) ctx.depth = 2;
+  if (isUndefined(ctx.colors)) ctx.colors = false;
+  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
+  if (ctx.colors) ctx.stylize = stylizeWithColor;
+  return formatValue(ctx, obj, ctx.depth);
+}
+exports.inspect = inspect;
+
+
+// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
+inspect.colors = {
+  'bold' : [1, 22],
+  'italic' : [3, 23],
+  'underline' : [4, 24],
+  'inverse' : [7, 27],
+  'white' : [37, 39],
+  'grey' : [90, 39],
+  'black' : [30, 39],
+  'blue' : [34, 39],
+  'cyan' : [36, 39],
+  'green' : [32, 39],
+  'magenta' : [35, 39],
+  'red' : [31, 39],
+  'yellow' : [33, 39]
+};
+
+// Don't use 'blue' not visible on cmd.exe
+inspect.styles = {
+  'special': 'cyan',
+  'number': 'yellow',
+  'boolean': 'yellow',
+  'undefined': 'grey',
+  'null': 'bold',
+  'string': 'green',
+  'date': 'magenta',
+  // "name": intentionally not styling
+  'regexp': 'red'
+};
+
+
+function stylizeWithColor(str, styleType) {
+  var style = inspect.styles[styleType];
+
+  if (style) {
+    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
+           '\u001b[' + inspect.colors[style][1] + 'm';
+  } else {
+    return str;
+  }
+}
+
+
+function stylizeNoColor(str, styleType) {
+  return str;
+}
+
+
+function arrayToHash(array) {
+  var hash = {};
+
+  array.forEach(function(val, idx) {
+    hash[val] = true;
+  });
+
+  return hash;
+}
+
+
+function formatValue(ctx, value, recurseTimes) {
+  // Provide a hook for user-specified inspect functions.
+  // Check that value is an object with an inspect function on it
+  if (ctx.customInspect &&
+      value &&
+      isFunction(value.inspect) &&
+      // Filter out the util module, it's inspect function is special
+      value.inspect !== exports.inspect &&
+      // Also filter out any prototype objects using the circular check.
+      !(value.constructor && value.constructor.prototype === value)) {
+    var ret = value.inspect(recurseTimes, ctx);
+    if (!isString(ret)) {
+      ret = formatValue(ctx, ret, recurseTimes);
+    }
+    return ret;
+  }
+
+  // Primitive types cannot have properties
+  var primitive = formatPrimitive(ctx, value);
+  if (primitive) {
+    return primitive;
+  }
+
+  // Look up the keys of the object.
+  var keys = Object.keys(value);
+  var visibleKeys = arrayToHash(keys);
+
+  if (ctx.showHidden) {
+    keys = Object.getOwnPropertyNames(value);
+  }
+
+  // IE doesn't make error fields non-enumerable
+  // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
+  if (isError(value)
+      && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
+    return formatError(value);
+  }
+
+  // Some type of object without properties can be shortcutted.
+  if (keys.length === 0) {
+    if (isFunction(value)) {
+      var name = value.name ? ': ' + value.name : '';
+      return ctx.stylize('[Function' + name + ']', 'special');
+    }
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    }
+    if (isDate(value)) {
+      return ctx.stylize(Date.prototype.toString.call(value), 'date');
+    }
+    if (isError(value)) {
+      return formatError(value);
+    }
+  }
+
+  var base = '', array = false, braces = ['{', '}'];
+
+  // Make Array say that they are Array
+  if (isArray(value)) {
+    array = true;
+    braces = ['[', ']'];
+  }
+
+  // Make functions say that they are functions
+  if (isFunction(value)) {
+    var n = value.name ? ': ' + value.name : '';
+    base = ' [Function' + n + ']';
+  }
+
+  // Make RegExps say that they are RegExps
+  if (isRegExp(value)) {
+    base = ' ' + RegExp.prototype.toString.call(value);
+  }
+
+  // Make dates with properties first say the date
+  if (isDate(value)) {
+    base = ' ' + Date.prototype.toUTCString.call(value);
+  }
+
+  // Make error with message first say the error
+  if (isError(value)) {
+    base = ' ' + formatError(value);
+  }
+
+  if (keys.length === 0 && (!array || value.length == 0)) {
+    return braces[0] + base + braces[1];
+  }
+
+  if (recurseTimes < 0) {
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    } else {
+      return ctx.stylize('[Object]', 'special');
+    }
+  }
+
+  ctx.seen.push(value);
+
+  var output;
+  if (array) {
+    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
+  } else {
+    output = keys.map(function(key) {
+      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
+    });
+  }
+
+  ctx.seen.pop();
+
+  return reduceToSingleString(output, base, braces);
+}
+
+
+function formatPrimitive(ctx, value) {
+  if (isUndefined(value))
+    return ctx.stylize('undefined', 'undefined');
+  if (isString(value)) {
+    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
+                                             .replace(/'/g, "\\'")
+                                             .replace(/\\"/g, '"') + '\'';
+    return ctx.stylize(simple, 'string');
+  }
+  if (isNumber(value))
+    return ctx.stylize('' + value, 'number');
+  if (isBoolean(value))
+    return ctx.stylize('' + value, 'boolean');
+  // For some reason typeof null is "object", so special case here.
+  if (isNull(value))
+    return ctx.stylize('null', 'null');
+}
+
+
+function formatError(value) {
+  return '[' + Error.prototype.toString.call(value) + ']';
+}
+
+
+function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
+  var output = [];
+  for (var i = 0, l = value.length; i < l; ++i) {
+    if (hasOwnProperty(value, String(i))) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          String(i), true));
+    } else {
+      output.push('');
+    }
+  }
+  keys.forEach(function(key) {
+    if (!key.match(/^\d+$/)) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          key, true));
+    }
+  });
+  return output;
+}
+
+
+function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
+  var name, str, desc;
+  desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] };
+  if (desc.get) {
+    if (desc.set) {
+      str = ctx.stylize('[Getter/Setter]', 'special');
+    } else {
+      str = ctx.stylize('[Getter]', 'special');
+    }
+  } else {
+    if (desc.set) {
+      str = ctx.stylize('[Setter]', 'special');
+    }
+  }
+  if (!hasOwnProperty(visibleKeys, key)) {
+    name = '[' + key + ']';
+  }
+  if (!str) {
+    if (ctx.seen.indexOf(desc.value) < 0) {
+      if (isNull(recurseTimes)) {
+        str = formatValue(ctx, desc.value, null);
+      } else {
+        str = formatValue(ctx, desc.value, recurseTimes - 1);
+      }
+      if (str.indexOf('\n') > -1) {
+        if (array) {
+          str = str.split('\n').map(function(line) {
+            return '  ' + line;
+          }).join('\n').substr(2);
+        } else {
+          str = '\n' + str.split('\n').map(function(line) {
+            return '   ' + line;
+          }).join('\n');
+        }
+      }
+    } else {
+      str = ctx.stylize('[Circular]', 'special');
+    }
+  }
+  if (isUndefined(name)) {
+    if (array && key.match(/^\d+$/)) {
+      return str;
+    }
+    name = JSON.stringify('' + key);
+    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
+      name = name.substr(1, name.length - 2);
+      name = ctx.stylize(name, 'name');
+    } else {
+      name = name.replace(/'/g, "\\'")
+                 .replace(/\\"/g, '"')
+                 .replace(/(^"|"$)/g, "'");
+      name = ctx.stylize(name, 'string');
+    }
+  }
+
+  return name + ': ' + str;
+}
+
+
+function reduceToSingleString(output, base, braces) {
+  var numLinesEst = 0;
+  var length = output.reduce(function(prev, cur) {
+    numLinesEst++;
+    if (cur.indexOf('\n') >= 0) numLinesEst++;
+    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
+  }, 0);
+
+  if (length > 60) {
+    return braces[0] +
+           (base === '' ? '' : base + '\n ') +
+           ' ' +
+           output.join(',\n  ') +
+           ' ' +
+           braces[1];
+  }
+
+  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
+}
+
+
+// NOTE: These type checking functions intentionally don't use `instanceof`
+// because it is fragile and can be easily faked with `Object.create()`.
+function isArray(ar) {
+  return Array.isArray(ar);
+}
+exports.isArray = isArray;
+
+function isBoolean(arg) {
+  return typeof arg === 'boolean';
+}
+exports.isBoolean = isBoolean;
+
+function isNull(arg) {
+  return arg === null;
+}
+exports.isNull = isNull;
+
+function isNullOrUndefined(arg) {
+  return arg == null;
+}
+exports.isNullOrUndefined = isNullOrUndefined;
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+exports.isNumber = isNumber;
+
+function isString(arg) {
+  return typeof arg === 'string';
+}
+exports.isString = isString;
+
+function isSymbol(arg) {
+  return typeof arg === 'symbol';
+}
+exports.isSymbol = isSymbol;
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+exports.isUndefined = isUndefined;
+
+function isRegExp(re) {
+  return isObject(re) && objectToString(re) === '[object RegExp]';
+}
+exports.isRegExp = isRegExp;
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+exports.isObject = isObject;
+
+function isDate(d) {
+  return isObject(d) && objectToString(d) === '[object Date]';
+}
+exports.isDate = isDate;
+
+function isError(e) {
+  return isObject(e) &&
+      (objectToString(e) === '[object Error]' || e instanceof Error);
+}
+exports.isError = isError;
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+exports.isFunction = isFunction;
+
+function isPrimitive(arg) {
+  return arg === null ||
+         typeof arg === 'boolean' ||
+         typeof arg === 'number' ||
+         typeof arg === 'string' ||
+         typeof arg === 'symbol' ||  // ES6 symbol
+         typeof arg === 'undefined';
+}
+exports.isPrimitive = isPrimitive;
+
+exports.isBuffer = require('./support/isBuffer');
+
+function objectToString(o) {
+  return Object.prototype.toString.call(o);
+}
+
+
+function pad(n) {
+  return n < 10 ? '0' + n.toString(10) : n.toString(10);
+}
+
+
+var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+              'Oct', 'Nov', 'Dec'];
+
+// 26 Feb 16:19:34
+function timestamp() {
+  var d = new Date();
+  var time = [pad(d.getHours()),
+              pad(d.getMinutes()),
+              pad(d.getSeconds())].join(':');
+  return [d.getDate(), months[d.getMonth()], time].join(' ');
+}
+
+
+// log is just a thin wrapper to console.log that prepends a timestamp
+exports.log = function() {
+  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
+};
+
+
+/**
+ * Inherit the prototype methods from one constructor into another.
+ *
+ * The Function.prototype.inherits from lang.js rewritten as a standalone
+ * function (not on Function.prototype). NOTE: If this file is to be loaded
+ * during bootstrapping this function needs to be rewritten using some native
+ * functions as prototype setup using normal JavaScript does not work as
+ * expected during bootstrapping (see mirror.js in r114903).
+ *
+ * @param {function} ctor Constructor function which needs to inherit the
+ *     prototype.
+ * @param {function} superCtor Constructor function to inherit prototype from.
+ */
+exports.inherits = require('inherits');
+
+exports._extend = function(origin, add) {
+  // Don't do anything if add isn't an object
+  if (!add || !isObject(add)) return origin;
+
+  var keys = Object.keys(add);
+  var i = keys.length;
+  while (i--) {
+    origin[keys[i]] = add[keys[i]];
+  }
+  return origin;
+};
+
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./support/isBuffer":113,"_process":94,"inherits":91}]},{},[1]);
