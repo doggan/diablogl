@@ -3,7 +3,7 @@ DiabloGL
 The goal of this project is to re-implement the original Diablo game using WebGL, so that it is playable in a modern web browser.
 
 <p align="center">
-<img src="https://raw.github.com/doggan/diablogl/screenshots/town_chests.gif"/>
+<img src="https://raw.github.com/doggan/diablogl/screenshots/town_attack.gif"/>
 </p>
 
 ## Usage
