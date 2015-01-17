@@ -3,13 +3,6 @@
   "version": "0.0.0",
   "description": "A re-implementation of the original Diablo with WebGL.",
   "private": true,
-  "scripts": {
-    "start": "NODE_ENV=development beefy index.js --cwd ./client/",
-    "test": "NODE_ENV=test node --use_strict ./test/main2.js",
-    "auto-test": "NODE_ENV=test mocha --reporter spec ./test/index.test.js",
-    "manual-test": "NODE_ENV=test node --use_strict ./test/main.js",
-    "manual-test2": "NODE_ENV=test node --use_strict ./test/main.js"
-  },
   "keywords": [
     "diablo",
     "webgl"
@@ -42,10 +35,8 @@
   "devDependencies": {
     "chai": "^1.10.0",
     "graceful-fs": "^3.0.5",
-    "mech-mpq": "0.0.1",
     "mocha": "^2.1.0",
-    "node-png": "^0.4.3",
-    "three": "^0.69.0"
+    "node-png": "^0.4.3"
   },
   "browser": {
     "http": "http-browserify"
