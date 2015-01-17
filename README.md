@@ -7,6 +7,31 @@ The goal of this project is to re-implement the original Diablo game using WebGL
 </p>
 
 ## Usage
+### File Server Setup
+1. Install Node.js and npm.
+ * https://docs.npmjs.com/getting-started/installing-node
+1. Install [mpq-server](https://github.com/doggan/mpq-server).
+ * `npm install mpq-server -g`
+1. Run mpq-server.
+  ```
+  $ mpq-server /path/to/DIABDAT.MPQ
+
+  mpq-server running...
+  ...port [3000]
+  ...archive [/path/to/DIABDAT.MPQ]
+  ```
+
+### Client Setup
+1. Download a [release](https://github.com/doggan/diablogl/releases).
+1. Unpack, and open `index.html` in a web browser.
+
+or
+
+1. Clone the repository.
+ * `git clone git://github.com/doggan/diablogl.git`
+1. Open `./diablogl/client/index.html` in a web browser.
+
+### (optional) Multi-Player Server Setup
 Coming soon. :sweat_drops:
 
 ## Technical Overview
@@ -20,12 +45,12 @@ Coming soon. :sweat_drops:
 1. The DiabloGL client, running in a web browser, sends HTTP requests to the `mpq-server` and receives binary data (textures, map data, etc) in the response.
   * The client uses the [diablo-file-formats](https://github.com/doggan/diablo-file-formats) package to handle converting the raw binary data into easy to use run-time data structures.
   * All game logic is implemented directly by the client.
-1. (Optional) For multi-player gameplay, a dedicated server (tentatively called DiabloGL-Server), handles routing of all client packets.
+1. (Optional) For multi-player gameplay, a dedicated server handles routing of all client packets.
 
 ## Progress
 At the time of this writing, this project is in its very early stages. Various pieces and core functionality are working, but there is no gameplay yet.
 
-### Done
+### Working
 * MPQ data streaming over http + file loading.
 * Town map rendering and collisions.
 * Character rendering and animations.
