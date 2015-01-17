@@ -23,13 +23,13 @@ The goal of this project is to re-implement the original Diablo game using WebGL
 
 ### Client Setup
 1. Download a [release](https://github.com/doggan/diablogl/releases).
-1. Unpack, and open `index.html` in a web browser.
+1. Unpack, and open `./client/index.html` in a web browser.
 
 or
 
 1. Clone the repository.
  * `git clone git://github.com/doggan/diablogl.git`
-1. Open `./diablogl/client/index.html` in a web browser.
+1. Open `./client/index.html` in a web browser.
 
 ### (optional) Multi-Player Server Setup
 Coming soon. :sweat_drops:
