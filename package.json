@@ -1,6 +1,6 @@
 {
   "name": "diablogl",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A re-implementation of the original Diablo with WebGL.",
   "private": true,
   "keywords": [
@@ -35,6 +35,8 @@
   "devDependencies": {
     "chai": "^1.10.0",
     "graceful-fs": "^3.0.5",
+    "grunt": "^0.4.5",
+    "grunt-browserify": "^3.3.0",
     "mocha": "^2.1.0",
     "node-png": "^0.4.3"
   },
