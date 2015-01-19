@@ -60,3 +60,6 @@ At the time of this writing, this project is in its very early stages. Various p
 
 ### Remaining
 * Everything else.
+
+## Disclaimer
+MPQ archives often contain data copyrighted by Blizzard Entertainment. As such, no MPQ data is distributed with this package. Users of this package must supply their own MPQ data after having legally purchased the associated product.
