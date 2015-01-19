@@ -1,5 +1,9 @@
 DiabloGL
 =======
+[![Build Status](http://img.shields.io/travis/doggan/diablogl.svg?style=flat)](https://travis-ci.org/doggan/diablogl)
+[![Dependency Status](https://david-dm.org/doggan/diablogl/status.svg?style=flat)](https://david-dm.org/doggan/diablogl)
+![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat)
+
 The goal of this project is to re-implement the original Diablo game using WebGL, so that it is playable in a modern web browser.
 
 <p align="center">
