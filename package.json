@@ -23,8 +23,11 @@
   "dependencies": {
     "async": "^0.9.0",
     "behavior-tree": "git://github.com/doggan/behavior-tree.git",
+    "component-engine": "git://github.com/doggan/component-engine.git",
     "diablo-file-formats": "git://github.com/doggan/diablo-file-formats.git",
     "events": "^1.0.2",
+    "gl-mat4": "^1.1.2",
+    "gl-vec3": "^1.0.3",
     "http-browserify": "^1.7.0",
     "inherits": "^2.0.1",
     "lodash": "^2.4.1",
