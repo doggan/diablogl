@@ -1,4 +1,6 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+/*global performance, threeStats, glStats, rStats*/
+
 'use strict';
 
 var Game = require('./game'),
@@ -131,8 +133,8 @@ document.addEventListener("DOMContentLoaded", function() {
             var actionComponent = player.getComponent('ActionComponent');
             if (actionComponent.currentPath !== null) {
                 for (var i = 0; i < actionComponent.currentPath.length; i++) {
-                    var col = actionComponent.currentPath[i][0];
-                    var row = actionComponent.currentPath[i][1];
+                    // var col = actionComponent.currentPath[i][0];
+                    // var row = actionComponent.currentPath[i][1];
                     // util.dbgDrawTile(col, row, 'blue', THREE, DbgDraw);
                 }
             }
@@ -323,7 +325,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
         return entity;
     }
-
+/*
     function _TEMP_setupHealer(gridPos) {
         var Entity = require('./core/entity');
         var GameObjectComponent = require('./component/game_object_component');
@@ -399,17 +401,17 @@ document.addEventListener("DOMContentLoaded", function() {
 
         return entity;
     }
+    */
 });
 
-},{"./behaviour_fallen":2,"./component/anim_component":3,"./component/game_object_component":4,"./component/network_component":5,"./component/sprite_component":6,"./core/entity":8,"./core/file_mgr":9,"./core/sprite_mgr":13,"./enemy/action_component":14,"./game":15,"./level_controller":16,"./level_renderer":17,"./network_mgr":18,"./player/action_component":19,"./player/follow_camera_component":20,"./player/input_controller_component":21,"./resource_loader":22,"./signals":23,"./util":24,"behavior-tree":26,"three-debug-draw":113}],2:[function(require,module,exports){
+},{"./behaviour_fallen":2,"./component/anim_component":3,"./component/game_object_component":4,"./component/network_component":5,"./component/sprite_component":6,"./core/entity":8,"./core/file_mgr":9,"./enemy/action_component":14,"./game":15,"./level_controller":16,"./level_renderer":17,"./network_mgr":18,"./player/action_component":19,"./player/follow_camera_component":20,"./player/input_controller_component":21,"./resource_loader":22,"./signals":23,"./util":24,"behavior-tree":26,"three-debug-draw":113}],2:[function(require,module,exports){
 'use strict';
 
 var inherits = require('inherits'),
     Component = require('./core/component');
 
 var LevelController = require('./level_controller'),
-    util = require('./util'),
-    DbgDraw = require('three-debug-draw')(THREE);
+    util = require('./util');
 
 var bt = require('behavior-tree');
 
@@ -681,7 +683,7 @@ BehaviourFallen.prototype.update = function() {
 
 module.exports = BehaviourFallen;
 
-},{"./core/component":7,"./level_controller":16,"./util":24,"behavior-tree":26,"inherits":86,"three-debug-draw":113}],3:[function(require,module,exports){
+},{"./core/component":7,"./level_controller":16,"./util":24,"behavior-tree":26,"inherits":86}],3:[function(require,module,exports){
 'use strict';
 
 var inherits = require('inherits'),
@@ -819,8 +821,7 @@ var inherits = require('inherits'),
     assert = require('assert'),
     Component = require('./../core/component'),
     MaterialMgr = require('./../core/material_mgr'),
-    util = require('./../util'),
-    DbgDraw = require('three-debug-draw')(THREE);
+    util = require('./../util');
 
 var LevelController = require('./../level_controller');
 
@@ -929,7 +930,7 @@ GameObjectComponent.prototype._frameEnd = function () {
 
 module.exports = GameObjectComponent;
 
-},{"./../core/component":7,"./../core/material_mgr":11,"./../level_controller":16,"./../util":24,"assert":39,"inherits":86,"three-debug-draw":113}],5:[function(require,module,exports){
+},{"./../core/component":7,"./../core/material_mgr":11,"./../level_controller":16,"./../util":24,"assert":39,"inherits":86}],5:[function(require,module,exports){
 'use strict';
 
 var inherits = require('inherits'),
@@ -1797,7 +1798,6 @@ var assert = require('assert'),
     inherits = require('inherits'),
     Component = require('./../core/component'),
     util = require('./../util'),
-    DbgDraw = require('three-debug-draw')(THREE),
     LevelController = require('./../level_controller'),
     Signals = require('./../signals');
 
@@ -2102,7 +2102,7 @@ ActionComponent.prototype.faceDirection = function (gridPos) {
 
 module.exports = ActionComponent;
 
-},{"./../core/component":7,"./../level_controller":16,"./../signals":23,"./../util":24,"assert":39,"inherits":86,"three-debug-draw":113}],15:[function(require,module,exports){
+},{"./../core/component":7,"./../level_controller":16,"./../signals":23,"./../util":24,"assert":39,"inherits":86}],15:[function(require,module,exports){
 'use strict';
 
 // Inherit EventEmitter to allow event listeners to be registered directly to this object.
@@ -2215,21 +2215,21 @@ function mouseEventToButton(event) {
 /**
  * Was the mouse button pushed down this frame?
  */
-Game.prototype.isMouseButtonDown = function (buttonIndex) {
+Game.prototype.isMouseButtonDown = function (/*buttonIndex*/) {
     return this.mouseButtonStates[MouseButton.LEFT] === InputState.DOWN;
 };
 
 /**
  * Was the mouse button lifted up this frame?
  */
-Game.prototype.isMouseButtonUp = function (buttonIndex) {
+Game.prototype.isMouseButtonUp = function (/*buttonIndex*/) {
     return this.mouseButtonStates[MouseButton.LEFT] === InputState.UP;
 };
 
 /**
  * Is the mouse button pressed down?
  */
-Game.prototype.isMouseButtonPressed = function (buttonIndex) {
+Game.prototype.isMouseButtonPressed = function (/*buttonIndex*/) {
     return this.mouseButtonStates[MouseButton.LEFT] === InputState.PRESSED;
 };
 
@@ -2905,6 +2905,8 @@ module.exports = {
 };
 
 },{"./core/material_mgr":11,"./core/sprite_mgr":13}],18:[function(require,module,exports){
+/*global io*/
+
 'use strict';
 
 // Inherit EventEmitter to allow event listeners to be registered directly to this object.
@@ -2953,7 +2955,7 @@ NetworkMgr.prototype._onConnect = function () {
     this.emit('connect', true, this.sessionId);
 };
 
-NetworkMgr.prototype._onConnectError = function (err) {
+NetworkMgr.prototype._onConnectError = function (/*err*/) {
     this.emit('connect', false);
 };
 
@@ -3065,7 +3067,6 @@ var assert = require('assert'),
     Component = require('./../core/component'),
     PF = require('pathfinding'),
     util = require('./../util'),
-    DbgDraw = require('three-debug-draw')(THREE),
     LevelController = require('./../level_controller'),
     Signals = require('./../signals');
 
@@ -3150,14 +3151,14 @@ ActionComponent.prototype._registerAnimEvents = function () {
     }
 };
 
-ActionComponent.prototype._onDamaged = function (info) {
+ActionComponent.prototype._onDamaged = function (/*info*/) {
     // console.log('Player takes damage: ' + info.amount);
 };
 
 ActionComponent.prototype.TEMP_onEnemyKilled = function() {
     this.TEMP_enemyKillCount++;
     console.log('enemy killed: ' + this.TEMP_enemyKillCount);
-}
+};
 
 var BREADCRUMB_SPAWN_INTERVAL = 0.5;
 
@@ -3366,7 +3367,7 @@ ActionComponent.prototype.faceDirection = function (gridPos) {
 
 module.exports = ActionComponent;
 
-},{"./../core/component":7,"./../level_controller":16,"./../signals":23,"./../util":24,"assert":39,"inherits":86,"pathfinding":88,"three-debug-draw":113}],20:[function(require,module,exports){
+},{"./../core/component":7,"./../level_controller":16,"./../signals":23,"./../util":24,"assert":39,"inherits":86,"pathfinding":88}],20:[function(require,module,exports){
 'use strict';
 
 var inherits = require('inherits'),
