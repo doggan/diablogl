@@ -36,12 +36,20 @@
     "three-debug-draw": "0.0.5"
   },
   "devDependencies": {
+    "browser-sync": "^2.2.4",
+    "browserify": "^9.0.3",
     "chai": "^1.10.0",
     "graceful-fs": "^3.0.5",
-    "grunt": "^0.4.5",
-    "grunt-browserify": "^3.3.0",
+    "gulp": "^3.8.11",
+    "gulp-notify": "^2.2.0",
+    "gulp-util": "^3.0.4",
+    "lodash": "^2.4.1",
     "mocha": "^2.1.0",
-    "node-png": "^0.4.3"
+    "node-png": "^0.4.3",
+    "pretty-hrtime": "^1.0.0",
+    "require-dir": "^0.1.0",
+    "vinyl-source-stream": "^1.1.0",
+    "watchify": "^2.4.0"
   },
   "browser": {
     "http": "http-browserify"
