@@ -17,7 +17,6 @@ module.exports = {
             outputName: 'index.js',
             // list of externally available modules to exclude from the bundle
             external: []
-            // external: ['jquery', 'underscore']
         }]
     }
 };
