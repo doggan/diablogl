@@ -1,9 +1,9 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 'use strict';
 
-var Game = require('./lib/game'),
-    LevelController = require('./lib/level_controller'),
-    ResourceLoader = require('./lib/resource_loader');
+var Game = require('./game'),
+    LevelController = require('./level_controller'),
+    ResourceLoader = require('./resource_loader');
 
 document.addEventListener("DOMContentLoaded", function() {
     var game = new Game({
@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 
     var THREE = game.THREE;
-    var util = require('./lib/util');
+    var util = require('./util');
     var DbgDraw = require('three-debug-draw')(THREE);
 
     // Stat object initialization.
@@ -178,15 +178,15 @@ document.addEventListener("DOMContentLoaded", function() {
     function onLevelLoaded() {
         LevelController.TEMP_setCurrentLevel();
 
-        var FileMgr = require('./lib/core/file_mgr');
+        var FileMgr = require('./core/file_mgr');
         var dun = FileMgr.getFile('levels/towndata/sector1s.dun');
         var til = FileMgr.getFile('levels/towndata/town.til');
         var min = FileMgr.getFile('levels/towndata/town.min');
 
-        var renderer = require('./lib/level_renderer');
+        var renderer = require('./level_renderer');
         renderer.drawDungeon(dun, til, min, game.scene);
 
-        var NetworkMgr = require('./lib/network_mgr');
+        var NetworkMgr = require('./network_mgr');
         game.networkMgr = new NetworkMgr();
 
         // Network test code...
@@ -251,13 +251,13 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function _TEMP_setupPlayer(gridPos, isMine) {
-        var Entity = require('./lib/core/entity');
-        var GameObjectComponent = require('./lib/component/game_object_component');
-        var AnimComponent = require('./lib/component/anim_component');
-        var ActionComponent = require('./lib/player/action_component');
-        var NetworkComponent = require('./lib/component/network_component');
-        var SpriteComponent = require('./lib/component/sprite_component');
-        var InputControllerComponent = require('./lib/player/input_controller_component');
+        var Entity = require('./core/entity');
+        var GameObjectComponent = require('./component/game_object_component');
+        var AnimComponent = require('./component/anim_component');
+        var ActionComponent = require('./player/action_component');
+        var NetworkComponent = require('./component/network_component');
+        var SpriteComponent = require('./component/sprite_component');
+        var InputControllerComponent = require('./player/input_controller_component');
 
         var entity = new Entity(game);
         entity.addComponent(new GameObjectComponent(entity));
@@ -268,14 +268,14 @@ document.addEventListener("DOMContentLoaded", function() {
         entity.addComponent(new InputControllerComponent(entity));
 
         if (isMine) {
-            var CameraComponent = require('./lib/player/follow_camera_component');
+            var CameraComponent = require('./player/follow_camera_component');
 
             entity.addComponent(new CameraComponent(entity));
         }
 
         LevelController.registerPlayer(entity);
 
-        var Signals = require('./lib/signals');
+        var Signals = require('./signals');
         Signals.sendWarp(entity, gridPos);
 
         var networkComponent = entity.getComponent('NetworkComponent');
@@ -298,12 +298,12 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function _TEMP_setupEnemy(gridPos) {
-        var Entity = require('./lib/core/entity');
-        var GameObjectComponent = require('./lib/component/game_object_component');
-        var SpriteComponent = require('./lib/component/sprite_component');
-        var AnimComponent = require('./lib/component/anim_component');
-        var ActionComponent = require('./lib/enemy/action_component');
-        var BehaviourFallen = require('./lib/behaviour_fallen');
+        var Entity = require('./core/entity');
+        var GameObjectComponent = require('./component/game_object_component');
+        var SpriteComponent = require('./component/sprite_component');
+        var AnimComponent = require('./component/anim_component');
+        var ActionComponent = require('./enemy/action_component');
+        var BehaviourFallen = require('./behaviour_fallen');
 
         var entity = new Entity(game);
         entity.addComponent(new GameObjectComponent(entity));
@@ -314,7 +314,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
         LevelController.registerEnemy(entity);
 
-        var Signals = require('./lib/signals');
+        var Signals = require('./signals');
         Signals.sendWarp(entity, gridPos);
 
         var goComponent = entity.getComponent('GameObjectComponent');
@@ -325,10 +325,10 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function _TEMP_setupHealer(gridPos) {
-        var Entity = require('./lib/core/entity');
-        var GameObjectComponent = require('./lib/component/game_object_component');
-        var SpriteComponent = require('./lib/component/sprite_component');
-        var AnimComponent = require('./lib/component/anim_component');
+        var Entity = require('./core/entity');
+        var GameObjectComponent = require('./component/game_object_component');
+        var SpriteComponent = require('./component/sprite_component');
+        var AnimComponent = require('./component/anim_component');
 
         var entity = new Entity(game);
         entity.addComponent(new GameObjectComponent(entity));
@@ -362,9 +362,9 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function _TEMP_setupObject(gridPos) {
-        var Entity = require('./lib/core/entity');
-        var GameObjectComponent = require('./lib/component/game_object_component');
-        var SpriteComponent = require('./lib/component/sprite_component');
+        var Entity = require('./core/entity');
+        var GameObjectComponent = require('./component/game_object_component');
+        var SpriteComponent = require('./component/sprite_component');
 
         var entity = new Entity(game);
         entity.addComponent(new GameObjectComponent(entity));
@@ -379,7 +379,7 @@ document.addEventListener("DOMContentLoaded", function() {
         goComponent.collisionRect = new THREE.Vector2(32, 26);
         goComponent.collisionOffset = new THREE.Vector2(-5, 0);
 
-        var SpriteMgr = require('./lib/core/sprite_mgr');
+        var SpriteMgr = require('./core/sprite_mgr');
         var self = goComponent;
 
         goComponent.onStart = function() {
@@ -401,7 +401,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 
-},{"./lib/behaviour_fallen":2,"./lib/component/anim_component":3,"./lib/component/game_object_component":4,"./lib/component/network_component":5,"./lib/component/sprite_component":6,"./lib/core/entity":8,"./lib/core/file_mgr":9,"./lib/core/sprite_mgr":13,"./lib/enemy/action_component":14,"./lib/game":15,"./lib/level_controller":16,"./lib/level_renderer":17,"./lib/network_mgr":18,"./lib/player/action_component":19,"./lib/player/follow_camera_component":20,"./lib/player/input_controller_component":21,"./lib/resource_loader":22,"./lib/signals":23,"./lib/util":24,"behavior-tree":26,"three-debug-draw":113}],2:[function(require,module,exports){
+},{"./behaviour_fallen":2,"./component/anim_component":3,"./component/game_object_component":4,"./component/network_component":5,"./component/sprite_component":6,"./core/entity":8,"./core/file_mgr":9,"./core/sprite_mgr":13,"./enemy/action_component":14,"./game":15,"./level_controller":16,"./level_renderer":17,"./network_mgr":18,"./player/action_component":19,"./player/follow_camera_component":20,"./player/input_controller_component":21,"./resource_loader":22,"./signals":23,"./util":24,"behavior-tree":26,"three-debug-draw":113}],2:[function(require,module,exports){
 'use strict';
 
 var inherits = require('inherits'),
