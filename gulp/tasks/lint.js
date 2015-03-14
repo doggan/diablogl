@@ -5,16 +5,18 @@ var config = require('../config');
 var reporter = require('jshint-stylish');
 var map = require('map-stream');
 
-var errorReporter = map(function(file, cb) {
-    if (!file.jshint.success) {
-        gutil.beep();
-    }
-    cb(null, file);
-});
+var errorReporter = function(file, cb) {
+    return map(function(file, cb) {
+        if (!file.jshint.success) {
+            gutil.beep();
+        }
+        cb(null, file);
+    });
+};
 
 gulp.task('lint', function() {
     return gulp.src(config.lint.src)
         .pipe(jshint())
         .pipe(jshint.reporter(reporter))
-        .pipe(errorReporter);
+        .pipe(errorReporter());
 });
