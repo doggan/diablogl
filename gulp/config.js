@@ -18,5 +18,8 @@ module.exports = {
             // list of externally available modules to exclude from the bundle
             external: []
         }]
+    },
+    lint: {
+        src: "./*.js"
     }
 };

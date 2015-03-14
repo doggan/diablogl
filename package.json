@@ -41,8 +41,10 @@
     "chai": "^1.10.0",
     "graceful-fs": "^3.0.5",
     "gulp": "^3.8.11",
+    "gulp-jshint": "^1.9.2",
     "gulp-notify": "^2.2.0",
     "gulp-util": "^3.0.4",
+    "jshint-stylish": "^1.0.1",
     "lodash": "^2.4.1",
     "mocha": "^2.1.0",
     "node-png": "^0.4.3",
@@ -53,13 +55,5 @@
   },
   "browser": {
     "http": "http-browserify"
-  },
-  "jshintConfig": {
-    "node": true,
-    "browser": true,
-    "unused": true,
-    "predef": [
-      "THREE"
-    ]
   }
 }

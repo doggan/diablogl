@@ -1,0 +1,8 @@
+{
+    "node": true,
+    "browser": true,
+    "unused": true,
+    "predef": [
+        "THREE"
+    ]
+}
