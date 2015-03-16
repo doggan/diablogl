@@ -11,7 +11,6 @@ var errorReporter = function(file, cb) {
             gutil.beep();
         }
         cb(null, file);
-
     });
 };
 
