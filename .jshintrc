@@ -4,5 +4,6 @@
     "unused": true,
     "predef": [
         "THREE"
-    ]
+    ],
+    "esnext": true
 }
