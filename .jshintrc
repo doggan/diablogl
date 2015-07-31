@@ -2,5 +2,6 @@
     "node": true,
     "browser": true,
     "unused": "vars",
+    "strict": true,
     "esnext": true
 }
