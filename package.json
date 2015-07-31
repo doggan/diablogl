@@ -32,7 +32,7 @@
     "pathfinding": "^0.4.16",
     "stately.js": "^1.2.0",
     "three": "^0.71.0",
-    "three-debug-draw": "0.0.5"
+    "three-debug-draw": "0.1.0"
   },
   "devDependencies": {
     "babelify": "^6.1.3",
