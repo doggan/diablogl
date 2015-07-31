@@ -1,6 +1,6 @@
 {
     "node": true,
     "browser": true,
-    "unused": true,
+    "unused": "vars",
     "esnext": true
 }

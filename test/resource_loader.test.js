@@ -3,7 +3,7 @@
 
 GLOBAL.THREE = require('three');
 
-var expect = require('chai').expect,
+let expect = require('chai').expect,
     ResourceLoader = require('./../lib/resource_loader'),
     SpriteMgr = require('./../lib/core/sprite_mgr');
 
