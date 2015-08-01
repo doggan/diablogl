@@ -20,6 +20,11 @@
     "url": "http://shy.am"
   },
   "license": "MIT",
+  "scripts": {
+    "gulp": "gulp",
+    "lint": "gulp lint",
+    "build": "gulp browserify"
+  },
   "dependencies": {
     "async": "^0.9.0",
     "behavior-tree": "git://github.com/doggan/behavior-tree.git",
