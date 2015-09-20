@@ -1,7 +1,7 @@
 {
   "name": "diablogl",
   "version": "0.1.0",
-  "description": "A re-implementation of the original Diablo using WebGL.",
+  "description": "A re-implementation of the original Diablo for the web.",
   "private": true,
   "keywords": [
     "diablo",
