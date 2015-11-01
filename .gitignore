@@ -28,4 +28,7 @@ node_modules
 .lock-wscript
 
 # Application specific
+client/assets/*
 test/textures
+
+!.gitkeep
