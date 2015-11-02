@@ -3,5 +3,6 @@
     "browser": true,
     "unused": "vars",
     "strict": true,
-    "esnext": true
+    "esnext": true,
+    "predef": [ "Phaser" ]
 }

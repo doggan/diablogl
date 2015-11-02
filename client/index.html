@@ -2,67 +2,11 @@
 <html>
 	<head>
 		<title>DiabloGL</title>
-			<link rel="stylesheet" type="text/css" href="css/rStats.css" media="screen" />
 	</head>
 	<body>
-		<div id="container"></div>
-		<canvas id="canvas" width="600" height="400"></canvas>
+		<div id="canvas_container"></div>
 
-		<script id="vertexShader" type="x-shader/x-vertex">
-	    varying vec2 vUv;
-
-	    void main() {
-	        vUv = uv;
-	        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-	    }
-		</script>
-		<script id="fragmentShader" type="x-shader/x-fragment">
-		    uniform sampler2D texture1;
-			uniform vec3 borderColor;
-
-		    varying vec2 vUv;
-
-		    void main() {
-		        vec4 val = texture2D(texture1, vUv);
-
-				// TODO: fragments on border of sprite should not be influenced by neighbors!
-				// TODO: optimize + pass in texture size (1024) as uniform.
-
-				// Only attempt to process transparent and fully black fragments.
-				if (val.a < 0.5 ||
-					(val.r == 0.0 && val.g == 0.0 && val.b == 0.0)) {
-					vec2 T = vUv * vec2(1024.0, 1024.0);
-
-					vec4 N = texture2D(texture1, vec2(vUv.x, (T.y + 1.0) / 1024.0));
-					vec4 S = texture2D(texture1, vec2(vUv.x, (T.y - 1.0) / 1024.0));
-					vec4 E = texture2D(texture1, vec2((T.x + 1.0) / 1024.0, vUv.y));
-					vec4 W = texture2D(texture1, vec2((T.x - 1.0) / 1024.0, vUv.y));
-
-					// Neighbor is opaque?
-					if (N.a > 0.5 || S.a > 0.5 || E.a > 0.5 || W.a > 0.5) {
-						// Neighbor is not black?
-						if (!(N.r == 0.0 && N.g == 0.0 && N.b == 0.0) ||
-							!(S.r == 0.0 && S.g == 0.0 && S.b == 0.0) ||
-							!(E.r == 0.0 && E.g == 0.0 && E.b == 0.0) ||
-							!(W.r == 0.0 && W.g == 0.0 && W.b == 0.0)) {
-							// Highlight it.
-							gl_FragColor = vec4(borderColor.r, borderColor.g, borderColor.b, 1.0);
-						} else {
-							// It's a shadow.
-							gl_FragColor = val;
-						}
-					} else {
-						// Full transparent.
-						discard;
-					}
-				} else {
-					gl_FragColor = val;
-				}
-		    }
-		</script>
-
-		<script src="./js/libs/rStats.min.js"></script>
-		<script src="./js/libs/rStats.extras.min.js"></script>
+		<script src="./js/libs/phaser.min.js"></script>
 		<script src="index.js"></script>
 	</body>
 </html>
