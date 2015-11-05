@@ -26,6 +26,8 @@
     "build": "gulp browserify"
   },
   "dependencies": {
+    "lodash.findindex": "^3.2.1",
+    "lodash.foreach": "^3.0.3",
     "tmx-parser": "^1.4.0"
   },
   "devDependencies": {
