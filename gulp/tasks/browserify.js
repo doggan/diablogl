@@ -8,6 +8,8 @@
    See browserify.bundleConfigs in gulp/config.js
 */
 
+'use strict';
+
 var browserify = require('browserify');
 var browserSync = require('browser-sync');
 var watchify = require('watchify');
@@ -17,7 +19,8 @@ var handleErrors = require('../util/handleErrors');
 var source = require('vinyl-source-stream');
 var config = require('../config').browserify;
 var babel = require('babelify');
-var _ = require('lodash');
+var assign = require('lodash.assign');
+var omit = require('lodash.omit');
 
 var browserifyTask = function(callback, devMode) {
 
@@ -27,13 +30,13 @@ var browserifyTask = function(callback, devMode) {
 
         if (devMode) {
             // Add watchify args and debug (sourcemaps) option
-            _.extend(bundleConfig, watchify.args, {
+            assign(bundleConfig, watchify.args, {
                 debug: true
             });
             // A watchify require/external bug that prevents proper recompiling,
             // so (for now) we'll ignore these options during development. Running
             // `gulp browserify` directly will properly require and externalize.
-            bundleConfig = _.omit(bundleConfig, ['external', 'require']);
+            bundleConfig = omit(bundleConfig, ['external', 'require']);
         }
 
         var b = browserify(bundleConfig)
