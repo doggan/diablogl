@@ -1,7 +1,7 @@
 {
   "name": "diablogl",
   "version": "0.1.0",
-  "description": "A re-implementation of the original Diablo for the web.",
+  "description": "A re-implementation of Diablo 1 for the web.",
   "private": true,
   "keywords": [
     "diablo",
