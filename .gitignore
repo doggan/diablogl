@@ -29,6 +29,6 @@ node_modules
 
 # Application specific
 client/assets/*
-client/assets_raw/*
+client/assets_src/*
 
 !.gitkeep
