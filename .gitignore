@@ -29,6 +29,6 @@ node_modules
 
 # Application specific
 client/assets/*
-test/textures
+client/assets_raw/*
 
 !.gitkeep
