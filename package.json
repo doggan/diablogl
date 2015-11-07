@@ -29,6 +29,7 @@
     "gl-vec2": "^1.0.0",
     "lodash.findindex": "^3.2.1",
     "lodash.foreach": "^3.0.3",
+    "pathfinding": "^0.4.17",
     "tmx-parser": "^1.4.0"
   },
   "devDependencies": {
