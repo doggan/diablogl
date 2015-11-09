@@ -1,7 +1,7 @@
 {
   "name": "diablogl",
   "version": "0.1.0",
-  "description": "A re-implementation of the original Diablo with WebGL.",
+  "description": "A re-implementation of Diablo 1 for the web.",
   "private": true,
   "keywords": [
     "diablo",
@@ -20,35 +20,38 @@
     "url": "http://shy.am"
   },
   "license": "MIT",
+  "scripts": {
+    "gulp": "gulp",
+    "lint": "gulp lint",
+    "build": "gulp browserify"
+  },
   "dependencies": {
-    "async": "^0.9.0",
-    "behavior-tree": "git://github.com/doggan/behavior-tree.git",
-    "diablo-file-formats": "git://github.com/doggan/diablo-file-formats.git",
-    "events": "^1.0.2",
-    "http-browserify": "^1.7.0",
-    "inherits": "^2.0.1",
-    "lodash": "^2.4.1",
-    "pathfinding": "^0.4.16",
-    "stately.js": "^1.2.0",
-    "three-debug-draw": "0.0.5"
+    "gl-vec2": "^1.0.0",
+    "lodash.findindex": "^3.2.1",
+    "lodash.foreach": "^3.0.3",
+    "pathfinding": "^0.4.17",
+    "tmx-parser": "^1.4.0"
   },
   "devDependencies": {
+    "babelify": "^6.1.3",
+    "browser-sync": "^2.2.4",
+    "browserify": "^9.0.3",
     "chai": "^1.10.0",
-    "graceful-fs": "^3.0.5",
-    "grunt": "^0.4.5",
-    "grunt-browserify": "^3.3.0",
+    "gulp": "^3.8.11",
+    "gulp-jshint": "^1.11.2",
+    "gulp-notify": "^2.2.0",
+    "gulp-util": "^3.0.4",
+    "jshint-stylish": "^1.0.1",
+    "lodash.assign": "^3.2.0",
+    "lodash.omit": "^3.1.0",
+    "map-stream": "0.0.5",
     "mocha": "^2.1.0",
-    "node-png": "^0.4.3"
+    "pretty-hrtime": "^1.0.0",
+    "require-dir": "^0.1.0",
+    "vinyl-source-stream": "^1.1.0",
+    "watchify": "^2.4.0"
   },
-  "browser": {
-    "http": "http-browserify"
-  },
-  "jshintConfig": {
-    "node": true,
-    "browser": true,
-    "unused": true,
-    "predef": [
-      "THREE"
-    ]
+  "engines": {
+    "node": "0.12.x"
   }
 }

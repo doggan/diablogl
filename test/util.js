@@ -1,11 +1,11 @@
-var DFormats = require('diablo-file-formats'),
+let DFormats = require('diablo-file-formats'),
     PNG = require('node-png').PNG,
     fs = require('graceful-fs');
 
-var BLOCK_HEIGHT = 32;
-var HALF_BLOCK_HEIGHT = BLOCK_HEIGHT / 2;
-var BLOCK_WIDTH = 32;
-var PILLAR_BLOCK_RECTS = new Array(16);
+let BLOCK_HEIGHT = 32;
+let HALF_BLOCK_HEIGHT = BLOCK_HEIGHT / 2;
+let BLOCK_WIDTH = 32;
+let PILLAR_BLOCK_RECTS = new Array(16);
 PILLAR_BLOCK_RECTS[0]  = { x: 0, y: BLOCK_HEIGHT * 0 };
 PILLAR_BLOCK_RECTS[2]  = { x: 0, y: BLOCK_HEIGHT * 1 };
 PILLAR_BLOCK_RECTS[4]  = { x: 0, y: BLOCK_HEIGHT * 2 };
@@ -36,19 +36,19 @@ function getPillarOffset(col, row, mapWidth) {
     // From the center of the map, offset by 1/2 a pillar (one block).
     // Offset left by 1/2 a pillar (one block) for every row.
     // Offset right by 1/2 a pillar (one block) for every column.
-    var x = (mapWidth / 2) - BLOCK_WIDTH - (row * BLOCK_WIDTH) + (col * BLOCK_WIDTH);
+    let x = (mapWidth / 2) - BLOCK_WIDTH - (row * BLOCK_WIDTH) + (col * BLOCK_WIDTH);
     // From the top of the map (y = 0), offset downward for each column and row.
-    var y = (col * HALF_BLOCK_HEIGHT) + (row * HALF_BLOCK_HEIGHT);
+    let y = (col * HALF_BLOCK_HEIGHT) + (row * HALF_BLOCK_HEIGHT);
 
     return [x, y];
 }
 
 function doPillarSide(pillarBlocks, blockStartIndex, celFrames, xOffset, yOffset, png) {
     // TODO: cleanup this moveUp/isFirst logic.
-    var moveUp = false;
-    var isFirst = true;
-    for (var i = blockStartIndex; i >= 0; i -= 2) {
-        var block = pillarBlocks[i];
+    let moveUp = false;
+    let isFirst = true;
+    for (let i = blockStartIndex; i >= 0; i -= 2) {
+        let block = pillarBlocks[i];
         if (block) {
             switch (block.type) {
             case 4: case 5:
@@ -69,10 +69,10 @@ function doPillarSide(pillarBlocks, blockStartIndex, celFrames, xOffset, yOffset
             }
 
             isFirst = false;
-            var rect = PILLAR_BLOCK_RECTS[i];
-            var extraYOffset = moveUp ? -1 : 0;
+            let rect = PILLAR_BLOCK_RECTS[i];
+            let extraYOffset = moveUp ? -1 : 0;
 
-            var frame = celFrames[block.frameNum];
+            let frame = celFrames[block.frameNum];
 
             drawToPNG(png,
                 xOffset + rect.x, yOffset + rect.y + extraYOffset,
@@ -93,8 +93,8 @@ function doPillar(pillarBlocks, celFrames, xOffset, yOffset, png) {
 }
 
 function doSquare(square, minFile, celFrames, pillarWidth, png) {
-    var mapWidth = pillarWidth * 2;
-    var offset = getPillarOffset(0, 0, mapWidth);
+    let mapWidth = pillarWidth * 2;
+    let offset = getPillarOffset(0, 0, mapWidth);
     doPillar(minFile.pillars[square[DFormats.Til.SQUARE_TOP]], celFrames, offset[0], offset[1], png);
     offset = getPillarOffset(1, 0, mapWidth);
     doPillar(minFile.pillars[square[DFormats.Til.SQUARE_RIGHT]], celFrames, offset[0], offset[1], png);
@@ -105,11 +105,11 @@ function doSquare(square, minFile, celFrames, pillarWidth, png) {
 }
 
 function doDungeon(dunFile, minFile, celFrames, width, png) {
-    for (var row = 0; row < dunFile.rowCount; row++) {
-        for (var col = 0; col < dunFile.colCount; col++) {
-            var pillarIndex = dunFile.pillarData[col][row];
+    for (let row = 0; row < dunFile.rowCount; row++) {
+        for (let col = 0; col < dunFile.colCount; col++) {
+            let pillarIndex = dunFile.pillarData[col][row];
             if (pillarIndex !== null) {
-                var offset = getPillarOffset(col, row, width);
+                let offset = getPillarOffset(col, row, width);
                 doPillar(minFile.pillars[pillarIndex], celFrames, offset[0], offset[1], png);
             }
         }
@@ -117,16 +117,16 @@ function doDungeon(dunFile, minFile, celFrames, width, png) {
 }
 
 function doLevel(level, minFile, celFrames, width, png) {
-    for (var row = 0; row < level.rowCount; row++) {
-        for (var col = 0; col < level.colCount; col++) {
-            var dunIndex = level.dunMap[col][row];
+    for (let row = 0; row < level.rowCount; row++) {
+        for (let col = 0; col < level.colCount; col++) {
+            let dunIndex = level.dunMap[col][row];
             if (dunIndex !== null) {
-                var dunFile = level.dunFiles[dunIndex];
-                var localCol = col - dunFile.startCol;
-                var localRow = row - dunFile.startRow;
-                var pillarIndex = dunFile.pillarData[localCol][localRow];
+                let dunFile = level.dunFiles[dunIndex];
+                let localCol = col - dunFile.startCol;
+                let localRow = row - dunFile.startRow;
+                let pillarIndex = dunFile.pillarData[localCol][localRow];
                 if (pillarIndex !== null) {
-                    var offset = getPillarOffset(col, row, width);
+                    let offset = getPillarOffset(col, row, width);
                     doPillar(minFile.pillars[pillarIndex], celFrames, offset[0], offset[1], png);
                 }
             }
@@ -135,7 +135,7 @@ function doLevel(level, minFile, celFrames, width, png) {
 }
 
 function writeCelFrameToPNG(path, frame, skipFullAphaPixels) {
-    var png = new PNG({
+    let png = new PNG({
         width: frame.width,
         height: frame.height,
         filterType: -1
@@ -148,11 +148,11 @@ function writeCelFrameToPNG(path, frame, skipFullAphaPixels) {
 }
 
 function drawToPNG(png, startX, startY, width, height, colors, skipFullAphaPixels) {
-    var totalWidth = png.width;
-    var cnt = 0;
-    for (var y = (startY + height - 1); y >= startY; y--) {
-        for (var x = startX; x < (startX + width); x++) {
-            var idx = (totalWidth * y + x) << 2;
+    let totalWidth = png.width;
+    let cnt = 0;
+    for (let y = (startY + height - 1); y >= startY; y--) {
+        for (let x = startX; x < (startX + width); x++) {
+            let idx = (totalWidth * y + x) << 2;
 
             if (skipFullAphaPixels) {
                 if (colors[cnt + 3] === 0) {

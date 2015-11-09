@@ -1,0 +1,11 @@
+language: node_js
+
+node_js:
+  - '0.12'
+
+notifications:
+  email:
+    recipients:
+      - shyamguth@gmail.com
+    on_success: change
+    on_failure: change

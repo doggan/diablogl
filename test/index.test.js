@@ -1,13 +1,13 @@
 // Prevent chai syntax from causing JSLint errors.
 /*jshint expr: true*/
 
-var expect = require('chai').expect,
+let expect = require('chai').expect,
     util = require('../lib/util');
 
 describe('main', function(){
     describe('GET - /mpq_files/:filename', function(){
         it('should return the requested binary file', function(done){
-            var path = 'levels\\towndata\\town.pal';
+            let path = 'levels\\towndata\\town.pal';
             util.requestReadFile(path, function(err, res, buffer) {
                 // console.log('STATUS: ' + res.statusCode);
                 // console.log('HEADERS: ' + JSON.stringify(res.headers, null, '\t'));

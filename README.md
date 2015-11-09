@@ -1,5 +1,9 @@
 DiabloGL
 =======
+[![Build Status](http://img.shields.io/travis/doggan/diablogl.svg?style=flat)](https://travis-ci.org/doggan/diablogl)
+[![Dependency Status](https://david-dm.org/doggan/diablogl/status.svg?style=flat)](https://david-dm.org/doggan/diablogl)
+[![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg?style=flat)](https://raw.githubusercontent.com/doggan/diablogl/master/LICENSE)
+
 The goal of this project is to re-implement the original Diablo game using WebGL, so that it is playable in a modern web browser.
 
 <p align="center">
@@ -23,13 +27,13 @@ The goal of this project is to re-implement the original Diablo game using WebGL
 
 ### Client Setup
 1. Download a [release](https://github.com/doggan/diablogl/releases).
-1. Unpack, and open `index.html` in a web browser.
+1. Unpack, and open `./client/index.html` in a web browser.
 
 or
 
 1. Clone the repository.
  * `git clone git://github.com/doggan/diablogl.git`
-1. Open `./diablogl/client/index.html` in a web browser.
+1. Open `./client/index.html` in a web browser.
 
 ### (optional) Multi-Player Server Setup
 Coming soon. :sweat_drops:
@@ -60,3 +64,6 @@ At the time of this writing, this project is in its very early stages. Various p
 
 ### Remaining
 * Everything else.
+
+## Disclaimer
+MPQ archives often contain data copyrighted by Blizzard Entertainment. As such, no MPQ data is distributed with this package. Users of this package must supply their own MPQ data after having legally purchased the associated product.
