@@ -29,7 +29,7 @@ Open data formats will be utilized to allow moddability and customization.
 1. Run.
  * `npm run-script gulp`
 
-## Goals / Progress:
+## Goals / Progress
 * ~~Basic [TMX file](http://www.mapeditor.org/) loading and isometric map rendering.~~
 * Everything else.
  * Gameplay logic, large map rendering, multiplayer (socket.io), mod support, asset tools... :rocket:
