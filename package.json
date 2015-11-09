@@ -1,11 +1,13 @@
 {
   "name": "diablogl",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A re-implementation of Diablo 1 for the web.",
   "private": true,
   "keywords": [
     "diablo",
-    "webgl"
+    "webgl",
+    "game",
+    "rpg"
   ],
   "homepage": "https://github.com/doggan/diablogl",
   "repository": {
