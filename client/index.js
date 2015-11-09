@@ -1,5996 +1,856 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-/*global performance, threeStats, glStats, rStats*/
-
 'use strict';
 
-var Game = require('./game'),
+document.addEventListener("DOMContentLoaded", main);
+
+/**
+ * Application entry point.
+ */
+function main() {
+  var app = require('./app');
+  app.go();
+}
+
+},{"./app":2}],2:[function(require,module,exports){
+'use strict';
+
+/**
+ * The application singleton.
+ * Serves as the main driver for this program.
+ */
+
+var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ('value' in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError('Cannot call a class as a function'); } }
+
+var App = (function () {
+    function App() {
+        _classCallCheck(this, App);
+    }
+
+    _createClass(App, [{
+        key: 'go',
+        value: function go() {
+            this.game = new Phaser.Game(400, 400, Phaser.AUTO, 'canvas-container');
+
+            this.game.state.add("BootState", require('./boot_state'));
+
+            this.game.state.start("BootState");
+        }
+    }]);
+
+    return App;
+})();
+
+module.exports = new App();
+
+},{"./boot_state":3}],3:[function(require,module,exports){
+'use strict';
+
+var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ('value' in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError('Cannot call a class as a function'); } }
+
+var mapUtils = require('./map_utils'),
     LevelController = require('./level_controller'),
-    ResourceLoader = require('./resource_loader');
+    Player = require('./player').Player;
 
-document.addEventListener("DOMContentLoaded", function() {
-    var game = new Game({
-        clearColor: 0xDEDEDE
-    });
+var BootState = (function () {
+    function BootState() {
+        _classCallCheck(this, BootState);
+    }
 
-    var THREE = game.THREE;
-    var util = require('./util');
-    var DbgDraw = require('three-debug-draw')(THREE);
+    _createClass(BootState, [{
+        key: 'preload',
+        value: function preload() {
+            // this.game.add.plugin(Phaser.Plugin.Debug);
 
-    // Stat object initialization.
-    var glS = new glStats();
-    var tS = new threeStats(game.renderer);
-    var rS = new rStats({
-        CSSPath : "css/",
-        values: {
-            fps: { caption: 'Framerate (FPS)', below: 59 },
-            frame: { caption: 'Total frame time (ms)', over: 16, average: true, avgMs: 100 },
-            calls: { caption: 'Calls (three.js)', over: 3000 },
-            rstats: { caption: 'rStats update (ms)', average: true, avgMs: 100 },
+            LevelController.setup(this.game);
 
-            limit: { caption: 'Limit (MB)' },
-            used: { caption: 'Used (MB)' },
-            total: { caption: 'Total (MB)' },
-            remaining: { caption: 'Remaining (MB)' },
-        },
-        groups: [
-            { caption: 'General', values: [ 'fps', 'frame', 'update', 'render', 'rstats' ] },
-            { caption: 'Memory', values: [ 'limit', 'used', 'total', 'remaining' ] }
-        ],
-        plugins: [
-            tS,
-            glS
-        ]
-    });
+            this.game.load.atlasJSONArray('characters/skeleton', 'assets/characters/skeleton/atlas.png', 'assets/characters/skeleton/atlas.json');
 
-    // Hide stats.
-    document.getElementsByClassName('rs-base')[0].style.display = 'none';
+            // this.game.load.image('square', 'assets/square.png');
+            // this.game.load.image('square_small', 'assets/square_small.png');
 
-    game.on('update', function() {
-        rS('FPS').frame();
-        rS('frame').start();
-        glS.start();
-        rS('update').start();
-
-        // Dbg draw - LoS from enemy to player
-        // var e = LevelController.TEMP_getEnemy();
-        // if (e) {
-        //     var p = LevelController.getLocalPlayer();
-        //
-        //     var p0 = e.getComponent('GameObjectComponent').currentGridPosition.clone();
-        //     var p1 = p.getComponent('GameObjectComponent').currentGridPosition.clone();
-        //
-        //     var hitPos = new THREE.Vector2();
-        //     var res = LevelController.checkLineOfSight(p0, p1, hitPos);
-        //
-        //     var c = 'cyan';
-        //     if (res === false) {
-        //         c = 'red';
-        //     }
-        //
-        //     util.dbgDrawTile(p0.x, p0.y, c, THREE, DbgDraw);
-        //
-        //     while (true) {
-        //         if ((res === false) && p0.equals(hitPos)) {
-        //             break;
-        //         }
-        //
-        //         var d = util.getDirection(p0.x, p0.y, p1.x, p1.y);
-        //         var o = util.getGridOffsetInDirection(d);
-        //         p0.x += o.x;
-        //         p0.y += o.y;
-        //
-        //         util.dbgDrawTile(p0.x, p0.y, c, THREE, DbgDraw);
-        //
-        //         if (p0.equals(p1)) {
-        //             break;
-        //         }
-        //     }
-        // }
-
-        {
-            var mousePos = game.mousePosition;
-            var gridPos = new THREE.Vector2();
-            util.screenToWorldCoord(game.width, game.height, mousePos, game.camera, gridPos);
-            util.worldToGridCoord(gridPos, gridPos);
-
-            if (LevelController.checkStaticCollision(gridPos)) {
-                // util.dbgDrawTile(gridPos.x, gridPos.y, 'red', THREE, DbgDraw);
-            } else {
-                util.dbgDrawTile(gridPos.x, gridPos.y, 'green', THREE, DbgDraw);
-            }
+            mapUtils.ATLAS_NAME_PREFIX = 'maps/atlases/';
+            mapUtils.preloadMap(this.game, 'maps/map_0', 'assets/maps/map_0.tmx');
+            this.game.load.atlasJSONArray('maps/atlases/tiled_dungeon', 'assets/maps/atlases/tiled_dungeon.png', 'assets/maps/atlases/tiled_dungeon.json');
+            this.game.load.atlasJSONArray('maps/atlases/tiled_dungeon_2x2', 'assets/maps/atlases/tiled_dungeon_2x2.png', 'assets/maps/atlases/tiled_dungeon_2x2.json');
         }
+    }, {
+        key: 'create',
+        value: function create() {
+            var _this = this;
 
-        // Draw all static collision tiles.
-        // var staticCollisionGrid = LevelController.getStaticCollisionGrid();
-        // if (staticCollisionGrid) {
-        //     for (var j = 0; j < staticCollisionGrid.width; j++) {
-        //         for (var i = 0; i < staticCollisionGrid.height; i++) {
-        //             if (staticCollisionGrid.isWalkableAt(j, i)) {
-        //                 util.dbgDrawTile(j, i, 'green', THREE, DbgDraw);
-        //             } else {
-        //                 util.dbgDrawTile(j, i, 'red', THREE, DbgDraw);
-        //             }
-        //         }
-        //     }
-        // }
+            this.backgroundGroup = this.game.add.group();
+            this.objectGroup = this.game.add.group();
+            this._isCreationFinished = false;
 
-        // Draw all dynamic collision tiles.
-        // var dynamicCollisionGrid = LevelController.getDynamicCollisionGrid();
-        // if (dynamicCollisionGrid) {
-        //     for (var j = 0; j < dynamicCollisionGrid.width; j++) {
-        //         for (var i = 0; i < dynamicCollisionGrid.height; i++) {
-        //             if (dynamicCollisionGrid.isWalkableAt(j, i)) {
-        //                 util.dbgDrawTile(j, i, 'green', THREE, DbgDraw);
-        //             } else {
-        //                 util.dbgDrawTile(j, i, 'red', THREE, DbgDraw);
-        //             }
-        //         }
-        //     }
-        // }
-
-        if (LevelController.getLocalPlayer()) {
-            var player = LevelController.getLocalPlayer();
-            var actionComponent = player.getComponent('ActionComponent');
-            if (actionComponent.currentPath !== null) {
-                for (var i = 0; i < actionComponent.currentPath.length; i++) {
-                    // var col = actionComponent.currentPath[i][0];
-                    // var row = actionComponent.currentPath[i][1];
-                    // util.dbgDrawTile(col, row, 'blue', THREE, DbgDraw);
+            mapUtils.createMap(this.game, 'maps/map_0', function (err, map) {
+                if (err) {
+                    return console.error(err);
                 }
-            }
-        }
-    });
 
-    game.on('lateUpdate', function() {
-        rS('update').end();
-    });
+                function renderLayer(map, layerName, parentGroup) {
+                    var map_w = map.width;var map_h = map.height;
+                    var map_tw = map.tileWidth;var map_th = map.tileHeight;
+                    var map_tw_2 = map_tw / 2;var map_th_2 = map_th / 2;
 
-    game.on('render', function() {
-        rS('render').start();
+                    var layerIndex = map.getLayerIndex(layerName);
+                    for (var y = 0; y < map_h; y++) {
+                        for (var x = 0; x < map_w; x++) {
+                            var tileInfo = map.getTileInfo(layerIndex, x, y);
+                            if (!tileInfo) {
+                                continue;
+                            }
 
-        DbgDraw.render(game.scene);
-    });
+                            var atlasName = map.getTilesetAtlasName(tileInfo.tilesetIndex);
+                            if (!atlasName) {
+                                console.warn('Undefined tilset atlas.');
+                                continue;
+                            }
 
-    game.on('frameEnd', function() {
-        rS('render').end();
-        rS('frame').end();
+                            var worldPos = map.tileToWorldPos([x, y]);
+                            var tw = tileInfo.tileWidth;var th = tileInfo.tileHeight;
 
-        rS('limit').set(performance.memory.jsHeapSizeLimit / 1024 / 1024);
-        rS('total').set(performance.memory.totalJSHeapSize / 1024 / 1024);
-        rS('used').set(performance.memory.usedJSHeapSize / 1024 / 1024);
-        rS('remaining').set((performance.memory.totalJSHeapSize - performance.memory.usedJSHeapSize) / 1024 / 1024);
+                            var xPos = worldPos[0] - map_tw_2;
+                            var yPos = worldPos[1] -
+                            // align the bottom of the image with top of grid cell
+                            th + map_th +
+                            // align leftmost cell with grid cell
+                            (tw / map_tw - 1) * map_th_2;
 
-        rS('rStats').start();
-        rS().update();
-        rS('rStats').end();
-    });
-
-    var bt = require('behavior-tree');
-    bt.Services.deltaTime = function() {
-        return game.time.deltaTime;
-    };
-    LevelController.init(game);
-
-    game.run();
-
-    ResourceLoader.loadCommon(function() {
-        ResourceLoader.loadLevel(0, onLevelLoaded);
-    });
-
-    function onLevelLoaded() {
-        LevelController.TEMP_setCurrentLevel();
-
-        var FileMgr = require('./core/file_mgr');
-        var dun = FileMgr.getFile('levels/towndata/sector1s.dun');
-        var til = FileMgr.getFile('levels/towndata/town.til');
-        var min = FileMgr.getFile('levels/towndata/town.min');
-
-        var renderer = require('./level_renderer');
-        renderer.drawDungeon(dun, til, min, game.scene);
-
-        var NetworkMgr = require('./network_mgr');
-        game.networkMgr = new NetworkMgr();
-
-        // Network test code...
-        game.networkMgr.on('connect', function(didSucceed, sessionId) {
-            var player;
-
-            if (didSucceed) {
-                console.log('ON CONNECT: succeeded! sessionId: ' + sessionId);
-
-                player = _TEMP_setupPlayer(new THREE.Vector2(0, 0), true);
-                var networkComponent = player.getComponent('NetworkComponent');
-                networkComponent.objectId = sessionId;    // TODO: object id generation; for now just use session id for player
-                networkComponent.ownerId = sessionId;
-            } else {
-                console.log('ON CONNECT: failed!');
-
-                player = _TEMP_setupPlayer(new THREE.Vector2(11, 24), true);
-
-                // _TEMP_setupHealer(new THREE.Vector2(4, 4));
-                // _TEMP_setupObject(new THREE.Vector2(8, 3));
-
-                // Enemy.
-                _TEMP_setupEnemy(new THREE.Vector2(14, 21));
-                // _TEMP_setupEnemy(new THREE.Vector2(3, 2));
-                // _TEMP_setupEnemy(new THREE.Vector2(4, 2));
-                // _TEMP_setupEnemy(new THREE.Vector2(5, 2));
-                // _TEMP_setupEnemy(new THREE.Vector2(6, 2));
-                // _TEMP_setupEnemy(new THREE.Vector2(3, 3));
-                // _TEMP_setupEnemy(new THREE.Vector2(4, 4));
-            }
-        });
-
-        game.networkMgr.on('disconnect', function() {
-            console.log('ON DISCONNECT');
-        });
-
-        game.networkMgr.on('playerJoined', function(data) {
-            console.log('ON PLAYER JOINED: ' + data.sessionId);
-
-            var otherPlayer = _TEMP_setupPlayer(new THREE.Vector2(0, 0), false);
-            var networkComponent = otherPlayer.getComponent('NetworkComponent');
-            networkComponent.objectId = data.sessionId;    // TODO: object id generation; for now just use session id for player
-            networkComponent.ownerId = data.sessionId;
-
-            // TODO: tell the remote player the location of our local player
-            game.networkMgr.sendTo_object({
-                rpc: 'RPC_forcePosition',
-                sessionId: networkComponent.ownerId,
-                objectId: LevelController.getLocalPlayer().getComponent('NetworkComponent').objectId,
-                data: {
-                    x: LevelController.getLocalPlayer().position.x,
-                    y: LevelController.getLocalPlayer().position.y
+                            parentGroup.create(xPos, yPos, atlasName, tileInfo.tileId);
+                        }
+                    }
                 }
+
+                console.log(map);
+
+                renderLayer(map, 'background', _this.backgroundGroup);
+                // renderLayer(map, 'object', this.objectGroup);
+
+                LevelController.tempLoad(map);
+                _this._map = map;
+                _this._onMapFinishedLoading();
             });
-        });
-
-        game.networkMgr.on('playerLeft', function(data) {
-            console.log('ON PLAYER LEFT: ' + data.sessionId);
-        });
-
-        game.networkMgr.connect('localhost', 8080);
-    }
-
-    function _TEMP_setupPlayer(gridPos, isMine) {
-        var Entity = require('./core/entity');
-        var GameObjectComponent = require('./component/game_object_component');
-        var AnimComponent = require('./component/anim_component');
-        var ActionComponent = require('./player/action_component');
-        var NetworkComponent = require('./component/network_component');
-        var SpriteComponent = require('./component/sprite_component');
-        var InputControllerComponent = require('./player/input_controller_component');
-
-        var entity = new Entity(game);
-        entity.addComponent(new GameObjectComponent(entity));
-        entity.addComponent(new AnimComponent(entity));
-        entity.addComponent(new SpriteComponent(entity, { yOffset: -16 }));
-        entity.addComponent(new ActionComponent(entity));
-        entity.addComponent(new NetworkComponent(entity));
-        entity.addComponent(new InputControllerComponent(entity));
-
-        if (isMine) {
-            var CameraComponent = require('./player/follow_camera_component');
-
-            entity.addComponent(new CameraComponent(entity));
         }
-
-        LevelController.registerPlayer(entity);
-
-        var Signals = require('./signals');
-        Signals.sendWarp(entity, gridPos);
-
-        var networkComponent = entity.getComponent('NetworkComponent');
-        networkComponent.isMine = isMine;
-        // networkComponent.on('RPC_followPath', function(data) {
-        //     console.log('received: ' + data);
-        //     var actionComponent = entity.getComponent('ActionComponent');
-        //     actionComponent.currentPath = data.path;
-        //     actionComponent.currentPathIndex = 0;
-        //     actionComponent.currentTargetPosX = data.targetPosX;
-        //     actionComponent.currentTargetPosY = data.targetPosY;
-        //     entity.position.x = data.startX;
-        //     entity.position.y = data.startY;
-        // });
-        // networkComponent.on('RPC_forcePosition', function(data) {
-        //     entity.position.x = data.x;
-        //     entity.position.y = data.y;
-        // });
-        return entity;
-    }
-
-    function _TEMP_setupEnemy(gridPos) {
-        var Entity = require('./core/entity');
-        var GameObjectComponent = require('./component/game_object_component');
-        var SpriteComponent = require('./component/sprite_component');
-        var AnimComponent = require('./component/anim_component');
-        var ActionComponent = require('./enemy/action_component');
-        var BehaviourFallen = require('./behaviour_fallen');
-
-        var entity = new Entity(game);
-        entity.addComponent(new GameObjectComponent(entity));
-        entity.addComponent(new SpriteComponent(entity, { yOffset: -16 }));
-        entity.addComponent(new AnimComponent(entity));
-        entity.addComponent(new ActionComponent(entity));
-        entity.addComponent(new BehaviourFallen(entity));
-
-        LevelController.registerEnemy(entity);
-
-        var Signals = require('./signals');
-        Signals.sendWarp(entity, gridPos);
-
-        var goComponent = entity.getComponent('GameObjectComponent');
-        goComponent.collisionRect = new THREE.Vector2(30, 40);
-        goComponent.collisionOffset = new THREE.Vector2(0, 15);
-
-        return entity;
-    }
-/*
-    function _TEMP_setupHealer(gridPos) {
-        var Entity = require('./core/entity');
-        var GameObjectComponent = require('./component/game_object_component');
-        var SpriteComponent = require('./component/sprite_component');
-        var AnimComponent = require('./component/anim_component');
-
-        var entity = new Entity(game);
-        entity.addComponent(new GameObjectComponent(entity));
-        entity.addComponent(new SpriteComponent(entity, { yOffset: -16 }));
-        entity.addComponent(new AnimComponent(entity));
-
-        var animComponent = entity.getComponent('AnimComponent');
-        animComponent.play('strytell');
-
-        LevelController.registerEnemy(entity);
-
-        var goComponent = entity.getComponent('GameObjectComponent');
-        goComponent.currentGridPosition.copy(gridPos);
-        util.gridToWorldCoord(gridPos, entity.position);
-
-        goComponent.collisionRect = new THREE.Vector2(32, 62);
-        goComponent.collisionOffset = new THREE.Vector2(0, 30);
-
-        var self = goComponent;
-        goComponent.onStart = function() {
-            self.entity.addSignalListener('interact', self._onInteract.bind(self));
-        };
-
-        goComponent._onInteract = function (fromEntity) {
-            console.log('Stay awhile and listen...');
-
-            // TODO: heal player (fromEntity)
-        };
-
-        return entity;
-    }
-
-    function _TEMP_setupObject(gridPos) {
-        var Entity = require('./core/entity');
-        var GameObjectComponent = require('./component/game_object_component');
-        var SpriteComponent = require('./component/sprite_component');
-
-        var entity = new Entity(game);
-        entity.addComponent(new GameObjectComponent(entity));
-        entity.addComponent(new SpriteComponent(entity, { yOffset: -16 }));
-
-        LevelController.registerEnemy(entity);
-
-        var goComponent = entity.getComponent('GameObjectComponent');
-        goComponent.currentGridPosition.copy(gridPos);
-        util.gridToWorldCoord(gridPos, entity.position);
-
-        goComponent.collisionRect = new THREE.Vector2(32, 26);
-        goComponent.collisionOffset = new THREE.Vector2(-5, 0);
-
-        var SpriteMgr = require('./core/sprite_mgr');
-        var self = goComponent;
-
-        goComponent.onStart = function() {
-            self.entity.addSignalListener('interact', self._onInteract.bind(self));
-
-            var sprite = SpriteMgr.getSprite('chest1');
-            self.spriteClosed = sprite[0];
-            self.spriteOpened = sprite[2];
-
-            self.spriteComponent.setSprite(self.spriteClosed);
-        };
-
-        goComponent._onInteract = function (fromEntity) {
-            self.spriteComponent.setSprite(self.spriteOpened);
-            self.isTargetable = false;
-        };
-
-        return entity;
-    }
-    */
-});
-
-},{"./behaviour_fallen":2,"./component/anim_component":3,"./component/game_object_component":4,"./component/network_component":5,"./component/sprite_component":6,"./core/entity":8,"./core/file_mgr":9,"./enemy/action_component":14,"./game":15,"./level_controller":16,"./level_renderer":17,"./network_mgr":18,"./player/action_component":19,"./player/follow_camera_component":20,"./player/input_controller_component":21,"./resource_loader":22,"./signals":23,"./util":24,"behavior-tree":26,"three-debug-draw":113}],2:[function(require,module,exports){
-'use strict';
-
-var inherits = require('inherits'),
-    Component = require('./core/component');
-
-var LevelController = require('./level_controller'),
-    util = require('./util');
-
-var bt = require('behavior-tree');
-
-function buildBehaviorTree(fallen) {
-    var idle =
-        bt.Sequence()
-            .addChild(bt.Action({ update: fallen._idleAction.bind(fallen) }));
-
-    var attack =
-        bt.Sequence()
-            .addChild(bt.Action({ update: fallen._moveToTargetAction.bind(fallen) }))
-            .addChild(bt.Sequence()
-                .addChild(bt.Action({ update: fallen._attackTargetAction.bind(fallen) }))
-                .addChild(bt.Action({ update: fallen._attackTargetWaitAction.bind(fallen) }))
-            );
-
-    var retreat =
-        bt.Sequence()
-            .addChild(bt.Action({ update: fallen._selectRetreatPointAction.bind(fallen) }))
-            .addChild(bt.Action({ update: fallen._moveToRetreatPointAction.bind(fallen) }))
-            .addChild(bt.WaitAction(2));
-
-    return bt.PrioritySelector()
-        .addChild(retreat, fallen._checkRetreatCondition.bind(fallen))
-        .addChild(attack, fallen._checkAttackCondition.bind(fallen))
-        .addChild(idle);
-}
-
-var START_HEALTH = 2;
-
-function BehaviourFallen (entity) {
-    Component.call(this, entity);
-
-    this.game = entity.game;
-    this.THREE = this.game.THREE;
-
-    this.health = START_HEALTH;
-    this.isDead = false;
-
-    this.deadElapsedTime = 0;
-
-    this.entity.addSignalListener('damage', this._onDamaged.bind(this));
-
-    this.targetEntity = null;
-    this.shouldRetreat = false;
-}
-
-inherits(BehaviourFallen, Component);
-
-BehaviourFallen.prototype._idleAction = function () {
-    // console.log('idle...');
-    this.actionComponent.stopMoving();
-    return bt.Status.SUCCESS;
-};
-
-BehaviourFallen.prototype._checkRetreatCondition = function () {
-    if (!this.actionComponent.isIdle()) {
-        return false;
-    }
-
-    if (this.shouldRetreat) {
-        return true;
-    }
-
-    // if (this.game.isKeyDown(49)) {
-    //     console.log('RETREAT!');
-    //     return true;
-    // }
-
-    return false;
-};
-
-BehaviourFallen.prototype._selectRetreatPointAction = function () {
-    console.log('select retreat point');
-
-    var currentPosition = this.gameObjectComponent.currentGridPosition;
-
-    var xOffset = util.getRandomInt(3, 5);
-    if (util.getRandomInt(0, 2) === 0) {
-        xOffset *= -1;
-    }
-    var yOffset = util.getRandomInt(3, 5);
-    if (util.getRandomInt(0, 2) === 0) {
-        yOffset *= -1;
-    }
-
-    var retreatPosition = new THREE.Vector2(currentPosition.x - xOffset, currentPosition.y - yOffset);
-
-    this.actionComponent.requestMove(retreatPosition);
-
-    return bt.Status.SUCCESS;
-};
-
-BehaviourFallen.prototype._moveToRetreatPointAction = function () {
-    // console.log('retreating...');
-
-    if (this.actionComponent.isMoving()) {
-        return bt.Status.RUNNING;
-    }
-
-    this.shouldRetreat = false;
-    return bt.Status.SUCCESS;
-};
-
-var FOLLOW_RANGE = 8;
-
-BehaviourFallen.prototype._checkAttackCondition = function () {
-    if (!this.actionComponent.isIdle()) {
-        return false;
-    }
-
-    // Target selection.
-    this.targetEntity = LevelController.getNearestPlayerInRange(this.gameObjectComponent.currentGridPosition, FOLLOW_RANGE);
-
-    if (this.targetEntity !== null) {
-        // console.log('go!!!');
-        return true;
-    }
-
-    return false;
-};
-
-BehaviourFallen.prototype._moveToTargetAction = function () {
-    if (this.targetEntity === null) {
-        return bt.Status.FAILURE;
-    }
-
-    var targetGridPos = this.targetEntity.getComponent('GameObjectComponent').currentGridPosition;
-    var myGridPos = this.gameObjectComponent.currentGridPosition;
-    var diffX = Math.abs(targetGridPos.x - myGridPos.x);
-    var diffY = Math.abs(targetGridPos.y - myGridPos.y);
-
-    // Too far.
-    if (diffX + diffY > (FOLLOW_RANGE * 2)) {
-        return bt.Status.FAILURE;
-    }
-
-    if (diffX <= 1 && diffY <= 1) {
-        if (this.actionComponent.isMoving()) {
-            this.actionComponent.stopMoving();
-            return bt.Status.RUNNING;
+    }, {
+        key: '_onMapFinishedLoading',
+        value: function _onMapFinishedLoading() {
+            // Set the world bounds based on the map size, with (0,0) at the center.
+            var totalWidth = this._map.totalWidth;
+            var totalHeight = this._map.totalHeight;
+            this.game.world.setBounds(-totalWidth, -totalHeight, totalWidth * 2, totalHeight * 2);
+
+            this._player = new Player(this.game, this.objectGroup);
+            this._player.position = this._map.tileToVirtualPos([0, 0]);
+
+            this.game.camera.follow(this._player.sprite);
+
+            this._isCreationFinished = true;
         }
-        else {
-            return bt.Status.SUCCESS;
-        }
-    }
-
-    var breadCrumb = LevelController.getNewestBreadcrumb(0, myGridPos);
-    if (!breadCrumb) {
-        return bt.Status.FAILURE;
-    }
-
-    // {
-    //     var p = new THREE.Vector2();
-    //     util.gridToWorldCoord(breadCrumb.gridPosition, p);
-    //     p.z = 1000;
-    //     DbgDraw.drawSphere(p, 8.0, 'magenta');
-    // }
-
-    this.actionComponent.requestMove(breadCrumb.gridPosition);
-
-    // console.log('moving to target');
-    return bt.Status.RUNNING;
-};
-
-BehaviourFallen.prototype._attackTargetAction = function () {
-    // TODO: what should happen if we're about to attack but we get attacked?
-    if (!this.actionComponent.isIdle()) {
-        return bt.Status.FAILURE;
-    }
-
-    this.actionComponent.attackInDirection (this.targetEntity.getComponent('GameObjectComponent').currentGridPosition);
-
-    // console.log('do attack!');
-
-    return bt.Status.SUCCESS;
-};
-
-BehaviourFallen.prototype._attackTargetWaitAction = function () {
-    if (this.actionComponent.isAttacking()) {
-        return bt.Status.RUNNING;
-    }
-
-    return bt.Status.SUCCESS;
-};
-
-BehaviourFallen.prototype._onDamaged = function (info) {
-    if (this.isDead) {
-        return;
-    }
-
-    // console.log('take damage: ' + info.amount);
-
-    this.health -= 1;
-
-    if (this.health <= 0) {
-        this.isDead = true;
-
-        this.deadElapsedTime = 0;
-
-        // Don't allow targeting while dead.
-        this.entity.getComponent('GameObjectComponent').isTargetable = false;
-
-        this.actionComponent.die();
-
-        // TODO:
-        // Alert player.
-        info.fromEntity.getComponent('ActionComponent').TEMP_onEnemyKilled();
-
-        // TODO: alert all other enemies and set retreat flag
-        var enemies = LevelController.TEMP_getEnemies();
-        for (var i = 0; i < enemies.length; i++) {
-            if (!enemies[i].getComponent('BehaviourFallen').isDead) {
-                enemies[i].getComponent('BehaviourFallen').shouldRetreat = true;
-            }
-        }
-    }
-    else {
-        this.actionComponent.takeDamage();
-    }
-};
-
-BehaviourFallen.prototype.TEMP_respawn = function () {
-    this.health = START_HEALTH;
-    this.actionComponent.idle();
-
-    this.isDead = false;
-
-    this.entity.getComponent('GameObjectComponent').isTargetable = true;
-};
-
-BehaviourFallen.prototype.start = function() {
-    this.animComponent = this.entity.getComponent('AnimComponent');
-
-    this._registerAnimEvents();
-
-    this.tree = buildBehaviorTree(this);
-
-    this.actionComponent = this.entity.getComponent('ActionComponent');
-    this.gameObjectComponent = this.entity.getComponent('GameObjectComponent');
-};
-
-BehaviourFallen.prototype._registerAnimEvents = function () {
-    // TODO: cleaner way to do this for all 8 directions?
-
-    var i;
-    var self = this;
-
-    function doDieEnd() {
-        self.animComponent.stop();
-    }
-
-    for (i = 0; i < 8; i++) {
-        this.animComponent.registerCallback('phalld_' + i, doDieEnd);
-    }
-};
-
-BehaviourFallen.prototype.update = function() {
-    if (this.isDead) {
-        this.deadElapsedTime += this.game.time.deltaTime;
-
-        if (this.deadElapsedTime >= 5) {
-            this.TEMP_respawn();
-        }
-    }
-
-    this.tree.tick();
-};
-
-module.exports = BehaviourFallen;
-
-},{"./core/component":7,"./level_controller":16,"./util":24,"behavior-tree":26,"inherits":86}],3:[function(require,module,exports){
-'use strict';
-
-var inherits = require('inherits'),
-    Component = require('./../core/component'),
-    assert = require('assert'),
-    SpriteMgr = require('./../core/sprite_mgr');
-
-function AnimComponent (entity) {
-    Component.call(this, entity);
-
-    this.game = entity.game;
-
-    var fps = 30;    // TODO:
-    this.timePerFrame = 1 / fps;
-    this.currentFrame = 0;
-    this.elapsedTime = 0;
-
-    this.currentSprite = null;
-    this.currentAnimName = null;
-
-    this.forceImmediateChange = false;
-    this.callbacks = {};
-}
-
-inherits(AnimComponent, Component);
-
-AnimComponent.prototype.start = function () {
-    this.spriteComponent = this.entity.getComponent('SpriteComponent');
-};
-
-AnimComponent.prototype.registerCallback = function (animName, frameNum, callback) {
-    if (!this.callbacks.hasOwnProperty(animName)) {
-        this.callbacks[animName] = {};
-    }
-
-    var entry = this.callbacks[animName];
-
-    // If a frame number is not specified, use the last frame.
-    if (isNaN(frameNum)) {
-        var sprite = SpriteMgr.getSprite(animName);
-        if (!sprite) {
-            console.warn('Animation data for [' + animName + '] not found. Unable to register callback.');
-            return;
-        }
-
-        callback = frameNum;    // callback was second parameter
-        frameNum = sprite.length - 1;
-    }
-
-    if (entry.hasOwnProperty(frameNum)) {
-        console.warn('Callback already registered for [' + animName + '] at frame [' + frameNum + ']');
-        return;
-    }
-
-    entry[frameNum] = callback;
-};
-
-AnimComponent.prototype.play = function (animName) {
-    // Already playing?
-    if (this.currentAnimName === animName) {
-        return;
-    }
-
-    var sprite = SpriteMgr.getSprite(animName);
-    if (!sprite) {
-        console.warn('Unable to play animation: ' + animName);
-        return;
-    }
-
-    // console.log('Play [' + animName + '].');
-    this.currentSprite = sprite;
-    this.currentAnimName = animName;
-    this.currentFrame = 0;
-    this.elapsedTime = 0;
-
-    this.forceImmediateChange = true;
-};
-
-AnimComponent.prototype.stop = function() {
-    this.currentSprite = null;
-};
-
-AnimComponent.prototype.update = function() {
-    if (!this.currentSprite) {
-        this.elapsedTime = 0;
-        return;
-    }
-
-    if (this.forceImmediateChange) {
-        this._onChangeFrame();
-        this.forceImmediateChange = false;
-    }
-
-    if (this.elapsedTime > this.timePerFrame) {
-        // Current frame is finished - trigger callback.
-        this._doCallback(this.currentAnimName, this.currentFrame);
-
-        // If the callback stopped the animation, exit.
-        if (!this.currentSprite) {
-            return;
-        }
-
-        // Start next frame.
-        this.currentFrame = (this.currentFrame + 1) % this.currentSprite.length;
-        this._onChangeFrame();
-        this.elapsedTime = 0;
-    } else {
-        this.elapsedTime += this.game.time.deltaTime;
-    }
-};
-
-AnimComponent.prototype._doCallback = function (animName, frameNum) {
-    var entry = this.callbacks[animName];
-    if (entry) {
-        entry = entry[frameNum];
-        if (entry) {
-            entry();
-        }
-    }
-};
-
-AnimComponent.prototype._onChangeFrame = function () {
-    assert(this.currentSprite !== null);
-    assert(this.currentFrame < this.currentSprite.length);
-
-    this.spriteComponent.setSprite(this.currentSprite[this.currentFrame]);
-};
-
-module.exports = AnimComponent;
-
-},{"./../core/component":7,"./../core/sprite_mgr":13,"assert":39,"inherits":86}],4:[function(require,module,exports){
-'use strict';
-
-var inherits = require('inherits'),
-    assert = require('assert'),
-    Component = require('./../core/component'),
-    MaterialMgr = require('./../core/material_mgr'),
-    util = require('./../util');
-
-var LevelController = require('./../level_controller');
-
-function GameObjectComponent (entity) {
-    Component.call(this, entity);
-
-    this.game = entity.game;
-
-    this.currentGridPosition = new THREE.Vector2();
-
-    this.isTargeted = false;
-    this.targetedFrame = -1;
-    this.isTargetable = true;
-
-    this.collisionRect = new THREE.Vector2();
-    this.collisionOffset = new THREE.Vector2();
-
-    this.entity.addSignalListener('target', this._onTargeted.bind(this));
-    this.entity.addSignalListener('warp', this._onWarp.bind(this));
-    this.game.on('frameEnd', this._frameEnd.bind(this));
-}
-
-inherits(GameObjectComponent, Component);
-
-GameObjectComponent.prototype.start = function() {
-    this.spriteComponent = this.entity.getComponent('SpriteComponent');
-
-    var self = this;
-    this.spriteComponent.onSelectMaterialCallback = function(textureId) {
-        if (self.isTargeted) {
-            if (self.entity.getComponent('BehaviourFallen')) {
-                return MaterialMgr.getSelectedTargetMaterial(textureId);
-            } else {
-                return MaterialMgr.getSelectedTargetMaterial2(textureId);
-            }
-        } else {
-            return MaterialMgr.getBasicMaterial(textureId);
-        }
-    };
-};
-
-GameObjectComponent.prototype.destroy = function() {
-    this.game.removeListener('frameEnd', this._frameEnd.bind(this));
-};
-
-GameObjectComponent.prototype._onWarp = function (gridPos) {
-    this.setGridPosition(gridPos);
-    util.gridToWorldCoord(gridPos, this.entity.position);
-};
-
-GameObjectComponent.prototype._onTargeted = function () {
-    assert(this.isTargetable);
-
-    this.isTargeted = true;
-    this.targetedFrame = this.game.time.frameCount;
-
-    this.spriteComponent.requestMaterialChange();
-};
-
-GameObjectComponent.prototype._onUntargeted = function () {
-    assert(this.isTargeted);
-
-    this.isTargeted = false;
-
-    this.spriteComponent.requestMaterialChange();
-};
-
-/**
- * Set the grid position of this entity.
- */
-GameObjectComponent.prototype.setGridPosition = function (gridPosition) {
-    // Ignore if we are already at this position.
-    if (gridPosition.equals(this.currentGridPosition)) {
-        return;
-    }
-
-    // Update collision.
-    LevelController.unsetDynamicCollision(this.currentGridPosition);
-    LevelController.setDynamicCollision(gridPosition);
-
-    this.currentGridPosition.copy(gridPosition);
-};
-
-GameObjectComponent.prototype.update = function() {
-    // Entity collision debug draw:
-    // var centerPosX = this.entity.position.x + this.collisionOffset.x;
-    // var centerPosY = this.entity.position.y + this.collisionOffset.y;
-    // var halfWidth = this.collisionRect.x * 0.5;
-    // var halfHeight = this.collisionRect.y * 0.5;
-    // DbgDraw.drawLineStrip([
-    //     new THREE.Vector3(centerPosX - halfWidth, centerPosY - halfHeight, 1000),
-    //     new THREE.Vector3(centerPosX + halfWidth, centerPosY - halfHeight, 1000),
-    //     new THREE.Vector3(centerPosX + halfWidth, centerPosY + halfHeight, 1000),
-    //     new THREE.Vector3(centerPosX - halfWidth, centerPosY + halfHeight, 1000),
-    //     new THREE.Vector3(centerPosX - halfWidth, centerPosY - halfHeight, 1000)],
-    //     'red');
-};
-
-GameObjectComponent.prototype._frameEnd = function () {
-    if (this.isTargeted) {
-        if (this.targetedFrame !== this.game.time.frameCount) {
-            this._onUntargeted();
-        }
-    }
-};
-
-module.exports = GameObjectComponent;
-
-},{"./../core/component":7,"./../core/material_mgr":11,"./../level_controller":16,"./../util":24,"assert":39,"inherits":86}],5:[function(require,module,exports){
-'use strict';
-
-var inherits = require('inherits'),
-    Component = require('./../core/component');
-
-function NetworkComponent (entity) {
-    Component.call(this, entity, { requireUpdate: false });
-
-    this.networkMgr = entity.game.networkMgr;
-    this.isMine = true;
-    this.objectId = -1;
-    this.ownerId = -1;
-
-    this.networkMgr.registerObject(this);
-}
-
-inherits(NetworkComponent, Component);
-
-module.exports = NetworkComponent;
-
-},{"./../core/component":7,"inherits":86}],6:[function(require,module,exports){
-'use strict';
-
-var inherits = require('inherits'),
-    Component = require('./../core/component'),
-    util = require('./../util');
-
-function SpriteComponent (entity, options) {
-    Component.call(this, entity);
-
-    this.game = entity.game;
-    this.THREE = this.game.THREE;
-
-    options = options || {};
-
-    // Additional offset for the mesh to make the 'feet' of the
-    // texture align with the actual entity position.
-    this.yOffset = options.yOffset || 0;
-
-    // Simple quad geometry.
-    var geometry = new this.THREE.Geometry();
-    geometry.vertices.push(new this.THREE.Vector3(-0.5, -0.5, 0));
-    geometry.vertices.push(new this.THREE.Vector3(0.5, -0.5, 0));
-    geometry.vertices.push(new this.THREE.Vector3(0.5, 0.5, 0));
-    geometry.vertices.push(new this.THREE.Vector3(-0.5, 0.5, 0));
-
-    geometry.faces.push(new this.THREE.Face3(0, 1, 3));
-    geometry.faces.push(new this.THREE.Face3(1, 2, 3));
-
-    geometry.faceVertexUvs = [[]];
-    geometry.computeBoundingSphere();
-
-    // Create the mesh.
-    this.mesh = new this.THREE.Mesh(geometry,
-        new this.THREE.MeshBasicMaterial({ color: 'magenta' }));
-    this.mesh.scale.set(96, 96, 1);    // arbitrary initialization size
-    this.game.scene.add(this.mesh);
-
-    this.onSelectMaterialCallback = null;
-    this.currentTextureId = -1;
-
-    // For debugging the mesh position:
-    // this.testMesh = new this.THREE.Mesh(geometry,
-    //     new this.THREE.MeshBasicMaterial({
-    //         wireframe: true,
-    //         color: 'magenta'
-    // }));
-    // this.game.scene.add(this.testMesh);
-}
-
-inherits(SpriteComponent, Component);
-
-SpriteComponent.prototype.destroy = function() {
-    this.game.scene.remove(this.mesh);
-};
-
-SpriteComponent.prototype.setSprite = function(spriteInfo) {
-    this.mesh.scale.set(spriteInfo.w, spriteInfo.h, 1);
-
-    var uvs = spriteInfo.uvs;
-    this.mesh.geometry.faceVertexUvs[0][0] = [uvs[1], uvs[2], uvs[0]];
-    this.mesh.geometry.faceVertexUvs[0][1] = [uvs[2], uvs[3], uvs[0]];
-    this.mesh.geometry.uvsNeedUpdate = true;
-
-    // Update material if texture id changed.
-    var textureId = spriteInfo.textureId;
-    if (this.currentTextureId !== textureId) {
-        this.currentTextureId = textureId;
-
-        this.requestMaterialChange();
-    }
-};
-
-SpriteComponent.prototype.requestMaterialChange = function() {
-    // Trigger callback.
-    var desiredMaterial = this.onSelectMaterialCallback(this.currentTextureId);
-
-    // Update material if it changed.
-    if (this.mesh.material !== desiredMaterial) {
-        this.mesh.material = desiredMaterial;
-
-        // TODO: can we remove this?
-        // Since the initial blank material for the geometry may not have had
-        // UV coordinates, we need to refresh the buffers completely for
-        // the UV coordinates of the new material to take effect.
-        this.mesh.geometry.buffersNeedUpdate = true;
-    }
-};
-
-SpriteComponent.prototype.update = function() {
-    var posX = this.entity.position.x;
-    var posY = this.entity.position.y;
-
-    // TODO: by using the fact that our tiles are rendered as the sum of col + row (zcoord),
-    // we can use the same formula to place our player correctly.
-    var gridCoord = new THREE.Vector2();
-    util.worldToGridCoord(this.entity.position, gridCoord);
-    var TODO_zOffset = gridCoord.x + gridCoord.y;
-
-    // Offset the mesh so that entity position is anchored to bottom of quad (and not the center).
-    var totalYOffset = this.mesh.scale.y / 2 + this.yOffset;
-
-    this.mesh.position.set(posX, posY + totalYOffset, TODO_zOffset);
-
-    // For debugging the mesh position:
-    // this.testMesh.scale.set(this.mesh.scale.x, this.mesh.scale.y, 1);
-    // this.testMesh.position.set(posX, posY + totalYOffset, TODO_zOffset + 100);
-};
-
-module.exports = SpriteComponent;
-
-},{"./../core/component":7,"./../util":24,"inherits":86}],7:[function(require,module,exports){
-'use strict';
-
-/**
- * Base class for all components.
- */
-function Component (entity, params) {
-    this.entity = entity;
-
-    params = params || {};
-
-    // Allow derived components to disable update call.
-    this.requireUpdate = (typeof params.requireUpdate === 'undefined') ? true : params.requireUpdate;
-
-    // Allow callbacks and other logic to be setup from outside of the component.
-    // Allows easier re-use of components.
-    this.onStart = null;
-}
-
-Component.prototype.startImpl = function () {
-    this.start();
-
-    if (this.onStart) {
-        this.onStart();
-    }
-};
-
-Component.prototype.start = function () {
-
-};
-
-Component.prototype.destroy = function() {
-
-};
-
-Component.prototype.update = function() {
-
-};
-
-module.exports = Component;
-
-},{}],8:[function(require,module,exports){
-'use strict';
-
-var Vector2 = THREE.Vector2,
-    EventEmitter = require("events").EventEmitter;
-
-function Entity (game) {
-    this.game = game;
-    this.position = new Vector2();
-    this.components = [];
-    this.updateableComponents = [];
-    this.eventEmitter = new EventEmitter();
-
-    this.game.on('update', this._update.bind(this));
-
-    this.didCallStart = false;
-}
-
-Entity.prototype._start = function () {
-    for (var i = 0; i < this.components.length; i++) {
-        this.components[i].startImpl();
-    }
-
-    this.didCallStart = true;
-};
-
-Entity.prototype.destroy = function() {
-    for (var i = 0; i < this.components.length; i++) {
-        this.components[i].destroy();
-    }
-
-    this.eventEmitter.removeAllListeners();
-    this.game.removeListener('update', this._update.bind(this));
-};
-
-/**
- * Add a component to this entity.
- */
-Entity.prototype.addComponent = function(component) {
-    this.components.push(component);
-
-    if (component.requireUpdate) {
-        this.updateableComponents.push(component);
-    }
-};
-
-/**
- * Gets a component by class (constructor) name.
- * Returns null if the component is not found.
- */
-Entity.prototype.getComponent = function(componentName) {
-    for (var i = 0; i < this.components.length; i++) {
-        if (this.components[i].constructor.name == componentName) {
-            return this.components[i];
-        }
-    }
-
-    return null;
-};
-
-/**
- * Send a signal to the entity which can be handled by a component
- * of this entity.
- */
-Entity.prototype.sendSignal = function (signalType) {
-    switch (arguments.length) {
-        case 1:
-            this.eventEmitter.emit(signalType);
-            break;
-        case 2:
-            this.eventEmitter.emit(signalType, arguments[1]);
-            break;
-        case 3:
-            this.eventEmitter.emit(signalType, arguments[1], arguments[2]);
-            break;
-        default:
-            // Slowest case - for multiple arguments.
-            var len = arguments.length;
-            var args = new Array(len - 1);
-            for (var i = 1; i < len; i++) {
-                args[i - 1] = arguments[i];
-            }
-            this.eventEmitter.emit(signalType, args);
-    }
-};
-
-/**
- * Add a listener to handle the given signal type.
- */
-Entity.prototype.addSignalListener = function (signalType, listener) {
-    this.eventEmitter.addListener(signalType, listener);
-};
-
-/**
- * Remove a listener from handling the given signal type.
- */
-Entity.prototype.removeSignalListener = function (signalType, listener) {
-    this.eventEmitter.removeListener(signalType, listener);
-};
-
-Entity.prototype._update = function() {
-    // Trigger 'start' on first update.
-    if (!this.didCallStart) {
-        this._start();
-    }
-
-    for (var i = 0; i < this.updateableComponents.length; i++) {
-        this.updateableComponents[i].update();
-    }
-};
-
-module.exports = Entity;
-
-},{"events":81}],9:[function(require,module,exports){
-'use strict';
-
-var util = require('./../util'),
-    async = require('async'),
-    DFormats = require('diablo-file-formats'),
-    pathLib = require('path');
-
-function loadFileImpl(path, userCallback) {
-    return function(asyncCallback) {
-        util.requestReadFile(path, function(err, res, buffer) {
-            if (err) {
-                console.error('Unable to load data file: ' + path);
-                throw err;
-            }
-
-            userCallback(buffer);
-            asyncCallback();
-        });
-    };
-}
-
-function createFileImpl(path, buffer) {
-    switch (pathLib.extname(path)) {
-        case '.pal':
-            return DFormats.Pal.load(buffer, path);
-        case '.cel':
-            return DFormats.Cel.load(buffer, path);
-        case '.cl2':
-            return DFormats.Cl2.load(buffer, path);
-        case '.min':
-            return DFormats.Min.load(buffer, path);
-        case '.til':
-            return DFormats.Til.load(buffer, path);
-        case '.sol':
-            return DFormats.Sol.load(buffer, path);
-        case '.dun':
-            return DFormats.Dun.load(buffer, path);
-        default:
-            console.warn('Unhandled extension: ' + pathLib.extname(path));
-    }
-
-    return null;
-}
-
-function createFileLoader(loadUnit, path) {
-    return loadFileImpl(path, function(buffer) {
-        var file = createFileImpl(path, buffer);
-
-        if (file) {
-            // Duplicate check.
-            if (loadedFiles[path]) {
-                console.warn('File already loaded: ' + path);
+    }, {
+        key: 'update',
+        value: function update() {
+            if (!this._isCreationFinished) {
                 return;
             }
 
-            loadedFiles[path] = file;
-            loadedFileInfos[path] = { loadUnit: loadUnit };
-        } else {
-            console.warn('Unable to load file: ' + path);
+            // TODO: not correct way to sort for isometric perspective...
+            this.objectGroup.sort('y', Phaser.Group.SORT_ASCENDING);
+
+            var dt = this.game.time.elapsed / 1000;
+            this._player.update(this.game, dt);
+            // this.game.debug.spriteBounds(this._player.sprite);
+
+            this._debugDrawCursorPosition();
         }
-    });
-}
+    }, {
+        key: '_debugDrawCursorPosition',
+        value: function _debugDrawCursorPosition() {
+            var mouseWorldPos = [this.game.input.worldX, this.game.input.worldY];
+            var tilePos = this._map.worldToTilePos(mouseWorldPos);
+            var worldPos = this._map.tileToWorldPosCenter(tilePos);
 
-var loadedFiles = {};
-var loadedFileInfos = {};
-
-/**
- * Loads a list of files into the specific load unit.
- */
-function _loadFiles(loadUnit, paths, onFinishedCallback) {
-    var fileLoaderWork = new Array(paths.length);
-    for (var i = 0; i < paths.length; i++) {
-        fileLoaderWork[i] = createFileLoader(loadUnit, paths[i]);
-    }
-
-    async.series(fileLoaderWork, function() {
-        onFinishedCallback();
-    });
-}
-
-/**
- * Unloads files for a given load unit.
- */
-function _unloadFiles(loadUnit) {
-    // Gather list of paths to delete.
-    var unloadPaths = [];
-    for (var key in loadedFileInfos) {
-        var info = loadedFileInfos[key];
-        if (info.loadUnit === loadUnit) {
-            unloadPaths.push(key);
+            var color = 'rgba(0,255,0,0.5)';
+            if (tilePos[0] < 0 || tilePos[0] >= this._map.width || tilePos[1] < 0 || tilePos[1] >= this._map.height) {
+                color = 'rgba(255,0,0,0.5)';
+            }
+            var tw_2 = this._map.tileWidth / 2;
+            var th_2 = this._map.tileHeight / 2;
+            var l = [worldPos[0] - tw_2, worldPos[1]];
+            var r = [worldPos[0] + tw_2, worldPos[1]];
+            var t = [worldPos[0], worldPos[1] - th_2];
+            var b = [worldPos[0], worldPos[1] + th_2];
+            var l0 = new Phaser.Line(l[0], l[1], t[0], t[1]);
+            var l1 = new Phaser.Line(t[0], t[1], r[0], r[1]);
+            var l2 = new Phaser.Line(r[0], r[1], b[0], b[1]);
+            var l3 = new Phaser.Line(b[0], b[1], l[0], l[1]);
+            this.game.debug.geom(l0, color);
+            this.game.debug.geom(l1, color);
+            this.game.debug.geom(l2, color);
+            this.game.debug.geom(l3, color);
         }
-    }
+    }, {
+        key: 'render',
+        value: function render() {
+            // this.game.debug.cameraInfo(this.game.camera, 10, 20);
+        }
+    }]);
 
-    // Perform deletion.
-    for (var i = 0; i < unloadPaths.length; i++) {
-        var path = unloadPaths[i];
-        delete loadedFiles[path];
-        delete loadedFileInfos[path];
-    }
-}
+    return BootState;
+})();
 
-/**
- * Unloads all files.
- */
-function _unloadAllFiles() {
-    loadedFiles = {};
-    loadedFileInfos = {};
-}
+module.exports = BootState;
 
-/**
- * Gets a file.
- */
-function _getFile(fileName) {
-    return loadedFiles[fileName];
-}
-
-module.exports = {
-    loadFiles: _loadFiles,
-    unloadFiles: _unloadFiles,
-    unloadAllFiles: _unloadAllFiles,
-    getFile: _getFile
-};
-
-},{"./../util":24,"async":25,"diablo-file-formats":68,"path":46}],10:[function(require,module,exports){
+},{"./level_controller":5,"./map_utils":6,"./player":7}],4:[function(require,module,exports){
 'use strict';
 
-var Packer = require('./packer'),
-    assert = require('assert');
-
-var Vector2 = THREE.Vector2;
-
-var BYTES_PER_PIXEL = 4;    // RGBA
-
-/**
- * Attempts to pack and arrange all frame data efficiently onto fixed-size shared buffers.
- */
-function createBufferInfos(maxWidth, maxHeight, decodedFrames, frameInfos, bufferInfos) {
-    var currentBufferIndex = 0;
-    var packer = new Packer(maxWidth, maxHeight);
-    bufferInfos[currentBufferIndex].packer = packer;
-
-    for (var i = 0; i < decodedFrames.length; i++) {
-        var frame = decodedFrames[i];
-
-        var frameInfo = frameInfos[i];
-        frameInfo.w = frame.width;
-        frameInfo.h = frame.height;
-
-        var block = {
-            w: frame.width, h: frame.height,
-            frameIndex: i
-        };
-
-        // Attempt to pack the block into the current packer.
-        if (!packer.fit(block)) {
-            // No more room - pack failed! Create a new atlas.
-            bufferInfos.push([]);
-            currentBufferIndex++;
-
-            packer = new Packer(maxWidth, maxHeight);
-            bufferInfos[currentBufferIndex].packer = packer;
-
-            // Attempt to fit into newly created packer.
-            if (!packer.fit(block)) {
-                console.error('Block does not fit into an empty packer: ' + block);
-
-                // No owner atlas.
-                frameInfo.bufferIndex = -1;
-                continue;
-            }
-        }
-
-        // Add to the current atlas.
-        bufferInfos[currentBufferIndex].push(block);
-        frameInfo.bufferIndex = currentBufferIndex;
-    }
-}
-
-/**
- * Copy color buffer data from fromBuffer to a section of
- * toBuffer, designated by toX and toY offsets.
- */
-function copyColorBuffer(fromBuffer, width, height, toBuffer, toX, toY, totalWidth) {
-    var i = 0;
-    var j = (toY * totalWidth + toX) * 4;
-    for (var y = 0; y < height; y++) {
-        for (var x = 0; x < width; x++) {
-            toBuffer[j] = fromBuffer[i];
-            toBuffer[j + 1] = fromBuffer[i + 1];
-            toBuffer[j + 2] = fromBuffer[i + 2];
-            toBuffer[j + 3] = fromBuffer[i + 3];
-
-            i += 4;
-            j += 4;
-        }
-
-        // Skip to the next row.
-        j = ((toY + y + 1) * totalWidth + toX) * 4;
-    }
-}
-
-/**
- * Allocate color buffers and copy all frame data over.
- */
-function createBuffers(maxWidth, maxHeight, decodedFrames, bufferInfos, buffers) {
-    var i, buffer;
-
-    // Create color buffers.
-    for (i = 0; i < bufferInfos.length; i++) {
-        buffer = new Uint8Array(maxWidth * maxHeight * BYTES_PER_PIXEL);
-        buffer.width = maxWidth;
-        buffer.height = maxHeight;
-        buffers[i] = buffer;
-    }
-
-    // Copy all frame color data to buffer.
-    for (i = 0; i < bufferInfos.length; i++) {
-        var blocks = bufferInfos[i];
-        buffer = buffers[i];
-        for (var j = 0; j < blocks.length; j++) {
-            var block = blocks[j];
-            var frame = decodedFrames[block.frameIndex];
-            copyColorBuffer(
-                frame.colors,
-                block.w, block.h,
-                buffer,
-                block.x, block.y,
-                maxWidth);
-        }
-    }
-}
-
-/**
- * Calculate UV coordinates for each frame given it's location within the buffer.
- */
-function createUVs(frameInfos, bufferInfos, buffers) {
-    for (var i = 0; i < bufferInfos.length; i++) {
-        var blocks = bufferInfos[i];
-        var buffer = buffers[i];
-        var width = buffer.width;
-        var height = buffer.height;
-
-        for (var j = 0; j < blocks.length; j++) {
-            var block = blocks[j];
-
-            var uvs = new Array(4);
-            // Top left.
-            uvs[0] = new Vector2(block.x / width, (block.y + block.h) / height);
-            // Bottom left.
-            uvs[1] = new Vector2(block.x / width, block.y / height);
-            // Bottom right.
-            uvs[2] = new Vector2((block.x + block.w) / width, block.y / height);
-            // Top right.
-            uvs[3] = new Vector2((block.x + block.w) / width, (block.y + block.h) / height);
-
-            frameInfos[block.frameIndex].uvs = uvs;
-        }
-    }
-}
-
-/**
- * Pack all frame data into compact atlases (color buffers).
- * Returns the packed color buffers, and a list of all the frame data
- * and their indices into the packed color buffers.
- * @param  {[number]} maxWidth  The maximum width of the generated color buffers.
- * @param  {[number]} maxHeight The maximum height of the generated color buffers.
- * @param  {[array]} decodedFrames    Decoded frame data packed into atlas.
- */
-function _pack(maxWidth, maxHeight, decodedFrames) {
-    // Allocate results.
-    var frameInfos = new Array(decodedFrames.length);
-    for (var i = 0; i < frameInfos.length; i++) {
-        frameInfos[i] = {};
-    }
-
-    var bufferInfos = [[]];
-    createBufferInfos(maxWidth, maxHeight, decodedFrames, frameInfos, bufferInfos);
-
-    var buffers = new Array(bufferInfos.length);
-    createBuffers(maxWidth, maxHeight, decodedFrames, bufferInfos, buffers);
-
-    createUVs(frameInfos, bufferInfos, buffers);
-
-    assert(frameInfos.length === decodedFrames.length);
-
-    return {
-        // Data for each frame.
-        frameInfos: frameInfos,
-        // Packed frame color buffers.
-        colorBuffers: buffers
-    };
-}
-
-module.exports = {
-    pack: _pack
-};
-
-},{"./packer":12,"assert":39}],11:[function(require,module,exports){
-'use strict';
-
-var loadedTextures = [];
-var loadedTextureInfos = [];
-
-var basicMaterials = [];
-var selectedTargetMaterials = [];
-var selectedTargetMaterials2 = [];
-
-/**
- * Creates a texture from a given color buffer and returns the textureId.
- */
-function _loadTexture(loadUnit, colorBuffer) {
-    var imageTexture = new THREE.DataTexture(
-        colorBuffer,
-        colorBuffer.width, colorBuffer.height,
-        THREE.RGBAFormat, THREE.UnsignedByteType,
-        new THREE.UVMapping(),
-        THREE.ClampToEdgeWrapping,
-        THREE.ClampToEdgeWrapping,
-
-        // Linear filtering will cause seams in tiles, due mixing the color
-        // of the texture with alpha color outside of the texture coordinates.
-        THREE.NearestFilter
-    );
-    imageTexture.flipY = false;
-    imageTexture.needsUpdate = true;
-
-    // TODO: if we constantly load/unload textures, this will
-    // pose a theoretic limit to the # of times we can do that.
-    // A better implementation would set a MAX_TEXTURE limit, and treat
-    // the array as a circular buffer. The texture id would be the
-    // next free entry in the array.
-    var textureId = loadedTextures.length;
-    loadedTextures.push(imageTexture);
-    loadedTextureInfos.push(loadUnit);
-
-    return textureId;
-}
-
-/**
- * Unload all textures and all materials referencing this texture
- * in the given load unit.
- */
-function _unloadTextures(loadUnit) {
-    // Gather list of indices to delete.
-    var unloadIndices = [];
-    for (var i = 0; i < loadedTextureInfos.length; i++) {
-        if (loadedTextureInfos[i] === loadUnit) {
-            unloadIndices.push(i);
-        }
-    }
-
-    // Perform deletion.
-    // We can't actually delete the entries in the arrays
-    // since that would invalidate all other entries.
-    for (i = 0; i < unloadIndices.length; i++) {
-        loadedTextures[i] = null;
-        loadedTextureInfos[i] = null;
-    }
-}
-
-/**
- * Get the basic material for the given textureId.
- */
-function _getBasicMaterial(textureId) {
-    var material = basicMaterials[textureId];
-
-    // Return existing material.
-    if (material) {
-        return material;
-    }
-
-    var texture = loadedTextures[textureId];
-
-    // Generate a new material.
-    material = new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-
-        // Prevent full transparent portions of the texture from writing to the z-buffer.
-        alphaTest: 0.5
-    });
-
-    basicMaterials[textureId] = material;
-
-    return material;
-}
-
-/**
- * Get the selected target material for the given textureId.
- */
-function _getSelectedTargetMaterial(textureId) {
-    var color = new THREE.Vector3(0.8, 0.3, 0.3);
-    var material = selectedTargetMaterials[textureId];
-
-    // Return existing material.
-    if (material) {
-        return material;
-    }
-
-    var texture = loadedTextures[textureId];
-
-    // TODO: remove from HTML document
-    var vertShader = document.getElementById('vertexShader').innerHTML;
-    var fragShader = document.getElementById('fragmentShader').innerHTML;
-
-    // TODO: instead of using uniform for border color, might be more efficient to use
-    // vertex color buffer instead?
-
-    // TODO: only allows 1 unit to be targeted?
-    var uniforms = {
-        texture1: { type: 't', value: texture },
-        borderColor: { type: 'v3', value: color }
-    };
-
-    // Generate a new material.
-    material = new THREE.ShaderMaterial({
-        uniforms: uniforms,
-        vertexShader: vertShader,
-        fragmentShader: fragShader
-    });
-
-    selectedTargetMaterials[textureId] = material;
-
-    return material;
-}
-
-function _getSelectedTargetMaterial2(textureId) {
-    var color = new THREE.Vector3(0.7, 0.7, 0.4);
-    var material = selectedTargetMaterials2[textureId];
-
-    // Return existing material.
-    if (material) {
-        return material;
-    }
-
-    var texture = loadedTextures[textureId];
-
-    // TODO: remove from HTML document
-    var vertShader = document.getElementById('vertexShader').innerHTML;
-    var fragShader = document.getElementById('fragmentShader').innerHTML;
-
-    // TODO: instead of using uniform for border color, might be more efficient to use
-    // vertex color buffer instead?
-
-    // TODO: only allows 1 unit to be targeted?
-    var uniforms = {
-        texture1: { type: 't', value: texture },
-        borderColor: { type: 'v3', value: color }
-    };
-
-    // Generate a new material.
-    material = new THREE.ShaderMaterial({
-        uniforms: uniforms,
-        vertexShader: vertShader,
-        fragmentShader: fragShader
-    });
-
-    selectedTargetMaterials2[textureId] = material;
-
-    return material;
-}
-
-module.exports = {
-    loadTexture: _loadTexture,
-    unloadTextures: _unloadTextures,
-    getBasicMaterial: _getBasicMaterial,
-    getSelectedTargetMaterial: _getSelectedTargetMaterial,
-    getSelectedTargetMaterial2: _getSelectedTargetMaterial2
-};
-
-},{}],12:[function(require,module,exports){
-'use strict';
-
-function Packer(w, h) {
-    this.root = { x: 0, y: 0, w: w, h: h };
-    this.usedSize = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-}
-
-Packer.prototype = {
-
-/**
- * Attempt to fit a block of a certian width/height (block.w, block.h)
- * into the current packer. Returns true if successful, or false
- * if there is no room for this block.
- *
- * If successful, the block will have a newly added block.x and block.y
- * field that describes it's position within the packer.
- */
-fit: function(block) {
-    var node = this._findNode(this.root, block.w, block.h);
-    if (node) {
-        node = this._splitNode(node, block.w, block.h);
-        block.x = node.x;
-        block.y = node.y;
-        return true;
-    }
-
-    // Unable to fit.
-    return false;
-},
-
-_findNode: function(root, w, h) {
-    if (root.used) {
-        return this._findNode(root.right, w, h) || this._findNode(root.down, w, h);
-    }
-    else if ((w <= root.w) && (h <= root.h)) {
-        return root;
-    }
-    else {
-        return null;
-    }
-},
-
-_splitNode: function(node, w, h) {
-    node.used = true;
-    node.down  = { x: node.x,     y: node.y + h, w: node.w,     h: node.h - h };
-    node.right = { x: node.x + w, y: node.y,     w: node.w - w, h: h          };
-
-    // Keep track of the maximum used boundary.
-    this.usedSize.maxX = Math.max(this.usedSize.maxX, node.x + w);
-    this.usedSize.maxY = Math.max(this.usedSize.maxY, node.y + h);
-
-    return node;
-}
-
-};
-
-module.exports = Packer;
-
-},{}],13:[function(require,module,exports){
-'use strict';
-
-var loadedSprites = {};
-var loadedSpriteInfos = {};
-
-function _registerSprite(loadUnit, name, sprite) {
-    // Duplicate check.
-    if (loadedSprites[name]) {
-        console.warn('Sprite already registered: ' + name);
-        return;
-    }
-
-    loadedSprites[name] = sprite;
-    loadedSpriteInfos[name] = { loadUnit: loadUnit };
-}
-
-function _unloadSprites(loadUnit) {
-    // Gather list of sprites to delete.
-    var unloadNames = [];
-    for (var key in loadedSpriteInfos) {
-        var info = loadedSpriteInfos[key];
-        if (info.loadUnit === loadUnit) {
-            unloadNames.push(key);
-        }
-    }
-
-    // Perform deletion.
-    for (var i = 0; i < unloadNames.length; i++) {
-        var name = unloadNames[i];
-        delete loadedSprites[name];
-        delete loadedSpriteInfos[name];
-    }
-}
-
-function _getSprite(name) {
-    return loadedSprites[name];
-}
-
-module.exports = {
-    registerSprite: _registerSprite,
-    unloadSprites: _unloadSprites,
-    getSprite: _getSprite
-};
-
-},{}],14:[function(require,module,exports){
-'use strict';
-
-var assert = require('assert'),
-    inherits = require('inherits'),
-    Component = require('./../core/component'),
-    util = require('./../util'),
-    LevelController = require('./../level_controller'),
-    Signals = require('./../signals');
-
-var Vector2 = THREE.Vector2;
-
-var State = {
-    IDLE: 0,
-    MOVE: 1,
-    ATTACK: 2,
-    DAMAGE: 3,
-    DEAD: 4,
-};
-
-function ActionComponent (entity) {
-    Component.call(this, entity);
-
-    this.game = entity.game;
-
-    this.MOVE_SPEED = new Vector2(80, 40);
-
-    this.currentState = State.IDLE;
-
-    this.currentDestinationGridPosition = new Vector2();
-    this.currentFacingDirection = 0;
-    this.currentMoveDirection = new Vector2();
-    this.currentMoveSpeed = 0;
-    this.currentTargetPosition = this.entity.position.clone();
-    this.currentDistanceRemainingToTargetPosition = 0;
-}
-
-inherits(ActionComponent, Component);
-
-ActionComponent.prototype.start = function() {
-    this.animComponent = this.entity.getComponent('AnimComponent');
-    this.gameObjectComponent = this.entity.getComponent('GameObjectComponent');
-
-    this._registerAnimEvents();
-};
-
-ActionComponent.prototype._registerAnimEvents = function () {
-    // TODO: cleaner way to do this for all 8 directions?
-
-    var i;
-    var self = this;
-
-    function doAttack() {
-        var attackGridPosition = util.getGridOffsetInDirection(self.currentFacingDirection);
-        attackGridPosition.add(self.gameObjectComponent.currentGridPosition);
-
-        // var dbgAttackWorldPos = new THREE.Vector2();
-        // util.gridToWorldCoord(attackGridPosition, dbgAttackWorldPos);
-        // DbgDraw.drawSphere(new THREE.Vector3(dbgAttackWorldPos.x, dbgAttackWorldPos.y, 1000), 10, 'yellow');
-
-        var player = LevelController.getPlayerAtGridPosition(attackGridPosition);
-        if (player) {
-            var info = {
-                amount: 1,
-                fromEntity: self.entity,
-            };
-            Signals.sendDamage(player, info);
-        }
-    }
-
-    function doAttackEnd() {
-        self.currentState = State.IDLE;
-    }
-
-    for (i = 0; i < 8; i++) {
-        this.animComponent.registerCallback('phalla_' + i, 9, doAttack);
-    }
-    for (i = 0; i < 8; i++) {
-        this.animComponent.registerCallback('phalla_' + i, doAttackEnd);
-    }
-
-    function doTakeDamageEnd() {
-        self.currentState = State.IDLE;
-    }
-
-    for (i = 0; i < 8; i++) {
-        this.animComponent.registerCallback('phallh_' + i, doTakeDamageEnd);
-    }
-};
-
-ActionComponent.prototype.update = function(dt) {
-    switch (this.currentState) {
-        case State.MOVE:
-            this._followPath(dt);
-            break;
-    }
-
-    // Animation update.
-    switch (this.currentState) {
-        case State.IDLE:
-            this.animComponent.play('phalln_' + this.currentFacingDirection);
-            break;
-        case State.MOVE:
-            this.animComponent.play('phallw_' + this.currentFacingDirection);
-            break;
-    }
-
-    // TODO: temp - move to AI
-    // if (this.game.isMouseButtonDown()) {
-    //     var mousePos = this.game.mousePosition;
-    //     var gridPos = new Vector2();
-    //     util.screenToWorldCoord(this.game.width, this.game.height, mousePos, this.game.camera, gridPos);
-    //     util.worldToGridCoord(gridPos, gridPos);
-    //
-    //     this.requestMove(gridPos);
-    // }
-    // if (this.game.isKeyDown(49)) {
-    //     var breadCrumb = LevelController.getNewestBreadcrumb(0);
-    //     if (breadCrumb) {
-    //         this.requestMove(breadCrumb.gridPosition);
-    //     }
-    // }
-};
-
-ActionComponent.prototype._followPath = function () {
-    var moveAmount = this.currentMoveSpeed * this.game.time.deltaTime;
-    this.currentDistanceRemainingToTargetPosition -= moveAmount;
-
-    // Arrived at target position?
-    if (this.currentDistanceRemainingToTargetPosition <= 0.0) {
-        this.entity.position.copy(this.currentTargetPosition);
-
-        // End of path?
-        if (this.gameObjectComponent.currentGridPosition.equals(this.currentDestinationGridPosition)) {
-            this.currentState = State.IDLE;
-        } else {
-            var nextNode = this._getNextNode(this.currentDestinationGridPosition);
-
-            // If unable to move, stop and go idle.
-            if (nextNode !== null) {
-                this._setTargetGridPosition(nextNode);
-            }
-            else {
-                this.currentState = State.IDLE;
-            }
-        }
-    } else {
-        this.entity.position.set(
-            this.entity.position.x + this.currentMoveDirection.x * moveAmount,
-            this.entity.position.y + this.currentMoveDirection.y * moveAmount);
-
-        // DbgDraw.drawLine(
-        //     new this.game.THREE.Vector3(this.entity.position.x, this.entity.position.y, 6000),
-        //     new this.game.THREE.Vector3(this.currentTargetPosition.x, this.currentTargetPosition.y, 6000),
-        //     'red'
-        // );
-    }
-};
-
-ActionComponent.prototype._setTargetGridPosition = function (pos) {
-    // Facing direction.
-    this._setFacingDirection(pos.x, pos.y);
-
-    // Move speed.
-    this.currentMoveSpeed = util.getMoveSpeed(this.currentFacingDirection, this.MOVE_SPEED.x, this.MOVE_SPEED.y);
-
-    // Update current grid position.
-    this.gameObjectComponent.setGridPosition(pos);
-
-    // Target position.
-    util.gridToWorldCoord(this.gameObjectComponent.currentGridPosition, this.currentTargetPosition);
-    this.currentDistanceRemainingToTargetPosition = this.entity.position.distanceTo(this.currentTargetPosition);
-
-    // Move direction.
-    this.currentMoveDirection.setX(this.currentTargetPosition.x - this.entity.position.x);
-    this.currentMoveDirection.setY(this.currentTargetPosition.y - this.entity.position.y);
-    this.currentMoveDirection.normalize();
-};
-
-ActionComponent.prototype._setFacingDirection = function (x, y) {
-    var facingDirection = util.getDirection(
-        this.gameObjectComponent.currentGridPosition.x, this.gameObjectComponent.currentGridPosition.y,
-        x, y);
-    if (facingDirection !== -1) {
-        this.currentFacingDirection = facingDirection;
-    }
-};
-
-ActionComponent.prototype.isMoving = function () {
-    return this.currentState === State.MOVE;
+var FACING_DIRECTIONS = {
+    INVALID: -1,
+
+    SOUTH: 0,
+    SOUTHWEST: 1,
+    WEST: 2,
+    NORTHWEST: 3,
+    NORTH: 4,
+    NORTHEAST: 5,
+    EAST: 6,
+    SOUTHEAST: 7
 };
 
 /**
- * From the current grid position, get the next node in the
- * direction of targetGridPosition that we will need to traverse
- * if moving in a straight line to the target.
+ * Get the facing direction to move from fromPos to toPos.
+ * @param  {number[]} fromPos The starting position.
+ * @param  {number[]} toPos   The end position.
+ * @return {FACING_DIRECTIONS}         The direction identifier.
  */
-ActionComponent.prototype._getNextNode = function(targetGridPosition) {
-    var direction = util.getDirection(
-        this.gameObjectComponent.currentGridPosition.x, this.gameObjectComponent.currentGridPosition.y,
-        targetGridPosition.x, targetGridPosition.y);
-
-    assert(direction !== -1);
-
-    var offset = util.getGridOffsetInDirection(direction);
-
-    var nextNode = new Vector2(
-        this.gameObjectComponent.currentGridPosition.x + offset.x,
-        this.gameObjectComponent.currentGridPosition.y + offset.y);
-
-    // Next node is not a collision? Move to it.
-    if (!LevelController.checkCollision(nextNode)) {
-        return nextNode;
-    }
-
-    // Collision! Local avoidance.
-
-    // Next node is the destination but it's blocked. Stop movement.
-    if (nextNode.equals(this.currentDestinationGridPosition)) {
-        return null;
-    }
-
-    // Next node is not the destination but it's blocked. Attempt to strafe.
-    var strafeDir = (direction + 1) % 8;
-    offset = util.getGridOffsetInDirection(strafeDir);
-
-    nextNode = new Vector2(
-        this.gameObjectComponent.currentGridPosition.x + offset.x,
-        this.gameObjectComponent.currentGridPosition.y + offset.y);
-
-    if (!LevelController.checkCollision(nextNode)) {
-        return nextNode;
-    }
-
-    // Strafe in other direction if blocked.
-    strafeDir = ((direction - 1) + 8) % 8;
-    offset = util.getGridOffsetInDirection(strafeDir);
-
-    nextNode = new Vector2(
-        this.gameObjectComponent.currentGridPosition.x + offset.x,
-        this.gameObjectComponent.currentGridPosition.y + offset.y);
-
-    if (!LevelController.checkCollision(nextNode)) {
-        return nextNode;
-    }
-
-    return null;
-};
-
-ActionComponent.prototype.requestMove = function (targetGridPosition) {
-    assert(this.currentState === State.IDLE ||
-           this.currentState === State.MOVE);
-
-    // If not currently moving, initialize the movement.
-    // First node will be the current position. FollowPath routine
-    // will handle transition to the next node in the destination direction.
-    if (!this.isMoving()) {
-        this.currentTargetPosition.copy(this.entity.position);
-        this.currentDistanceRemainingToTargetPosition = 0.0;
-    }
-
-    this.currentState = State.MOVE;
-    this.currentDestinationGridPosition.copy(targetGridPosition);
-
-    return true;
-};
-
-ActionComponent.prototype.stopMoving = function () {
-    if (this.isMoving()) {
-        this.currentDestinationGridPosition.copy(this.gameObjectComponent.currentGridPosition);
-    }
-};
-
-ActionComponent.prototype.isIdle = function () {
-    return this.currentState === State.IDLE;
-};
-
-ActionComponent.prototype.idle = function () {
-    this.currentState = State.IDLE;
-};
-
-ActionComponent.prototype.isAttacking = function () {
-    return this.currentState === State.ATTACK;
-};
-
-ActionComponent.prototype.attackInDirection = function (gridPos) {
-    assert(this.currentState === State.IDLE);
-
-    this._setFacingDirection(gridPos.x, gridPos.y);
-    this.animComponent.play('phalla_' + this.currentFacingDirection);
-    this.currentState = State.ATTACK;
-};
-
-ActionComponent.prototype.takeDamage = function () {
-    this.animComponent.play('phallh_' + this.currentFacingDirection);
-    this.currentState = State.DAMAGE;
-};
-
-ActionComponent.prototype.die = function () {
-    this.animComponent.play('phalld_' + this.currentFacingDirection);
-    this.currentState = State.DEAD;
-};
-
-ActionComponent.prototype.faceDirection = function (gridPos) {
-    assert(this.currentState === State.IDLE);
-
-    this._setFacingDirection(gridPos.x, gridPos.y);
-};
-
-module.exports = ActionComponent;
-
-},{"./../core/component":7,"./../level_controller":16,"./../signals":23,"./../util":24,"assert":39,"inherits":86}],15:[function(require,module,exports){
-'use strict';
-
-// Inherit EventEmitter to allow event listeners to be registered directly to this object.
-require('inherits')(Game, require('events').EventEmitter);
-
-function Game(options) {
-    this.THREE = THREE;
-
-    this.canvas = document.getElementById("canvas");
-    if (!this.canvas) {
-        throw "'canvas' element not found.";
-    }
-
-    this.width = this.canvas.width;
-    this.height = this.canvas.height;
-
-    this._initRenderer(options);
-
-    this.prevTime = Date.now() / 1000;
-    this.time = {
-        // The time in seconds it took to complete the last frame.
-        deltaTime: 0,
-        // The total number of frames that have passed.
-        frameCount: 0
-    };
-
-    document.addEventListener('keydown', this._onKeyDown.bind(this), false);
-    document.addEventListener('keyup', this._onKeyUp.bind(this), false);
-    this.keyStates = [];
-}
-
-Game.prototype._initRenderer = function(options) {
-    var viewSize = this.height / 2;
-    var aspectRatio = this.width / this.height;
-
-    // Coordinate system: right hand rule (+z towards camera, -z away from camera).
-    this.camera = new THREE.OrthographicCamera(
-        -aspectRatio * viewSize, aspectRatio * viewSize,
-        viewSize, -viewSize,
-        0.1, 10000);
-    this.camera.position.z = 10000;
-
-    this.scene = new THREE.Scene();
-
-    this.renderer = new THREE.WebGLRenderer( { canvas : this.canvas });
-    this.renderer.setClearColor(options.clearColor || 0xFFFFFF, 1);
-
-    window.addEventListener('resize', this._onWindowResize.bind(this), false);
-    this.canvas.addEventListener('mousedown', this._onCanvasMouseDown.bind(this), false);
-    this.canvas.addEventListener('mouseup', this._onCanvasMouseUp.bind(this), false);
-    this.canvas.addEventListener('mousemove', this._onCanvasMouseMove.bind(this), false);
-
-    this.mouseButtonStates = [];
-    this.mousePosition = new THREE.Vector2();
-};
-
-Game.prototype._onWindowResize = function() {
-    this.emit('windowResize');
-};
-
-var InputState = {
-    NONE: 0,
-    DOWN: 1,
-    UP: 2,
-    PRESSED: 3,
-};
-
-var MouseButton = {
-    LEFT: 1,
-    RIGHT: 2,
-    MIDDLE: 3,
-};
-
-function mouseEventToXY(game, event) {
-    var x = 0;
-    var y = 0;
-
-    if (event.x !== undefined && event.y !== undefined) {
-        x = event.x;
-        y = event.y;
-    }
-    // Firefox method to get the position.
-    else {
-        x = event.clientX + document.body.scrollLeft +
-          document.documentElement.scrollLeft;
-        y = event.clientY + document.body.scrollTop +
-          document.documentElement.scrollTop;
-    }
-
-    x -= game.canvas.offsetLeft;
-    y -= game.canvas.offsetTop;
-
-    // Account window scrolling via scrollbars.
-    x += window.pageXOffset;
-    y += window.pageYOffset;
-
-    // Flip y coordinate so that y = 0 is bottom.
-    y = game.canvas.height - y - 1;
-
-    return {
-        x: x,
-        y: y
-    };
-}
-
-function mouseEventToButton(event) {
-    return event.which || event.button;
-}
-
-/**
- * Was the mouse button pushed down this frame?
- */
-Game.prototype.isMouseButtonDown = function (/*buttonIndex*/) {
-    return this.mouseButtonStates[MouseButton.LEFT] === InputState.DOWN;
-};
-
-/**
- * Was the mouse button lifted up this frame?
- */
-Game.prototype.isMouseButtonUp = function (/*buttonIndex*/) {
-    return this.mouseButtonStates[MouseButton.LEFT] === InputState.UP;
-};
-
-/**
- * Is the mouse button pressed down?
- */
-Game.prototype.isMouseButtonPressed = function (/*buttonIndex*/) {
-    return this.mouseButtonStates[MouseButton.LEFT] === InputState.PRESSED;
-};
-
-Game.prototype._onCanvasMouseDown = function(event) {
-    event.preventDefault();
-
-    var button = mouseEventToButton(event);
-    this.mouseButtonStates[button] = InputState.DOWN;
-};
-
-Game.prototype._onCanvasMouseUp = function(event) {
-    event.preventDefault();
-
-    var button = mouseEventToButton(event);
-    this.mouseButtonStates[button] = InputState.UP;
-};
-
-Game.prototype._onCanvasMouseMove = function(event) {
-    event.preventDefault();
-
-    var mousePos = mouseEventToXY(this, event);
-    this.mousePosition.set(mousePos.x, mousePos.y);
-};
-
-/**
- * Was the key pushed down this frame?
- */
-Game.prototype.isKeyDown = function (keyCode) {
-    return this.keyStates[keyCode] === InputState.DOWN;
-};
-
-/**
- * Was the key released this frame?
- */
-Game.prototype.isKeyUp = function (keyCode) {
-    return this.keyStates[keyCode] === InputState.UP;
-};
-
-/**
- * Is the key pressed down?
- */
-Game.prototype.isKeyPressed = function (keyCode) {
-    return this.keyStates[keyCode] === InputState.PRESSED;
-};
-
-Game.prototype._onKeyDown = function (event) {
-    this.keyStates[event.keyCode] = InputState.DOWN;
-};
-
-Game.prototype._onKeyUp = function (event) {
-    this.keyStates[event.keyCode] = InputState.UP;
-};
-
-/**
- * Start the game loop.
- */
-Game.prototype.run = function() {
-    this._update();
-};
-
-Game.prototype._update = function() {
-    var time = Date.now() / 1000;
-    this.time.deltaTime = time - this.prevTime;
-
-    this.emit('update');
-    this.emit('lateUpdate');
-
-    this._render();
-    this._updateInputStates();
-
-    this.emit('frameEnd');
-
-    this.time.frameCount += 1;
-    this.prevTime = time;
-
-    window.requestAnimationFrame(this._update.bind(this));
-};
-
-Game.prototype._updateInputStates = function () {
-    // Mouse states.
-    for (var i in this.mouseButtonStates) {
-        switch (this.mouseButtonStates[i]) {
-            case InputState.DOWN:
-                this.mouseButtonStates[i] = InputState.PRESSED;
-                break;
-            case InputState.UP:
-                this.mouseButtonStates[i] = InputState.NONE;
-                break;
-        }
-    }
-
-    // Key states.
-    for (i in this.keyStates) {
-        switch (this.keyStates[i]) {
-            case InputState.DOWN:
-                this.keyStates[i] = InputState.PRESSED;
-                break;
-            case InputState.UP:
-                this.keyStates[i] = InputState.NONE;
-                break;
-        }
-    }
-};
-
-Game.prototype._render = function() {
-    this.emit('render');
-
-    this.renderer.clearDepth();
-    this.renderer.render(this.scene, this.camera);
-};
-
-module.exports = Game;
-
-},{"events":81,"inherits":86}],16:[function(require,module,exports){
-'use strict';
-
-var util = require('./util');
-var FileMgr = require('./core/file_mgr');
-
-var enemies = [];
-var players = [];
-var localPlayer = null;
-
-var activeBreadcrumbs = [];
-var Vector2;
-var DbgDraw;
-var g_engine;
-
-var BREADCRUMB_UNSPAWN_TIME = 5.0;
-
-function init(engine) {
-    g_engine = engine;
-    engine.on('update', update);
-
-    Vector2 = engine.THREE.Vector2;
-    DbgDraw = require('three-debug-draw')(engine.THREE);
-}
-
-function update() {
-    // Prune breadcrumbs.
-    for (var i = 0; i < activeBreadcrumbs.length; /*i++*/) {
-        if (activeBreadcrumbs[i].elapsedTime >= BREADCRUMB_UNSPAWN_TIME) {
-            activeBreadcrumbs.splice(i, 1);
-            continue;
-        }
-
-        i++;
-    }
-
-    // Advance all breadcrumbs forward in time.
-    var deltaTime = g_engine.time.deltaTime;
-    for (i = 0; i < activeBreadcrumbs.length; i++) {
-        activeBreadcrumbs[i].elapsedTime += deltaTime;
-    }
-
-    // debug draw:
-    // for (i = 0; i < activeBreadcrumbs.length; i++) {
-    //     var breadcrumb = activeBreadcrumbs[i];
-    //     var pos = new Vector2();
-    //
-    //     util.gridToWorldCoord(breadcrumb.gridPosition, pos);
-    //     pos.z = 1000;
-    //
-    //     DbgDraw.drawSphere(pos, 5.0, 'cyan');
-    // }
-
-    // var bc = getNewestBreadcrumb(0, new Vector2(2, 2));
-    // if (bc) {
-    //     var p = new Vector2();
-    //     util.gridToWorldCoord(bc.gridPosition, p);
-    //     p.z = 1000;
-    //     DbgDraw.drawSphere(p, 8.0, 'magenta');
-    // }
-}
-
-function addBreadcrumb(breadcrumb) {
-    activeBreadcrumbs.push(breadcrumb);
-    breadcrumb.elapsedTime = 0;
-}
-
-function clearBreadcrumbs(id) {
-    for (var i = 0; i < activeBreadcrumbs.length; /*i++*/) {
-        if (activeBreadcrumbs[i].id === id) {
-            activeBreadcrumbs.splice(i, 1);
-        }
-        else {
-            i++;
-        }
-    }
-}
-
-function getNewestBreadcrumb(id, fromGridPosition) {
-    var newest = null;
-    var newestTime = Number.MAX_VALUE;
-    for (var i = 0; i < activeBreadcrumbs.length; i++) {
-        if (activeBreadcrumbs[i].id === id) {
-            // Newest is the one with least amount of elapsed time.
-            if (activeBreadcrumbs[i].elapsedTime < newestTime) {
-                // Also must be in LoS.
-                if (checkLineOfSight(fromGridPosition, activeBreadcrumbs[i].gridPosition)) {
-                    newest = activeBreadcrumbs[i];
-                    newestTime = newest.elapsedTime;
-                }
-            }
-        }
-    }
-    return newest;
-}
-
-function checkLineOfSight(fromGridPosition, toGridPosition, hitGridPosition) {
-    // Origin point is a collision?
-    // if (_checkCollision(fromGridPosition)) {
-    //     hitGridPosition.copy(fromGridPosition);
-    //     return false;
-    // }
-
-    var currentGridPosition = fromGridPosition.clone();
-    while (true) {
-        // We made it to the destination position without any collisions.
-        if (currentGridPosition.equals(toGridPosition)) {
-            return true;
-        }
-
-        // Go to the next cell along the direction.
-        var direction = util.getDirection(currentGridPosition.x, currentGridPosition.y, toGridPosition.x, toGridPosition.y);
-        var offset = util.getGridOffsetInDirection(direction);
-        currentGridPosition.add(offset);
-
-        // TODO: ignore destination cell collision (player)
-        if (currentGridPosition.equals(toGridPosition)) {
-            return true;
-        }
-
-        // Is there a collision at the next cell?
-        if (_checkCollision(currentGridPosition)) {
-            if (hitGridPosition) {
-                hitGridPosition.copy(currentGridPosition);
-            }
-            return false;
-        }
-    }
-
-    // No collisions.
-    return true;
-}
-
-function getNearestPlayerInRange(fromGridPosition, maxRange) {
-    var nearestPlayer = null;
-    var nearestPlayerDist = Number.MAX_VALUE;
-    for (var i = 0; i < players.length; i++) {
-        var pos = players[i].getComponent('GameObjectComponent').currentGridPosition;
-        var dx = Math.abs(fromGridPosition.x - pos.x);
-        var dy = Math.abs(fromGridPosition.y - pos.y);
-        var d = dx + dy;
-        if (d < maxRange) {
-            if (d < nearestPlayerDist) {
-                nearestPlayer = players[i];
-                nearestPlayerDist = d;
-            }
-        }
-    }
-
-    return nearestPlayer;
-}
-
-function _registerPlayer(player) {
-    players.push(player);
-
-    // TODO: for now, set first player as local.
-    if (localPlayer === null) {
-        localPlayer = player;
-    }
-}
-
-function _getLocalPlayer() {
-    return localPlayer;
-}
-
-function getPlayerAtGridPosition(gridPosition) {
-    for (var i = 0; i < players.length; i++) {
-        var gameObjectComponent = players[i].getComponent('GameObjectComponent');
-        if (gridPosition.equals(gameObjectComponent.currentGridPosition)) {
-            return players[i];
-        }
-    }
-
-    return null;
-}
-
-function _registerEnemy(enemy) {
-    enemies.push(enemy);
-}
-
-function TEMP_getEnemy() {
-    if (enemies.length > 0)
-        return enemies[0];
-
-    return null;
-}
-
-function _getEnemy(gridPos) {
-    for (var i = 0; i < enemies.length; i++) {
-        var enemy = enemies[i];
-
-        // TODO: shouldn't need to convert enemy world coordinate since it already has it's integer grid coordinate
-        var enemyGridPos = new THREE.Vector2();
-        util.worldToGridCoord(enemy.position, enemyGridPos);
-
-        if (gridPos.equals(enemyGridPos)) {
-            return enemy;
-        }
-    }
-
-    return null;
-}
-
-function TEMP_getEnemies() {
-    return enemies;
-}
-
-function _getNearestEnemyWorldPos(worldPos) {
-    // TODO: how to handle overlapping targets? closest to camera (lowest y coord?)?
-    var best = -1;
-    for (var i = 0; i < enemies.length; i++) {
-        var enemy = enemies[i];
-        var goComponent = enemy.getComponent('GameObjectComponent');
-        if (!goComponent.isTargetable) {
-            continue;
-        }
-
-        var centerX = enemy.position.x + goComponent.collisionOffset.x;
-        var centerY = enemy.position.y + goComponent.collisionOffset.y;
-        var halfWidth = goComponent.collisionRect.x * 0.5;
-        var halfHeight = goComponent.collisionRect.y * 0.5;
-        var minX = centerX - halfWidth;
-        var maxX = centerX + halfWidth;
-        var minY = centerY - halfHeight;
-        var maxY = centerY + halfHeight;
-
-        if (worldPos.x >= minX && worldPos.x <= maxX &&
-            worldPos.y >= minY && worldPos.y <= maxY) {
-            best = i;
-        }
-    }
-
-    if (best !== -1) {
-        return enemies[best];
-    }
-
-    return null;
-}
-
-function _isCollisionTile(col, row) {
-    // TODO:
-    var dun = FileMgr.getFile('levels/towndata/sector1s.dun');
-    var til = FileMgr.getFile('levels/towndata/town.til');
-    var sol = FileMgr.getFile('levels/towndata/town.sol');
-
-    // Temp.. before level is loaded, we might do a mouse over.
-    if (!sol || !dun || !til) {
-        return false;
-    }
-
-    // TODO:
-    dun.unpack(til);
-
-    var pillarIndex = dun.pillarData[col][row];
-    return sol.isCollision(pillarIndex);
-}
-
-var PF = require('pathfinding');
-var collisionGridStatic = null;
-var collisionGridDynamic = null;
-
-function _onLevelLoaded() {
-    // TODO: town only for now
-    var width = 50;
-    var height = 50;
-
-    collisionGridStatic = new PF.Grid(width, height);
-    collisionGridDynamic = new PF.Grid(width, height);
-
-    for (var i = 0; i < width; i++) {
-        for (var j = 0; j < height; j++) {
-            if (_isCollisionTile(i, j)) {
-                collisionGridStatic.setWalkableAt(i, j, false);
-            }
-
-            collisionGridDynamic.getNodeAt(i, j).count = 0;
-        }
-    }
-}
-
-function _getStaticCollisionGrid() {
-    if (collisionGridStatic) {
-        return collisionGridStatic.clone();
-    }
-
-    return null;
-}
-
-function _getDynamicCollisionGrid() {
-    if (collisionGridDynamic) {
-        return collisionGridDynamic.clone();
-    }
-
-    return null;
-}
-
-function _getCollisionGrid() {
-    var grid = _getStaticCollisionGrid();
-    if (grid) {
-        var dynamicGrid = collisionGridDynamic;
-        if (dynamicGrid) {
-            for (var i = 0; i < grid.width; i++) {
-                for (var j = 0; j < grid.height; j++) {
-                    if (!dynamicGrid.isWalkableAt(i, j)) {
-                        grid.setWalkableAt(i, j, false);
-                    }
-                }
-            }
-        }
-    }
-
-    return grid;
-}
-
-function _setDynamicCollision(gridPos) {
-    var node = collisionGridDynamic.getNodeAt(gridPos.x, gridPos.y);
-    node.count = node.count + 1;
-
-    node.walkable = false;
-}
-
-function _unsetDynamicCollision(gridPos) {
-    var node = collisionGridDynamic.getNodeAt(gridPos.x, gridPos.y);
-    node.count = Math.max(node.count - 1, 0);
-
-    if (node.count === 0) {
-        node.walkable = true;
-    }
-}
-
-function _checkStaticCollision(gridPos) {
-    if (collisionGridStatic) {
-        return !collisionGridStatic.isWalkableAt(gridPos.x, gridPos.y);
-    } else {
-        return false;
-    }
-}
-
-function _checkDynamicCollision(gridPos) {
-    if (collisionGridDynamic) {
-        return !collisionGridDynamic.isWalkableAt(gridPos.x, gridPos.y);
-    } else {
-        return false;
-    }
-}
-
-function _checkCollision(gridPos) {
-    return _checkStaticCollision(gridPos) || _checkDynamicCollision(gridPos);
-}
-
-module.exports = {
-    init: init,
-
-    TEMP_setCurrentLevel: function() {
-        _onLevelLoaded();
-    },
-
-    registerPlayer: _registerPlayer,
-    getLocalPlayer: _getLocalPlayer,
-    getPlayerAtGridPosition: getPlayerAtGridPosition,
-
-    registerEnemy: _registerEnemy,
-    getEnemy: _getEnemy,
-    getNearestEnemyWorldPos: _getNearestEnemyWorldPos,
-
-    getStaticCollisionGrid: _getStaticCollisionGrid,
-    getDynamicCollisionGrid: _getDynamicCollisionGrid,
-    getCollisionGrid: _getCollisionGrid,
-
-    setDynamicCollision: _setDynamicCollision,
-    unsetDynamicCollision: _unsetDynamicCollision,
-
-    checkStaticCollision: _checkStaticCollision,
-    checkDynamicCollision: _checkDynamicCollision,
-    checkCollision: _checkCollision,
-
-    addBreadcrumb: addBreadcrumb,
-    clearBreadcrumbs: clearBreadcrumbs,
-    getNewestBreadcrumb: getNewestBreadcrumb,
-
-    checkLineOfSight: checkLineOfSight,
-
-    getNearestPlayerInRange: getNearestPlayerInRange,
-
-    TEMP_getEnemy: TEMP_getEnemy,
-    TEMP_getEnemies: TEMP_getEnemies,
-};
-
-},{"./core/file_mgr":9,"./util":24,"pathfinding":88,"three-debug-draw":113}],17:[function(require,module,exports){
-'use strict';
-
-var MaterialMgr = require('./core/material_mgr');
-
-var BLOCK_HEIGHT = 32;
-var BLOCK_WIDTH = 32;
-var HALF_BLOCK_HEIGHT = BLOCK_HEIGHT / 2;
-
-var PILLAR_BLOCK_OFFSETS = new Array(16);
-// Left side.
-PILLAR_BLOCK_OFFSETS[0]  = { x: 0, y: BLOCK_HEIGHT * 7 };
-PILLAR_BLOCK_OFFSETS[2]  = { x: 0, y: BLOCK_HEIGHT * 6 };
-PILLAR_BLOCK_OFFSETS[4]  = { x: 0, y: BLOCK_HEIGHT * 5 };
-PILLAR_BLOCK_OFFSETS[6]  = { x: 0, y: BLOCK_HEIGHT * 4 };
-PILLAR_BLOCK_OFFSETS[8]  = { x: 0, y: BLOCK_HEIGHT * 3 };
-PILLAR_BLOCK_OFFSETS[10] = { x: 0, y: BLOCK_HEIGHT * 2 };
-PILLAR_BLOCK_OFFSETS[12] = { x: 0, y: BLOCK_HEIGHT * 1 };
-PILLAR_BLOCK_OFFSETS[14] = { x: 0, y: BLOCK_HEIGHT * 0 };
-// Right side.
-PILLAR_BLOCK_OFFSETS[1]  = { x: BLOCK_WIDTH, y: BLOCK_HEIGHT * 7 };
-PILLAR_BLOCK_OFFSETS[3]  = { x: BLOCK_WIDTH, y: BLOCK_HEIGHT * 6 };
-PILLAR_BLOCK_OFFSETS[5]  = { x: BLOCK_WIDTH, y: BLOCK_HEIGHT * 5 };
-PILLAR_BLOCK_OFFSETS[7]  = { x: BLOCK_WIDTH, y: BLOCK_HEIGHT * 4 };
-PILLAR_BLOCK_OFFSETS[9]  = { x: BLOCK_WIDTH, y: BLOCK_HEIGHT * 3 };
-PILLAR_BLOCK_OFFSETS[11] = { x: BLOCK_WIDTH, y: BLOCK_HEIGHT * 2 };
-PILLAR_BLOCK_OFFSETS[13] = { x: BLOCK_WIDTH, y: BLOCK_HEIGHT * 1 };
-PILLAR_BLOCK_OFFSETS[15] = { x: BLOCK_WIDTH, y: BLOCK_HEIGHT * 0 };
-
-function getPillarOffset(col, row) {
-    // Offset by 1/2 a pillar (one block) to center map.
-    // Offset left by 1/2 a pillar (one block) for every row.
-    // Offset right by 1/2 a pillar (one block) for every column.
-    var x = -BLOCK_WIDTH - (row * BLOCK_WIDTH) + (col * BLOCK_WIDTH);
-    // Offset downward by one block to put the origin at the top corner.
-    // Offset downward by half a block for each column and row.
-    var y = -BLOCK_HEIGHT + -(col * HALF_BLOCK_HEIGHT + row * HALF_BLOCK_HEIGHT);
-
-    return [x, y];
-}
-
-function drawPillarSide(pillarBlocks, blockStartIndex, xOffset, yOffset, zCoord) {
-    // TODO: cleanup this moveUp/isFirst logic.
-    var moveUp = false;
-    var isFirst = true;
-    for (var i = blockStartIndex; i >= 0; i -= 2) {
-        var block = pillarBlocks[i];
-        if (block) {
-            switch (block.type) {
-            case 4: case 5:
-                // If a block in a pillar section is one of these types, the block
-                // and all blocks above it in the same pillar section should move up too.
-                moveUp = true;
-                break;
-            default:
-                if (isFirst) {
-                    if (block.type === 1) {
-                        // If the first block in a section is of this type, the
-                        // entire section of blocks should move up.
-                        moveUp = true;
-                    } else {
-                        moveUp = false;
-                    }
-                }
-            }
-
-            isFirst = false;
-            var rect = PILLAR_BLOCK_OFFSETS[i];
-            var extraYOffset = moveUp ? 1 : 0;
-
-            var tileInfo = tilesetInfos[block.frameNum];
-            var geometry = textureIdToGeometryLUT[tileInfo.textureId];
-
-            // Create a new geometry if necessary.
-            if (!geometry) {
-                geometry = new THREE.Geometry();
-                geometry.faceVertexUvs = [[]];
-                geometries.push(geometry);
-
-                var material = MaterialMgr.getBasicMaterial(tileInfo.textureId);
-                materials.push(material);
-
-                textureIdToGeometryLUT[tileInfo.textureId] = geometry;
-            }
-
-            var vertOffset = geometry.vertices.length;
-
-            // TODO: tileInfo has a w/h property that can be used to dynamically dimensions
-
-            // Vertices (bottom left, bottom right, top right, top left).
-            geometry.vertices.push(new THREE.Vector3(xOffset + rect.x, yOffset + rect.y + extraYOffset, zCoord));
-            geometry.vertices.push(new THREE.Vector3(xOffset + rect.x + BLOCK_WIDTH, yOffset + rect.y + extraYOffset, zCoord));
-            geometry.vertices.push(new THREE.Vector3(xOffset + rect.x + BLOCK_WIDTH, yOffset + rect.y + extraYOffset + BLOCK_HEIGHT, zCoord));
-            geometry.vertices.push(new THREE.Vector3(xOffset + rect.x, yOffset + rect.y + extraYOffset + BLOCK_HEIGHT, zCoord));
-
-            // Faces.
-            geometry.faces.push(new THREE.Face3(vertOffset + 0, vertOffset + 1, vertOffset + 3));
-            geometry.faces.push(new THREE.Face3(vertOffset + 1, vertOffset + 2, vertOffset + 3));
-
-            // UVs.
-            var uvs = tileInfo.uvs;
-            geometry.faceVertexUvs[0].push([
-                uvs[1], uvs[2], uvs[0]
-            ]);
-            geometry.faceVertexUvs[0].push([
-                uvs[2], uvs[3], uvs[0]
-            ]);
-        } else {
-            isFirst = true;
-        }
-    }
-}
-
-function drawPillar(pillarBlocks, xOffset, yOffset, zCoord) {
-    // Left side of pillar.
-    drawPillarSide(pillarBlocks, pillarBlocks.length - 2, xOffset, yOffset, zCoord);
-    // Right side of pillar.
-    drawPillarSide(pillarBlocks, pillarBlocks.length - 1, xOffset, yOffset, zCoord);
-}
-
-// TODO: storing here for easy access. Should just be passed as parameters.
-var geometries = [];
-var materials = [];
-var tilesetInfos;
-var textureIdToGeometryLUT = [];
-
-function _drawDungeon(dunFile, tilFile, minFile, scene) {
-    geometries = [];
-    materials = [];
-    textureIdToGeometryLUT = [];
-
-    var SpriteMgr = require('./core/sprite_mgr');
-    tilesetInfos = SpriteMgr.getSprite('town');
-
-    dunFile.unpack(tilFile);
-
-    for (var row = 0; row < dunFile.rowCount; row++) {
-        for (var col = 0; col < dunFile.colCount; col++) {
-            var pillarIndex = dunFile.pillarData[col][row];
-            if (pillarIndex !== null) {
-                var offset = getPillarOffset(col, row);
-
-                // Rendering from back to front, so we want a z-configuration like below.
-                // We could also increase the zCoordinate for every rendered cell, but
-                // that requires too much depth buffer precision. Also, an advantage to
-                // the technique below is that we can partially render any pillar at
-                // the correct z value without re-rendering any surrounding pillars.
-                //
-                //     /\     0
-                //    /\/\  1   2
-                //    \/\/    2
-                //     \/
-                var zCoord = col + row;
-
-                drawPillar(minFile.pillars[pillarIndex], offset[0], offset[1], zCoord);
-            }
-        }
-    }
-
-    // console.log('Geometry count: ' + geometries.length);
-
-    // Add all geometries to scene.
-    for (var i = 0; i < geometries.length; i++) {
-        var geometry = geometries[i];
-        geometry.computeBoundingSphere();
-        scene.add(new THREE.Mesh(geometry, materials[i]));
-    }
-}
-
-module.exports = {
-    drawDungeon: _drawDungeon
-};
-
-},{"./core/material_mgr":11,"./core/sprite_mgr":13}],18:[function(require,module,exports){
-/*global io*/
-
-'use strict';
-
-// Inherit EventEmitter to allow event listeners to be registered directly to this object.
-require('inherits')(NetworkMgr, require('events').EventEmitter);
-
-var _ = require('lodash');
-
-function NetworkMgr () {
-    this.socket = null;
-    this.sessionId = null;
-    this.isConnected = false;
-    this.networkObjects = [];
-}
-
-NetworkMgr.prototype.registerObject = function(obj) {
-    // TODO: duplicate check
-    // TODO: type check
-    this.networkObjects.push(obj);
-};
-
-NetworkMgr.prototype.connect = function(address, port) {
-    var uri = 'http://' + address + ':' + port;
-    console.log('Connecting to: ' + uri);
-
-    this.socket = io.connect(uri, {
-        'reconnection': false
-    });
-
-    this.socket.on('connect', this._onConnect.bind(this));
-    this.socket.on('connect_error', this._onConnectError.bind(this));
-    this.socket.on('disconnect', this._onDisconnect.bind(this));
-    this.socket.on('playerJoined', this._onPlayerJoined.bind(this));
-    this.socket.on('playerLeft', this._onPlayerLeft.bind(this));
-
-    // this.socket.on('createObject', this._onCreateObject.bind(this));
-    this.socket.on('broadcastToOthers', this._onRPC.bind(this));
-    this.socket.on('sendTo', this._onRPC.bind(this));
-    this.socket.on('broadcastToOthers_object', this._onRPC_object.bind(this));
-    this.socket.on('sendTo_object', this._onRPC_object.bind(this));
-};
-
-NetworkMgr.prototype._onConnect = function () {
-    this.isConnected = true;
-    this.sessionId = this.socket.io.engine.id;
-
-    this.emit('connect', true, this.sessionId);
-};
-
-NetworkMgr.prototype._onConnectError = function (/*err*/) {
-    this.emit('connect', false);
-};
-
-NetworkMgr.prototype._onDisconnect = function () {
-    this.isConnected = false;
-    this.sessionId = null;
-    this.networkObjects = [];
-
-    this.emit('disconnect');
-};
-
-NetworkMgr.prototype._onPlayerJoined = function (data) {
-    this.emit('playerJoined', data);
-};
-
-NetworkMgr.prototype._onPlayerLeft = function (data) {
-    this.emit('playerLeft', data);
-
-    // Remove all objects belonging to this player.
-    _.remove(this.networkObjects, function(obj) {
-        if (obj.ownerId === data.sessionId) {
-            obj.entity.destroy();
-            return true;
-        }
-    });
-};
-
-// NetworkMgr.prototype.createObject = function (cb) {
-//     if (this.isConnected) {
-//         // TODO: will need to store these in LUT so that the correct callback
-//         // can be triggered on response
-//         this.TEMP_cb = cb;
-//
-//         this.socket.emit('createObject');
-//     }
-// };
-
-// NetworkMgr.prototype._onCreateObject = function (data) {
-//     this.TEMP_cb(data.id);
-// };
-
-NetworkMgr.prototype.broadcastToOthers = function(data) {
-    if (this.isConnected) {
-        this.socket.emit('broadcastToOthers', data);
-    }
-};
-
-NetworkMgr.prototype.sendTo = function(data) {
-    if (this.isConnected) {
-        this.socket.emit('sendTo', data);
-    }
-};
-
-NetworkMgr.prototype.broadcastToOthers_object = function(data) {
-    if (this.isConnected) {
-        this.socket.emit('broadcastToOthers_object', data);
-    }
-};
-
-NetworkMgr.prototype.sendTo_object = function(data) {
-    if (this.isConnected) {
-        this.socket.emit('sendTo_object', data);
-    }
-};
-
-NetworkMgr.prototype._onRPC = function(data) {
-    var rpc = data.rpc;
-    var userData = data.data;
-    this.emit(rpc, userData);
-};
-
-NetworkMgr.prototype._onRPC_object = function(data) {
-    var rpc = data.rpc;
-    var objectId = data.objectId;
-    var userData = data.data;
-
-    // Trigger the event for the object with the matching objectId.
-    for (var i = 0; i < this.networkObjects.length; i++) {
-        if (this.networkObjects[i].objectId === objectId) {
-            this.networkObjects[i].emit(rpc, userData);
-            return;
-        }
-    }
-
-    console.warn('Unable to invoke RPC [' + rpc + '] for objectId: ' + objectId);
-};
-
-// TODO:
-/*
-isHosting
-isInChannel
-ping
-channelID
-hostID
-
-List of players
-
-JoinChannel
-CreateChannel
- */
-
-module.exports = NetworkMgr;
-
-},{"events":81,"inherits":86,"lodash":87}],19:[function(require,module,exports){
-'use strict';
-
-var assert = require('assert'),
-    inherits = require('inherits'),
-    Component = require('./../core/component'),
-    PF = require('pathfinding'),
-    util = require('./../util'),
-    LevelController = require('./../level_controller'),
-    Signals = require('./../signals');
-
-var Vector2 = THREE.Vector2;
-
-var State = {
-    IDLE: 0,
-    MOVE: 1,
-    ATTACK: 2,
-};
-
-function ActionComponent (entity) {
-    Component.call(this, entity);
-
-    this.game = entity.game;
-
-    this.MOVE_SPEED = new Vector2(150, 100);
-
-    this.currentState = State.IDLE;
-
-    this.currentFacingDirection = 0;
-    this.currentMoveDirection = new Vector2();
-    this.currentMoveSpeed = 0;
-    this.currentPath = null;
-    this.currentPathIndex = -1;
-    this.currentTargetPosition = this.entity.position.clone();
-    this.currentDistanceRemainingToTargetPosition = 0;
-    this.pathfinder = new PF.AStarFinder({
-        allowDiagonal: true,
-        dontCrossCorners: true
-    });
-
-    this.breadCrumbSpawnTimer = 0;
-    this.TEMP_enemyKillCount = 0;
-}
-
-inherits(ActionComponent, Component);
-
-ActionComponent.prototype.start = function() {
-    this.animComponent = this.entity.getComponent('AnimComponent');
-    this.networkComponent = this.entity.getComponent('NetworkComponent');
-    this.gameObjectComponent = this.entity.getComponent('GameObjectComponent');
-
-    this._registerAnimEvents();
-
-    this.entity.addSignalListener('damage', this._onDamaged.bind(this));
-};
-
-ActionComponent.prototype._registerAnimEvents = function () {
-    // TODO: cleaner way to do this for all 8 directions?
-
-    var i;
-    var self = this;
-
-    function doAttack() {
-        var attackGridPosition = util.getGridOffsetInDirection(self.currentFacingDirection);
-        attackGridPosition.add(self.gameObjectComponent.currentGridPosition);
-
-        // var dbgAttackWorldPos = new THREE.Vector2();
-        // util.gridToWorldCoord(attackGridPosition, dbgAttackWorldPos);
-        // DbgDraw.drawSphere(new THREE.Vector3(dbgAttackWorldPos.x, dbgAttackWorldPos.y, 1000), 10, 'yellow');
-
-        var enemy = LevelController.getEnemy(attackGridPosition);
-        if (enemy) {
-            var info = {
-                amount: 1,
-                fromEntity: self.entity,
-            };
-            Signals.sendDamage(enemy, info);
-        }
-    }
-
-    function doAttackEnd() {
-        self.currentState = State.IDLE;
-    }
-
-    for (i = 0; i < 8; i++) {
-        this.animComponent.registerCallback('wlsat_' + i, 9, doAttack);
-    }
-    for (i = 0; i < 8; i++) {
-        this.animComponent.registerCallback('wlsat_' + i, doAttackEnd);
-    }
-};
-
-ActionComponent.prototype._onDamaged = function (/*info*/) {
-    // console.log('Player takes damage: ' + info.amount);
-};
-
-ActionComponent.prototype.TEMP_onEnemyKilled = function() {
-    this.TEMP_enemyKillCount++;
-    console.log('enemy killed: ' + this.TEMP_enemyKillCount);
-};
-
-var BREADCRUMB_SPAWN_INTERVAL = 0.5;
-
-ActionComponent.prototype.update = function() {
-    switch (this.currentState) {
-        case State.MOVE:
-            this._followPath();
-            break;
-    }
-
-    // Animation update.
-    switch (this.currentState) {
-        case State.IDLE:
-            this.animComponent.play('wlsas_' + this.currentFacingDirection);
-            break;
-        case State.MOVE:
-            this.animComponent.play('wlsaw_' + this.currentFacingDirection);
-            break;
-    }
-
-    if (this.breadCrumbSpawnTimer > BREADCRUMB_SPAWN_INTERVAL) {
-        var breadCrumb = {
-            id: 0,
-            gridPosition: this.gameObjectComponent.currentGridPosition.clone()
-        };
-
-        LevelController.addBreadcrumb(breadCrumb);
-
-        this.breadCrumbSpawnTimer = 0;
-    }
-    else {
-        this.breadCrumbSpawnTimer += this.game.time.deltaTime;
-    }
-};
-
-ActionComponent.prototype._followPath = function () {
-    var moveAmount = this.currentMoveSpeed * this.game.time.deltaTime;
-    this.currentDistanceRemainingToTargetPosition -= moveAmount;
-
-    // Arrived at target position?
-    if (this.currentDistanceRemainingToTargetPosition <= 0.0) {
-        this.entity.position.copy(this.currentTargetPosition);
-
-        // End of path?
-        if (this._isEndOfPath()) {
-            this.currentPath = null;
-            this.currentState = State.IDLE;
-        } else {
-            // To next node.
-            this.currentPathIndex++;
-
-            var nextPathNode = this.currentPath[this.currentPathIndex];
-            this._setTargetGridPosition(nextPathNode[0], nextPathNode[1]);
-        }
-    } else {
-        this.entity.position.set(
-            this.entity.position.x + this.currentMoveDirection.x * moveAmount,
-            this.entity.position.y + this.currentMoveDirection.y * moveAmount);
-
-        // DbgDraw.drawLine(
-        //     new this.game.THREE.Vector3(this.entity.position.x, this.entity.position.y, 6000),
-        //     new this.game.THREE.Vector3(this.currentTargetPosition.x, this.currentTargetPosition.y, 6000),
-        //     'red'
-        // );
-    }
-};
-
-ActionComponent.prototype._isEndOfPath = function () {
-    // End of the path?
-    if ((this.currentPathIndex + 1) >= this.currentPath.length) {
-        return true;
-    }
-
-    // Next path node is blocked?
-    var nextNode = this.currentPath[this.currentPathIndex + 1];
-    var nextGridPos = new THREE.Vector2(nextNode[0], nextNode[1]);
-    if (LevelController.checkDynamicCollision(nextGridPos)) {
-        return true;
-    }
-
-    return false;
-};
-
-ActionComponent.prototype._setTargetGridPosition = function (x, y) {
-    // Facing direction.
-    this._setFacingDirection(x, y);
-
-    // Move speed.
-    this.currentMoveSpeed = util.getMoveSpeed(this.currentFacingDirection, this.MOVE_SPEED.x, this.MOVE_SPEED.y);
-
-    // Update current grid position.
-    this.gameObjectComponent.setGridPosition(new Vector2(x, y));
-
-    // Target position.
-    util.gridToWorldCoord(this.gameObjectComponent.currentGridPosition, this.currentTargetPosition);
-    this.currentDistanceRemainingToTargetPosition = this.entity.position.distanceTo(this.currentTargetPosition);
-
-    // Move direction.
-    this.currentMoveDirection.setX(this.currentTargetPosition.x - this.entity.position.x);
-    this.currentMoveDirection.setY(this.currentTargetPosition.y - this.entity.position.y);
-    this.currentMoveDirection.normalize();
-};
-
-ActionComponent.prototype._setFacingDirection = function (x, y) {
-    var facingDirection = util.getDirection(this.gameObjectComponent.currentGridPosition.x, this.gameObjectComponent.currentGridPosition.y, x, y);
-    if (facingDirection !== -1) {
-        this.currentFacingDirection = facingDirection;
-    }
-};
-
-ActionComponent.prototype.isMoving = function () {
-    return this.currentState === State.MOVE;
-};
-
-ActionComponent.prototype.requestMove = function (targetGridPosition, ignoreTargetGridPositionCollision) {
-    assert(this.currentState === State.IDLE ||
-           this.currentState === State.MOVE);
-
-    // No need to re-calculate path since we're already moving to same location.
-    if (this.isMoving()) {
-        var lastPathNode = this.currentPath[this.currentPath.length - 1];
-        if ((lastPathNode[0] === targetGridPosition.x) &&
-            (lastPathNode[1] === targetGridPosition.y)) {
-            return true;
-        }
-    }
-
-    // If target is already 1 cell away, no need to actually move.
-    if (ignoreTargetGridPositionCollision &&
-        util.getGridDistance(this.gameObjectComponent.currentGridPosition, targetGridPosition) === 1) {
-        // Only short-circuit if we're already stopped, else we could be moving to a different location.
-        if (!this.isMoving()) {
-            return true;
-        }
-    }
-
-    var grid = LevelController.getCollisionGrid();
-
-    if (ignoreTargetGridPositionCollision) {
-        grid.setWalkableAt(targetGridPosition.x, targetGridPosition.y, true);
-    }
-
-    var path = this.pathfinder.findPath(
-        this.gameObjectComponent.currentGridPosition.x, this.gameObjectComponent.currentGridPosition.y,
-        targetGridPosition.x, targetGridPosition.y,
-        grid);
-
-    // No path.
-    if (path.length < 2) {
-        return false;
-    }
-
-    this.currentState = State.MOVE;
-    this.currentPath = path;
-    this.currentPathIndex = 0;
-
-    var nextPathNode = path[this.currentPathIndex];
-    this._setTargetGridPosition(nextPathNode[0], nextPathNode[1]);
-
-    /*
-    // TODO: alert remote player to follow this path
-    this.networkComponent.networkMgr.broadcastToOthers_object({
-        rpc: 'RPC_followPath',
-        objectId: this.networkComponent.objectId,
-        data: {
-            path: path,
-            targetPosX: this.currentTargetPosX,
-            targetPosY: this.currentTargetPosY,
-            startX: this.entity.position.x,
-            startY: this.entity.position.y
-        }
-    });
-    */
-
-    return true;
-};
-
-ActionComponent.prototype.stopMoving = function () {
-    if (this.isMoving()) {
-        // Trim the path so only the current target node remains.
-        var startIndex = this.currentPathIndex;
-        var endIndex = startIndex + 1;
-        if (endIndex < this.currentPath.length) {
-            this.currentPath = this.currentPath.slice(startIndex, endIndex);
-        }
-    }
-};
-
-ActionComponent.prototype.isAttacking = function () {
-    return this.currentState === State.ATTACK;
-};
-
-ActionComponent.prototype.attackInDirection = function (gridPos) {
-    assert(this.currentState === State.IDLE);
-
-    this._setFacingDirection(gridPos.x, gridPos.y);
-    this.animComponent.play('wlsat_' + this.currentFacingDirection);
-    this.currentState = State.ATTACK;
-};
-
-ActionComponent.prototype.faceDirection = function (gridPos) {
-    assert(this.currentState === State.IDLE);
-
-    this._setFacingDirection(gridPos.x, gridPos.y);
-};
-
-module.exports = ActionComponent;
-
-},{"./../core/component":7,"./../level_controller":16,"./../signals":23,"./../util":24,"assert":39,"inherits":86,"pathfinding":88}],20:[function(require,module,exports){
-'use strict';
-
-var inherits = require('inherits'),
-    Component = require('./../core/component');
-
-function FollowCameraComponent (entity) {
-    Component.call(this, entity);
-
-    this.camera = entity.game.camera;
-}
-
-inherits(FollowCameraComponent, Component);
-
-FollowCameraComponent.prototype.update = function() {
-    // TODO: technically should be done in a lateUpdate to prevent camera position from being 1 frame behind
-    // (depending on update order)
-    this.camera.position.x = this.entity.position.x;
-    this.camera.position.y = this.entity.position.y;
-};
-
-module.exports = FollowCameraComponent;
-
-},{"./../core/component":7,"inherits":86}],21:[function(require,module,exports){
-'use strict';
-
-var inherits = require('inherits'),
-    Component = require('./../core/component'),
-    assert = require('assert'),
-    Stately = require('stately.js'),
-    util = require('./../util');
-
-function InputControllerComponent (entity) {
-    Component.call(this, entity);
-
-    this.game = entity.game;
-
-    this.mouseWorldPosition = new THREE.Vector2();
-    this.mouseGridPosition = new THREE.Vector2();
-    this.nextAction = null;
-
-    this.currentTargetThisFrame = null;
-    this.currentMoveToTarget = null;
-    this.previousMoveToGridPosition = new THREE.Vector2();
-
-    this.fsm = null;
-    this.fsmOnUpdate = null;
-}
-
-inherits(InputControllerComponent, Component);
-
-InputControllerComponent.prototype.start = function () {
-    this.actionComponent = this.entity.getComponent('ActionComponent');
-    this.gameObjectComponent = this.entity.getComponent('GameObjectComponent');
-
-    // Define FSM.
-    var stateDesc = {
-        'Idle': {
-            toMove: function() { return this.Move; },
-            toAttack: function() { return this.Attack; },
-            toMoveToTarget: function() { return this.MoveToTarget; }
-        },
-        'Move': {
-            toIdle: function() { return this.Idle; },
-            toAttack: function() { return this.Attack; },
-            toMoveToTarget: function() { return this.MoveToTarget; }
-        },
-        'Attack': {
-            toIdle: function() { return this.Idle; },
-            toMove: function() { return this.Move; },
-            toMoveToTarget: function() { return this.MoveToTarget; }
-        },
-        'MoveToTarget': {
-            toIdle: function() { return this.Idle; },
-            toAttack: function() { return this.Attack; },
-            toMove: function() { return this.Move; }
-        }
-    };
-
-    // Initialize.
-    this.fsm = Stately.machine(stateDesc, 'Idle');
-    this.fsmOnUpdate = this._updateIdle;
-
-    // Set callbacks.
-    var self = this;
-    this.fsm.onenterIdle = function () { self.fsmOnUpdate = self._updateIdle; };
-    this.fsm.onenterMove = function () { self.fsmOnUpdate = self._updateMove; };
-    this.fsm.onenterAttack = function () { self.fsmOnUpdate = self._updateAttack; };
-    this.fsm.onenterMoveToTarget = function () {
-        self.fsmOnUpdate = self._updateMoveToTarget;
-
-        assert(self.currentMoveToTarget !== null);
-        self.previousMoveToGridPosition = getTargetGridPosition(self.currentMoveToTarget);
-    };
-    this.fsm.onleaveMoveToTarget = function () { self.currentMoveToTarget = null; };
-};
-
-// TODO: refactor 'action queue' system to use a single object: { name: ATTACK, params... }
-var Action = {
-    MOVE: 0,
-    ATTACK: 1,
-    MOVE_TO_TARGET: 2
-};
-
-InputControllerComponent.prototype.update = function() {
-    var mousePos = this.game.mousePosition;
-    util.screenToWorldCoord(this.game.width, this.game.height, mousePos, this.game.camera, this.mouseWorldPosition);
-    util.worldToGridCoord(this.mouseWorldPosition, this.mouseGridPosition);
-
-    this._updateTarget();
-    this.fsmOnUpdate();
-};
-
-var LevelController = require('./../level_controller');
-var Signals = require('./../signals');
-
-InputControllerComponent.prototype._updateTarget = function () {
-    var enemy = LevelController.getNearestEnemyWorldPos(this.mouseWorldPosition);
-    if (enemy) {
-        Signals.sendTarget(enemy);
-        this.currentTargetThisFrame = enemy;
-    } else {
-        this.currentTargetThisFrame = null;
-    }
-};
-
-// TODO: move to input system
-var KeyCode = {
-    SHIFT: 16
-};
-
-function getTargetGridPosition(targetEntity) {
-    // TODO:
-    var goComponent = targetEntity.getComponent('GameObjectComponent');
-    return goComponent.currentGridPosition.clone();
-}
-
-InputControllerComponent.prototype._clearNextAction = function () {
-    this.nextAction = null;
-};
-
-InputControllerComponent.prototype._hasNextAction = function () {
-    return this.nextAction !== null;
-};
-
-function createAttackAction(attackPos) {
-    return {
-        type: Action.ATTACK,
-        pos: attackPos.clone()
-    };
-}
-
-function createMoveAction(movePos) {
-    return {
-        type: Action.MOVE,
-        pos: movePos.clone()
-    };
-}
-
-function createMoveToAction(target) {
-    return {
-        type: Action.MOVE_TO_TARGET,
-        target: target
-    };
-}
-
-InputControllerComponent.prototype._updateIdle = function() {
-    if (this.game.isMouseButtonDown()) {
-        if (this.game.isKeyPressed(KeyCode.SHIFT)) {
-            this.actionComponent.attackInDirection(this.mouseGridPosition);
-            this.fsm.toAttack();
-        } else if (this.currentTargetThisFrame) {
-            var targetPos = getTargetGridPosition(this.currentTargetThisFrame);
-            if (this.actionComponent.requestMove(targetPos, true)) {
-                this.currentMoveToTarget = this.currentTargetThisFrame;
-                this.fsm.toMoveToTarget();
-            }
-        } else if (this.actionComponent.requestMove(this.mouseGridPosition)) {
-            this.fsm.toMove();
-        }
-    }
-};
-
-InputControllerComponent.prototype._updateMove = function() {
-    if (this.game.isMouseButtonDown()) {
-        if (this.game.isKeyPressed(KeyCode.SHIFT)) {
-            this.actionComponent.stopMoving();
-            this.nextAction = createAttackAction(this.mouseGridPosition);
-        } else if (this.currentTargetThisFrame) {
-            this.actionComponent.stopMoving();
-            this.nextAction = createMoveToAction(this.currentTargetThisFrame);
-        } else {
-            if (this.actionComponent.requestMove(this.mouseGridPosition)) {
-                // Continue moving...
-            } else {
-                this.actionComponent.stopMoving();
-            }
-
-            this._clearNextAction();
-        }
-    }
-
-    if (this.game.isMouseButtonPressed()) {
-        if (this._hasNextAction()) {
-            // Something is queued... don't overwrite it with a mouse press
-        }
-        else {
-            if (this.actionComponent.requestMove(this.mouseGridPosition)) {
-                // Continue moving...
-            } else {
-                this.actionComponent.stopMoving();
-            }
-        }
-    }
-
-    if (!this.actionComponent.isMoving()) {
-        var didTransition = false;
-        if (this._hasNextAction()) {
-            switch (this.nextAction.type) {
-                case Action.ATTACK:
-                    this.actionComponent.attackInDirection(this.nextAction.pos);
-                    this.fsm.toAttack();
-                    didTransition = true;
-                    break;
-                case Action.MOVE_TO_TARGET:
-                    var targetPos = getTargetGridPosition(this.nextAction.target);
-                    if (this.actionComponent.requestMove(targetPos, true)) {
-                        this.currentMoveToTarget = this.nextAction.target;
-                        this.fsm.toMoveToTarget();
-                        didTransition = true;
-                    }
-                    break;
-            }
-
-            this._clearNextAction();
-        }
-
-        if (!didTransition) {
-            this.fsm.toIdle();
-        }
-    }
-};
-
-InputControllerComponent.prototype._updateAttack = function() {
-    if (this.game.isMouseButtonDown()) {
-        if (this.game.isKeyPressed(KeyCode.SHIFT)) {
-            this.nextAction = createAttackAction(this.mouseGridPosition);
-        } else if (this.currentTargetThisFrame) {
-            this.nextAction = createMoveToAction(this.currentTargetThisFrame);
-        } else {
-            this.nextAction = createMoveAction(this.mouseGridPosition);
-        }
-    }
-
-    if (!this.actionComponent.isAttacking()) {
-        var didTransition = false;
-        if (this._hasNextAction()) {
-            switch (this.nextAction.type) {
-                case Action.ATTACK:
-                    this.actionComponent.attackInDirection(this.nextAction.pos);
-                    didTransition = true;
-                    break;
-                case Action.MOVE_TO_TARGET:
-                    var targetPos = getTargetGridPosition(this.nextAction.target);
-                    if (this.actionComponent.requestMove(targetPos, true)) {
-                        this.currentMoveToTarget = this.nextAction.target;
-                        this.fsm.toMoveToTarget();
-                        didTransition = true;
-                    }
-                    break;
-                case Action.MOVE:
-                    if (this.actionComponent.requestMove(this.nextAction.pos)) {
-                        this.fsm.toMove();
-                        didTransition = true;
-                    }
-                    break;
-            }
-
-            this._clearNextAction();
-        }
-
-        if (!didTransition) {
-            this.fsm.toIdle();
-        }
-    }
-};
-
-InputControllerComponent.prototype._updateMoveToTarget = function () {
-    assert(this.currentMoveToTarget !== null);
-
-    if (this.game.isMouseButtonDown()) {
-        if (this.game.isKeyPressed(KeyCode.SHIFT)) {
-            this.actionComponent.stopMoving();
-            this.nextAction = createAttackAction(this.mouseGridPosition);
-        } else if (this.currentTargetThisFrame) {
-            if (this.currentTargetThisFrame !== this.currentMoveToTarget) {
-                // New target!
-                this.currentMoveToTarget = this.currentTargetThisFrame;
-            }
-        } else {
-            if (!this.actionComponent.requestMove(this.mouseGridPosition)) {
-                this.actionComponent.stopMoving();
-            }
-
-            this.fsm.toMove();
-            this.currentMoveToTarget = null;
-            this._clearNextAction();
-        }
-    }
-
-    // TODO: handle transitions in case move target disappears (dies, etc)
-
-    if (!this.currentMoveToTarget) {
-        return;
-    }
-
-    var currentMoveToGridPosition = getTargetGridPosition(this.currentMoveToTarget);
-
-    // If our target position changed, re-pathfind.
-    if (!currentMoveToGridPosition.equals(this.previousMoveToGridPosition)) {
-        if (!this.actionComponent.requestMove(currentMoveToGridPosition, true)) {
-            this.actionComponent.stopMoving();
-        }
-
-        this.previousMoveToGridPosition.copy(currentMoveToGridPosition);
-    }
-
-    if (!this.actionComponent.isMoving()) {
-        var didTransition = false;
-        if (this._hasNextAction()) {
-            switch (this.nextAction.type) {
-                case Action.ATTACK:
-                    this.actionComponent.attackInDirection(this.nextAction.pos);
-                    this.fsm.toAttack();
-                    didTransition = true;
-                    break;
-            }
-
-            this._clearNextAction();
-        }
-
-        if (!didTransition) {
-            var distanceFromTarget = util.getGridDistance(currentMoveToGridPosition, this.gameObjectComponent.currentGridPosition);
-            if (distanceFromTarget === 1) {
-                // Depending on target type, our action is different.
-                if (this.currentMoveToTarget.getComponent('BehaviourFallen')) {
-                    // Enemy.
-                    this.actionComponent.attackInDirection(currentMoveToGridPosition);
-                    this.fsm.toAttack();
-                } else {
-                    // NPC.
-                    this.actionComponent.faceDirection(currentMoveToGridPosition);
-                    Signals.sendInteract(this.entity, this.currentMoveToTarget);
-                    this.fsm.toIdle();
-                }
-            } else {
-                this.fsm.toIdle();
-            }
-        }
-    }
-};
-
-module.exports = InputControllerComponent;
-
-},{"./../core/component":7,"./../level_controller":16,"./../signals":23,"./../util":24,"assert":39,"inherits":86,"stately.js":112}],22:[function(require,module,exports){
-'use strict';
-
-var FileMgr = require('./core/file_mgr'),
-    FramePacker = require('./core/frame_packer'),
-    SpriteMgr = require('./core/sprite_mgr'),
-    MaterialMgr = require('./core/material_mgr'),
-    assert = require('assert'),
-    pathLib = require('path');
-
-var LoadUnit = {
-    COMMON: 0,
-    LEVEL: 1
-};
-
-function appendArray(array0, array1) {
-    array1.forEach(function(entry) {
-        array0.push(entry);
-    });
-}
-
-function decodeCEL(outFrames, spriteLUT, path) {
-    var pal = FileMgr.getFile('levels/towndata/town.pal');  // TODO:
-
-    var cel = FileMgr.getFile(path);
-    var frames = cel.decodeFrames(pal);
-    appendArray(outFrames, frames);
-
-    spriteLUT.push({
-        name: cel.name,
-        frameCount: frames.length
-    });
-}
-
-function decodeCL2(outFrames, spriteLUT, path) {
-    var pal = FileMgr.getFile('levels/towndata/town.pal');  // TODO:
-
-    var cl2 = FileMgr.getFile(path);
-    var images = cl2.decodeFrames(pal);
-
-    for (var i = 0; i < images.length; i++) {
-        var frames = images[i];
-        appendArray(outFrames, frames);
-
-        var spriteName = cl2.name + '_' + i;
-
-        spriteLUT.push({
-            name: spriteName,
-            frameCount: frames.length
-        });
-    }
-}
-
-function loadSprites(loadUnit, filePaths) {
-    var frames = [];
-    var spriteLUT = [];
-
-    // Decode all frame data.
-    for (var i = 0; i < filePaths.length; i++) {
-        switch (pathLib.extname(filePaths[i])) {
-            case '.cel':
-                decodeCEL(frames, spriteLUT, filePaths[i]);
-                break;
-            case '.cl2':
-                decodeCL2(frames, spriteLUT, filePaths[i]);
-                break;
-        }
-    }
-
-    // Pack all the frame data into compact texture atlases.
-    var width = 1024;
-    var height = 1024;
-    var packedFrameInfo = FramePacker.pack(width, height, frames);
-
-    // Generate textures.
-    var colorBufferIndexToTextureIdLUT = [];
-    var colorBuffers = packedFrameInfo.colorBuffers;
-    for (i = 0; i < colorBuffers.length; i++) {
-        var textureId = MaterialMgr.loadTexture(loadUnit, colorBuffers[i]);
-        colorBufferIndexToTextureIdLUT[i] = textureId;
-    }
-
-    // Register sprites.
-    var count = 0;
-    var frameInfos = packedFrameInfo.frameInfos;
-    for (i = 0; i < spriteLUT.length; i++) {
-        var spriteInfo = spriteLUT[i];
-        var spriteEntry = new Array(spriteInfo.frameCount);
-
-        for (var j = 0; j < spriteEntry.length; j++) {
-            var frameInfo = frameInfos[count++];
-
-            spriteEntry[j] = {
-                w: frameInfo.w, h: frameInfo.h,
-                uvs: frameInfo.uvs,
-                textureId: colorBufferIndexToTextureIdLUT[frameInfo.bufferIndex]
-            };
-        }
-
-        SpriteMgr.registerSprite(loadUnit, spriteInfo.name, spriteEntry);
-    }
-}
-
-function _loadCommon(onFinishedCallback) {
-    console.log('Loading common data...');
-
-    var filePaths = [
-        'levels/towndata/town.pal',
-        //'plrgfx/warrior/wls/wlsst.cl2',
-        //'plrgfx/warrior/wls/wlswl.cl2',
-        'plrgfx/warrior/wls/wlsas.cl2',
-        'plrgfx/warrior/wls/wlsaw.cl2',
-        'plrgfx/warrior/wls/wlsat.cl2'
-    ];
-
-    var loadUnit = LoadUnit.COMMON;
-    FileMgr.loadFiles(loadUnit, filePaths, function() {
-        loadSprites(loadUnit, filePaths);
-
-        onFinishedCallback();
-    });
-}
-
-function doLoadLevel_0(onFinishedCallback) {
-    var filePaths = [
-        'levels/towndata/town.cel',
-        'levels/towndata/town.min',
-        'levels/towndata/town.til',
-        'levels/towndata/town.sol',
-        'levels/towndata/sector1s.dun',
-
-        'towners/strytell/strytell.cel',
-
-        'objects/chest1.cel',
-
-        'monsters/falspear/phalln.cl2',
-        'monsters/falspear/phalla.cl2',
-        'monsters/falspear/phalld.cl2',
-        'monsters/falspear/phallw.cl2',
-        'monsters/falspear/phallh.cl2',
-    ];
-
-    var loadUnit = LoadUnit.LEVEL;
-    FileMgr.loadFiles(loadUnit, filePaths, function() {
-        loadSprites(loadUnit, filePaths);
-
-        onFinishedCallback();
-    });
-}
-
-var activeLevelIndex = null;
-
-function _loadLevel(levelIndex, onFinishedCallback) {
-    assert(activeLevelIndex === null, 'Level is already loaded: ' + activeLevelIndex);
-
-    console.log('Loading level [' + levelIndex + '] data...');
-    activeLevelIndex = levelIndex;
-
-    switch (levelIndex) {
-        case 0:
-            doLoadLevel_0(onFinishedCallback);
-            break;
-        default:
-            console.error('Unhandled level index: ' + levelIndex);
-            break;
-    }
-}
-
-function doUnload(loadUnit) {
-    MaterialMgr.unloadTextures(loadUnit);
-    SpriteMgr.unloadSprites(loadUnit);
-    FileMgr.unloadFiles(loadUnit);
-}
-
-function _unloadCommon() {
-    console.log('Unloading common data...');
-
-    doUnload(LoadUnit.COMMON);
-}
-
-function _unloadActiveLevel() {
-    assert(activeLevelIndex !== null);
-
-    console.log('Unloading level [' + activeLevelIndex + '] data...');
-
-    doUnload(LoadUnit.LEVEL);
-    activeLevelIndex = null;
-}
-
-module.exports = {
-    loadCommon: _loadCommon,
-    unloadCommon: _unloadCommon,
-
-    loadLevel: _loadLevel,
-    unloadActiveLevel: _unloadActiveLevel
-};
-
-},{"./core/file_mgr":9,"./core/frame_packer":10,"./core/material_mgr":11,"./core/sprite_mgr":13,"assert":39,"path":46}],23:[function(require,module,exports){
-'use strict';
-
-module.exports = {
-    /**
-     * Warp an entity to a given grid position.
-     */
-    sendWarp: function(toEntity, gridPos) {
-        toEntity.sendSignal('warp', gridPos);
-    },
-
-    /**
-     * Damage a given entity.
-     * Info:
-     *  amount: the amount of damage
-     *  fromEntity: the entity that initiated the damage
-     */
-    sendDamage: function(toEntity, info) {
-        toEntity.sendSignal('damage', info);
-    },
-
-    sendTarget: function(toEntity) {
-        toEntity.sendSignal('target');
-    },
-
-    sendInteract: function(fromEntity, toEntity) {
-        toEntity.sendSignal('interact', fromEntity);
-    }
-};
-
-},{}],24:[function(require,module,exports){
-(function (Buffer){
-'use strict';
-
-var http = require('http');
-
-var SCHEME = 'http';
-// TODO: external IP is not working from within network
-var HOST = 'localhost';
-// var HOST = '122.130.169.187';
-var PORT = '3000';
-var PATH_BASE = '/mpq_files/';
-
-function _requestReadFile(fileName, cb) {
-    console.log('Requesting file: ' + fileName);
-
-    // Convert forward slashes to backward slashs.
-    // MPQ files are stored with backward slashes (path\to\file.ext), but
-    // we want to allow forward slash usage from application (path/to/file.ext)
-    // in order to use all standard nodejs path implementations (Unix-style).
-    fileName = fileName.replace(/\//g, '\\');
-
-    var req = http.request({
-        scheme: SCHEME,
-        host: HOST,
-        port: PORT,
-        path : PATH_BASE + encodeURIComponent(fileName),
-        method: 'GET',
-        withCredentials: false,
-        responseType: 'arraybuffer'
-    }, function(res) {
-        var data = [];
-        res.on('data', function (buf) {
-            data.push(buf);
-        });
-
-        res.on('end', function () {
-            if (res.statusCode != 200) {
-                return cb(new Error('HTTP request failed: ' + res.statusCode), res);
-            }
-
-            data = Buffer.concat(data);
-
-            // From the browser, we are given a UInt8Array,
-            // so we need to convert to a Buffer object.
-            if (!Buffer.isBuffer(data)) {
-                data = new Buffer(data);
-            }
-
-            cb(null, res, data);
-        });
-    });
-
-    req.on('error', function(err) {
-        cb(err, null);
-    });
-
-    req.end();
-}
-
-var TILE_WIDTH = 64;
-var TILE_HEIGHT = 32;
-
-/**
- * Convert screen coordinates to projection space coordinates (-1, +1).
- */
-function _screenToProjectionCoord(screenWidth, screenHeight, screenPosX, screenPosY) {
-    return {
-        x: screenPosX / screenWidth * 2 - 1,
-        y: screenPosY / screenHeight * 2 - 1
-    };
-}
-
-/**
- * Convert screen coordinates to world coordinates.
- */
-function _screenToWorldCoord(screenWidth, screenHeight, screenPos, camera, resultVec) {
-    var projectPos = _screenToProjectionCoord(screenWidth, screenHeight, screenPos.x, screenPos.y);
-
-    // TODO: eliminate this dependency?
-    var projector = new THREE.Projector();
-    var v = new THREE.Vector3(projectPos.x, projectPos.y, 0);
-    projector.unprojectVector(v, camera);
-
-    resultVec.set(v.x, v.y);
-}
-
-/**
- * Convert world to grid coordinate.
- */
-function _worldToGridCoord(worldPos, resultVec) {
-    var col = (worldPos.x / TILE_WIDTH) - (worldPos.y / TILE_HEIGHT);
-    var row = ((-2 * worldPos.y) / TILE_HEIGHT) - col;
-
-    // TODO: clamp to world boundaries?
-    col = Math.min(Math.max(col, 0), 49);
-    row = Math.min(Math.max(row, 0), 49);
-
-    resultVec.set(Math.floor(col), Math.floor(row));
-}
-
-/**
- * Convert grid to world coordinates.
- */
-function _gridToWorldCoord(gridPos, resultVec) {
-    resultVec.set(
-        (gridPos.x * (TILE_WIDTH / 2)) - (gridPos.y * (TILE_WIDTH / 2)),
-        -(TILE_HEIGHT / 2) - (gridPos.x * (TILE_HEIGHT / 2)) - (gridPos.y * (TILE_HEIGHT / 2))
-    );
-}
-
-/**
- * Gets the distance in grid coordinates between two grid positions.
- * Neighbor grid coordinates (in 8 directions) will have a distance of 1.
- * Reference:
- *  - http://en.wikipedia.org/wiki/Chebyshev_distance
- */
-function _getGridDistance(fromGridPos, toGridPos) {
-    var dx = Math.abs(fromGridPos.x - toGridPos.x);
-    var dy = Math.abs(fromGridPos.y - toGridPos.y);
-    return Math.max(dx, dy);
-}
-
-/**
- * Get the grid offset for 1 grid position in the facing direction.
- */
-function _getGridOffsetInDirection(direction) {
-    var result = new THREE.Vector2();
-
-    switch (direction) {
-        case 0:
-            result.set(1, 1);
-            break;
-        case 1:
-            result.set(0, 1);
-            break;
-        case 2:
-            result.set(-1, 1);
-            break;
-        case 3:
-            result.set(-1, 0);
-            break;
-        case 4:
-            result.set(-1, -1);
-            break;
-        case 5:
-            result.set(0, -1);
-            break;
-        case 6:
-            result.set(1, -1);
-            break;
-        case 7:
-            result.set(1, 0);
-            break;
-        default:
-            console.warn('Unhandled facing direction: ' + direction);
-            break;
-    }
-
-    return result;
-}
-
-function _getMoveSpeed(direction, xSpeed, ySpeed) {
-    // For diagonal tiles, we adjust the speed to scale with the ratio of the tiles.
-    // This helps maintain the 3D perspective illusion.
-    var sum = TILE_WIDTH + TILE_HEIGHT;
-    var xPercent = TILE_WIDTH / sum;
-    var yPercent = TILE_HEIGHT / sum;
-    var speed = (xSpeed * xPercent) + (ySpeed * yPercent);
-
-    switch (direction) {
-        case 0: return ySpeed;
-        case 1: return speed;
-        case 2: return xSpeed;
-        case 3: return speed;
-        case 4: return ySpeed;
-        case 5: return speed;
-        case 6: return xSpeed;
-        case 7: return speed;
-        default:
-            console.warn('Unhandled direction: ' + direction);
-            return xSpeed;
-    }
-}
-
-function _getDirection(oldX, oldY, newX, newY) {
-    var dx = newX - oldX;
-    var dy = newY - oldY;
+function getFacingDirection(fromPos, toPos) {
+    var dx = toPos[0] - fromPos[0];
+    var dy = toPos[1] - fromPos[1];
 
     dx = Math.max(-1, Math.min(1, dx));
     dy = Math.max(-1, Math.min(1, dy));
 
     if (dx === 0) {
         switch (dy) {
-            case 1: return 1;
-            case -1: return 5;
+            case 1:
+                return FACING_DIRECTIONS.SOUTHWEST;
+            case -1:
+                return FACING_DIRECTIONS.NORTHEAST;
         }
     } else if (dx === 1) {
         switch (dy) {
-            case 1: return 0;
-            case 0: return 7;
-            default: return 6;
+            case 1:
+                return FACING_DIRECTIONS.SOUTH;
+            case 0:
+                return FACING_DIRECTIONS.SOUTHEAST;
+            default:
+                return FACING_DIRECTIONS.EAST;
         }
     } else {
         switch (dy) {
-            case 1: return 2;
-            case 0: return 3;
-            default: return 4;
+            case 1:
+                return FACING_DIRECTIONS.WEST;
+            case 0:
+                return FACING_DIRECTIONS.NORTHWEST;
+            default:
+                return FACING_DIRECTIONS.NORTH;
         }
     }
 
-    // Failure - maintain current facing direction.
-    return -1;
+    return FACING_DIRECTIONS.INVALID;
 }
 
-function _dbgDrawTile(col, row, colorStr, THREE, DbgDraw) {
-    var centerPos = new THREE.Vector2();
-    _gridToWorldCoord(new THREE.Vector2(col, row), centerPos);
+exports.FACING_DIRECTIONS = FACING_DIRECTIONS;
+exports.getFacingDirection = getFacingDirection;
 
-    var z = 6000;
-    var points = [
-        // Top.
-        new THREE.Vector3(
-            centerPos.x,
-            centerPos.y + (TILE_HEIGHT / 2),
-            z),
-        // Right.
-        new THREE.Vector3(
-            centerPos.x + (TILE_WIDTH / 2),
-            centerPos.y,
-            z),
-        // Bottom.
-        new THREE.Vector3(
-            centerPos.x,
-            centerPos.y - (TILE_HEIGHT / 2),
-            z),
-        // Left.
-        new THREE.Vector3(
-            centerPos.x - (TILE_WIDTH / 2),
-            centerPos.y,
-            z),
-        // Top (connect back to top).
-        new THREE.Vector3(
-            centerPos.x,
-            centerPos.y + TILE_HEIGHT / 2,
-            z)
-    ];
-
-    DbgDraw.drawLineStrip(points, colorStr);
-}
-
-function getRandomInt(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-module.exports = {
-    requestReadFile: _requestReadFile,
-
-    TILE_WIDTH: TILE_WIDTH,
-    TILE_HEIGHT: TILE_HEIGHT,
-    screenToProjectionCoord: _screenToProjectionCoord,
-    screenToWorldCoord: _screenToWorldCoord,
-    worldToGridCoord: _worldToGridCoord,
-    gridToWorldCoord: _gridToWorldCoord,
-    getGridDistance: _getGridDistance,
-    getGridOffsetInDirection: _getGridOffsetInDirection,
-    getMoveSpeed: _getMoveSpeed,
-    getDirection: _getDirection,
-
-    getRandomInt: getRandomInt,
-
-    dbgDrawTile: _dbgDrawTile
-};
-
-}).call(this,require("buffer").Buffer)
-},{"buffer":41,"http":82}],25:[function(require,module,exports){
-(function (process){
-/*!
- * async
- * https://github.com/caolan/async
- *
- * Copyright 2010-2014 Caolan McMahon
- * Released under the MIT license
- */
-/*jshint onevar: false, indent:4 */
-/*global setImmediate: false, setTimeout: false, console: false */
-(function () {
-
-    var async = {};
-
-    // global on the server, window in the browser
-    var root, previous_async;
-
-    root = this;
-    if (root != null) {
-      previous_async = root.async;
-    }
-
-    async.noConflict = function () {
-        root.async = previous_async;
-        return async;
-    };
-
-    function only_once(fn) {
-        var called = false;
-        return function() {
-            if (called) throw new Error("Callback was already called.");
-            called = true;
-            fn.apply(root, arguments);
-        }
-    }
-
-    //// cross-browser compatiblity functions ////
-
-    var _toString = Object.prototype.toString;
-
-    var _isArray = Array.isArray || function (obj) {
-        return _toString.call(obj) === '[object Array]';
-    };
-
-    var _each = function (arr, iterator) {
-        if (arr.forEach) {
-            return arr.forEach(iterator);
-        }
-        for (var i = 0; i < arr.length; i += 1) {
-            iterator(arr[i], i, arr);
-        }
-    };
-
-    var _map = function (arr, iterator) {
-        if (arr.map) {
-            return arr.map(iterator);
-        }
-        var results = [];
-        _each(arr, function (x, i, a) {
-            results.push(iterator(x, i, a));
-        });
-        return results;
-    };
-
-    var _reduce = function (arr, iterator, memo) {
-        if (arr.reduce) {
-            return arr.reduce(iterator, memo);
-        }
-        _each(arr, function (x, i, a) {
-            memo = iterator(memo, x, i, a);
-        });
-        return memo;
-    };
-
-    var _keys = function (obj) {
-        if (Object.keys) {
-            return Object.keys(obj);
-        }
-        var keys = [];
-        for (var k in obj) {
-            if (obj.hasOwnProperty(k)) {
-                keys.push(k);
-            }
-        }
-        return keys;
-    };
-
-    //// exported async module functions ////
-
-    //// nextTick implementation with browser-compatible fallback ////
-    if (typeof process === 'undefined' || !(process.nextTick)) {
-        if (typeof setImmediate === 'function') {
-            async.nextTick = function (fn) {
-                // not a direct alias for IE10 compatibility
-                setImmediate(fn);
-            };
-            async.setImmediate = async.nextTick;
-        }
-        else {
-            async.nextTick = function (fn) {
-                setTimeout(fn, 0);
-            };
-            async.setImmediate = async.nextTick;
-        }
-    }
-    else {
-        async.nextTick = process.nextTick;
-        if (typeof setImmediate !== 'undefined') {
-            async.setImmediate = function (fn) {
-              // not a direct alias for IE10 compatibility
-              setImmediate(fn);
-            };
-        }
-        else {
-            async.setImmediate = async.nextTick;
-        }
-    }
-
-    async.each = function (arr, iterator, callback) {
-        callback = callback || function () {};
-        if (!arr.length) {
-            return callback();
-        }
-        var completed = 0;
-        _each(arr, function (x) {
-            iterator(x, only_once(done) );
-        });
-        function done(err) {
-          if (err) {
-              callback(err);
-              callback = function () {};
-          }
-          else {
-              completed += 1;
-              if (completed >= arr.length) {
-                  callback();
-              }
-          }
-        }
-    };
-    async.forEach = async.each;
-
-    async.eachSeries = function (arr, iterator, callback) {
-        callback = callback || function () {};
-        if (!arr.length) {
-            return callback();
-        }
-        var completed = 0;
-        var iterate = function () {
-            iterator(arr[completed], function (err) {
-                if (err) {
-                    callback(err);
-                    callback = function () {};
-                }
-                else {
-                    completed += 1;
-                    if (completed >= arr.length) {
-                        callback();
-                    }
-                    else {
-                        iterate();
-                    }
-                }
-            });
-        };
-        iterate();
-    };
-    async.forEachSeries = async.eachSeries;
-
-    async.eachLimit = function (arr, limit, iterator, callback) {
-        var fn = _eachLimit(limit);
-        fn.apply(null, [arr, iterator, callback]);
-    };
-    async.forEachLimit = async.eachLimit;
-
-    var _eachLimit = function (limit) {
-
-        return function (arr, iterator, callback) {
-            callback = callback || function () {};
-            if (!arr.length || limit <= 0) {
-                return callback();
-            }
-            var completed = 0;
-            var started = 0;
-            var running = 0;
-
-            (function replenish () {
-                if (completed >= arr.length) {
-                    return callback();
-                }
-
-                while (running < limit && started < arr.length) {
-                    started += 1;
-                    running += 1;
-                    iterator(arr[started - 1], function (err) {
-                        if (err) {
-                            callback(err);
-                            callback = function () {};
-                        }
-                        else {
-                            completed += 1;
-                            running -= 1;
-                            if (completed >= arr.length) {
-                                callback();
-                            }
-                            else {
-                                replenish();
-                            }
-                        }
-                    });
-                }
-            })();
-        };
-    };
-
-
-    var doParallel = function (fn) {
-        return function () {
-            var args = Array.prototype.slice.call(arguments);
-            return fn.apply(null, [async.each].concat(args));
-        };
-    };
-    var doParallelLimit = function(limit, fn) {
-        return function () {
-            var args = Array.prototype.slice.call(arguments);
-            return fn.apply(null, [_eachLimit(limit)].concat(args));
-        };
-    };
-    var doSeries = function (fn) {
-        return function () {
-            var args = Array.prototype.slice.call(arguments);
-            return fn.apply(null, [async.eachSeries].concat(args));
-        };
-    };
-
-
-    var _asyncMap = function (eachfn, arr, iterator, callback) {
-        arr = _map(arr, function (x, i) {
-            return {index: i, value: x};
-        });
-        if (!callback) {
-            eachfn(arr, function (x, callback) {
-                iterator(x.value, function (err) {
-                    callback(err);
-                });
-            });
-        } else {
-            var results = [];
-            eachfn(arr, function (x, callback) {
-                iterator(x.value, function (err, v) {
-                    results[x.index] = v;
-                    callback(err);
-                });
-            }, function (err) {
-                callback(err, results);
-            });
-        }
-    };
-    async.map = doParallel(_asyncMap);
-    async.mapSeries = doSeries(_asyncMap);
-    async.mapLimit = function (arr, limit, iterator, callback) {
-        return _mapLimit(limit)(arr, iterator, callback);
-    };
-
-    var _mapLimit = function(limit) {
-        return doParallelLimit(limit, _asyncMap);
-    };
-
-    // reduce only has a series version, as doing reduce in parallel won't
-    // work in many situations.
-    async.reduce = function (arr, memo, iterator, callback) {
-        async.eachSeries(arr, function (x, callback) {
-            iterator(memo, x, function (err, v) {
-                memo = v;
-                callback(err);
-            });
-        }, function (err) {
-            callback(err, memo);
-        });
-    };
-    // inject alias
-    async.inject = async.reduce;
-    // foldl alias
-    async.foldl = async.reduce;
-
-    async.reduceRight = function (arr, memo, iterator, callback) {
-        var reversed = _map(arr, function (x) {
-            return x;
-        }).reverse();
-        async.reduce(reversed, memo, iterator, callback);
-    };
-    // foldr alias
-    async.foldr = async.reduceRight;
-
-    var _filter = function (eachfn, arr, iterator, callback) {
-        var results = [];
-        arr = _map(arr, function (x, i) {
-            return {index: i, value: x};
-        });
-        eachfn(arr, function (x, callback) {
-            iterator(x.value, function (v) {
-                if (v) {
-                    results.push(x);
-                }
-                callback();
-            });
-        }, function (err) {
-            callback(_map(results.sort(function (a, b) {
-                return a.index - b.index;
-            }), function (x) {
-                return x.value;
-            }));
-        });
-    };
-    async.filter = doParallel(_filter);
-    async.filterSeries = doSeries(_filter);
-    // select alias
-    async.select = async.filter;
-    async.selectSeries = async.filterSeries;
-
-    var _reject = function (eachfn, arr, iterator, callback) {
-        var results = [];
-        arr = _map(arr, function (x, i) {
-            return {index: i, value: x};
-        });
-        eachfn(arr, function (x, callback) {
-            iterator(x.value, function (v) {
-                if (!v) {
-                    results.push(x);
-                }
-                callback();
-            });
-        }, function (err) {
-            callback(_map(results.sort(function (a, b) {
-                return a.index - b.index;
-            }), function (x) {
-                return x.value;
-            }));
-        });
-    };
-    async.reject = doParallel(_reject);
-    async.rejectSeries = doSeries(_reject);
-
-    var _detect = function (eachfn, arr, iterator, main_callback) {
-        eachfn(arr, function (x, callback) {
-            iterator(x, function (result) {
-                if (result) {
-                    main_callback(x);
-                    main_callback = function () {};
-                }
-                else {
-                    callback();
-                }
-            });
-        }, function (err) {
-            main_callback();
-        });
-    };
-    async.detect = doParallel(_detect);
-    async.detectSeries = doSeries(_detect);
-
-    async.some = function (arr, iterator, main_callback) {
-        async.each(arr, function (x, callback) {
-            iterator(x, function (v) {
-                if (v) {
-                    main_callback(true);
-                    main_callback = function () {};
-                }
-                callback();
-            });
-        }, function (err) {
-            main_callback(false);
-        });
-    };
-    // any alias
-    async.any = async.some;
-
-    async.every = function (arr, iterator, main_callback) {
-        async.each(arr, function (x, callback) {
-            iterator(x, function (v) {
-                if (!v) {
-                    main_callback(false);
-                    main_callback = function () {};
-                }
-                callback();
-            });
-        }, function (err) {
-            main_callback(true);
-        });
-    };
-    // all alias
-    async.all = async.every;
-
-    async.sortBy = function (arr, iterator, callback) {
-        async.map(arr, function (x, callback) {
-            iterator(x, function (err, criteria) {
-                if (err) {
-                    callback(err);
-                }
-                else {
-                    callback(null, {value: x, criteria: criteria});
-                }
-            });
-        }, function (err, results) {
-            if (err) {
-                return callback(err);
-            }
-            else {
-                var fn = function (left, right) {
-                    var a = left.criteria, b = right.criteria;
-                    return a < b ? -1 : a > b ? 1 : 0;
-                };
-                callback(null, _map(results.sort(fn), function (x) {
-                    return x.value;
-                }));
-            }
-        });
-    };
-
-    async.auto = function (tasks, callback) {
-        callback = callback || function () {};
-        var keys = _keys(tasks);
-        var remainingTasks = keys.length
-        if (!remainingTasks) {
-            return callback();
-        }
-
-        var results = {};
-
-        var listeners = [];
-        var addListener = function (fn) {
-            listeners.unshift(fn);
-        };
-        var removeListener = function (fn) {
-            for (var i = 0; i < listeners.length; i += 1) {
-                if (listeners[i] === fn) {
-                    listeners.splice(i, 1);
-                    return;
-                }
-            }
-        };
-        var taskComplete = function () {
-            remainingTasks--
-            _each(listeners.slice(0), function (fn) {
-                fn();
-            });
-        };
-
-        addListener(function () {
-            if (!remainingTasks) {
-                var theCallback = callback;
-                // prevent final callback from calling itself if it errors
-                callback = function () {};
-
-                theCallback(null, results);
-            }
-        });
-
-        _each(keys, function (k) {
-            var task = _isArray(tasks[k]) ? tasks[k]: [tasks[k]];
-            var taskCallback = function (err) {
-                var args = Array.prototype.slice.call(arguments, 1);
-                if (args.length <= 1) {
-                    args = args[0];
-                }
-                if (err) {
-                    var safeResults = {};
-                    _each(_keys(results), function(rkey) {
-                        safeResults[rkey] = results[rkey];
-                    });
-                    safeResults[k] = args;
-                    callback(err, safeResults);
-                    // stop subsequent errors hitting callback multiple times
-                    callback = function () {};
-                }
-                else {
-                    results[k] = args;
-                    async.setImmediate(taskComplete);
-                }
-            };
-            var requires = task.slice(0, Math.abs(task.length - 1)) || [];
-            var ready = function () {
-                return _reduce(requires, function (a, x) {
-                    return (a && results.hasOwnProperty(x));
-                }, true) && !results.hasOwnProperty(k);
-            };
-            if (ready()) {
-                task[task.length - 1](taskCallback, results);
-            }
-            else {
-                var listener = function () {
-                    if (ready()) {
-                        removeListener(listener);
-                        task[task.length - 1](taskCallback, results);
-                    }
-                };
-                addListener(listener);
-            }
-        });
-    };
-
-    async.retry = function(times, task, callback) {
-        var DEFAULT_TIMES = 5;
-        var attempts = [];
-        // Use defaults if times not passed
-        if (typeof times === 'function') {
-            callback = task;
-            task = times;
-            times = DEFAULT_TIMES;
-        }
-        // Make sure times is a number
-        times = parseInt(times, 10) || DEFAULT_TIMES;
-        var wrappedTask = function(wrappedCallback, wrappedResults) {
-            var retryAttempt = function(task, finalAttempt) {
-                return function(seriesCallback) {
-                    task(function(err, result){
-                        seriesCallback(!err || finalAttempt, {err: err, result: result});
-                    }, wrappedResults);
-                };
-            };
-            while (times) {
-                attempts.push(retryAttempt(task, !(times-=1)));
-            }
-            async.series(attempts, function(done, data){
-                data = data[data.length - 1];
-                (wrappedCallback || callback)(data.err, data.result);
-            });
-        }
-        // If a callback is passed, run this as a controll flow
-        return callback ? wrappedTask() : wrappedTask
-    };
-
-    async.waterfall = function (tasks, callback) {
-        callback = callback || function () {};
-        if (!_isArray(tasks)) {
-          var err = new Error('First argument to waterfall must be an array of functions');
-          return callback(err);
-        }
-        if (!tasks.length) {
-            return callback();
-        }
-        var wrapIterator = function (iterator) {
-            return function (err) {
-                if (err) {
-                    callback.apply(null, arguments);
-                    callback = function () {};
-                }
-                else {
-                    var args = Array.prototype.slice.call(arguments, 1);
-                    var next = iterator.next();
-                    if (next) {
-                        args.push(wrapIterator(next));
-                    }
-                    else {
-                        args.push(callback);
-                    }
-                    async.setImmediate(function () {
-                        iterator.apply(null, args);
-                    });
-                }
-            };
-        };
-        wrapIterator(async.iterator(tasks))();
-    };
-
-    var _parallel = function(eachfn, tasks, callback) {
-        callback = callback || function () {};
-        if (_isArray(tasks)) {
-            eachfn.map(tasks, function (fn, callback) {
-                if (fn) {
-                    fn(function (err) {
-                        var args = Array.prototype.slice.call(arguments, 1);
-                        if (args.length <= 1) {
-                            args = args[0];
-                        }
-                        callback.call(null, err, args);
-                    });
-                }
-            }, callback);
-        }
-        else {
-            var results = {};
-            eachfn.each(_keys(tasks), function (k, callback) {
-                tasks[k](function (err) {
-                    var args = Array.prototype.slice.call(arguments, 1);
-                    if (args.length <= 1) {
-                        args = args[0];
-                    }
-                    results[k] = args;
-                    callback(err);
-                });
-            }, function (err) {
-                callback(err, results);
-            });
-        }
-    };
-
-    async.parallel = function (tasks, callback) {
-        _parallel({ map: async.map, each: async.each }, tasks, callback);
-    };
-
-    async.parallelLimit = function(tasks, limit, callback) {
-        _parallel({ map: _mapLimit(limit), each: _eachLimit(limit) }, tasks, callback);
-    };
-
-    async.series = function (tasks, callback) {
-        callback = callback || function () {};
-        if (_isArray(tasks)) {
-            async.mapSeries(tasks, function (fn, callback) {
-                if (fn) {
-                    fn(function (err) {
-                        var args = Array.prototype.slice.call(arguments, 1);
-                        if (args.length <= 1) {
-                            args = args[0];
-                        }
-                        callback.call(null, err, args);
-                    });
-                }
-            }, callback);
-        }
-        else {
-            var results = {};
-            async.eachSeries(_keys(tasks), function (k, callback) {
-                tasks[k](function (err) {
-                    var args = Array.prototype.slice.call(arguments, 1);
-                    if (args.length <= 1) {
-                        args = args[0];
-                    }
-                    results[k] = args;
-                    callback(err);
-                });
-            }, function (err) {
-                callback(err, results);
-            });
-        }
-    };
-
-    async.iterator = function (tasks) {
-        var makeCallback = function (index) {
-            var fn = function () {
-                if (tasks.length) {
-                    tasks[index].apply(null, arguments);
-                }
-                return fn.next();
-            };
-            fn.next = function () {
-                return (index < tasks.length - 1) ? makeCallback(index + 1): null;
-            };
-            return fn;
-        };
-        return makeCallback(0);
-    };
-
-    async.apply = function (fn) {
-        var args = Array.prototype.slice.call(arguments, 1);
-        return function () {
-            return fn.apply(
-                null, args.concat(Array.prototype.slice.call(arguments))
-            );
-        };
-    };
-
-    var _concat = function (eachfn, arr, fn, callback) {
-        var r = [];
-        eachfn(arr, function (x, cb) {
-            fn(x, function (err, y) {
-                r = r.concat(y || []);
-                cb(err);
-            });
-        }, function (err) {
-            callback(err, r);
-        });
-    };
-    async.concat = doParallel(_concat);
-    async.concatSeries = doSeries(_concat);
-
-    async.whilst = function (test, iterator, callback) {
-        if (test()) {
-            iterator(function (err) {
-                if (err) {
-                    return callback(err);
-                }
-                async.whilst(test, iterator, callback);
-            });
-        }
-        else {
-            callback();
-        }
-    };
-
-    async.doWhilst = function (iterator, test, callback) {
-        iterator(function (err) {
-            if (err) {
-                return callback(err);
-            }
-            var args = Array.prototype.slice.call(arguments, 1);
-            if (test.apply(null, args)) {
-                async.doWhilst(iterator, test, callback);
-            }
-            else {
-                callback();
-            }
-        });
-    };
-
-    async.until = function (test, iterator, callback) {
-        if (!test()) {
-            iterator(function (err) {
-                if (err) {
-                    return callback(err);
-                }
-                async.until(test, iterator, callback);
-            });
-        }
-        else {
-            callback();
-        }
-    };
-
-    async.doUntil = function (iterator, test, callback) {
-        iterator(function (err) {
-            if (err) {
-                return callback(err);
-            }
-            var args = Array.prototype.slice.call(arguments, 1);
-            if (!test.apply(null, args)) {
-                async.doUntil(iterator, test, callback);
-            }
-            else {
-                callback();
-            }
-        });
-    };
-
-    async.queue = function (worker, concurrency) {
-        if (concurrency === undefined) {
-            concurrency = 1;
-        }
-        function _insert(q, data, pos, callback) {
-          if (!q.started){
-            q.started = true;
-          }
-          if (!_isArray(data)) {
-              data = [data];
-          }
-          if(data.length == 0) {
-             // call drain immediately if there are no tasks
-             return async.setImmediate(function() {
-                 if (q.drain) {
-                     q.drain();
-                 }
-             });
-          }
-          _each(data, function(task) {
-              var item = {
-                  data: task,
-                  callback: typeof callback === 'function' ? callback : null
-              };
-
-              if (pos) {
-                q.tasks.unshift(item);
-              } else {
-                q.tasks.push(item);
-              }
-
-              if (q.saturated && q.tasks.length === q.concurrency) {
-                  q.saturated();
-              }
-              async.setImmediate(q.process);
-          });
-        }
-
-        var workers = 0;
-        var q = {
-            tasks: [],
-            concurrency: concurrency,
-            saturated: null,
-            empty: null,
-            drain: null,
-            started: false,
-            paused: false,
-            push: function (data, callback) {
-              _insert(q, data, false, callback);
-            },
-            kill: function () {
-              q.drain = null;
-              q.tasks = [];
-            },
-            unshift: function (data, callback) {
-              _insert(q, data, true, callback);
-            },
-            process: function () {
-                if (!q.paused && workers < q.concurrency && q.tasks.length) {
-                    var task = q.tasks.shift();
-                    if (q.empty && q.tasks.length === 0) {
-                        q.empty();
-                    }
-                    workers += 1;
-                    var next = function () {
-                        workers -= 1;
-                        if (task.callback) {
-                            task.callback.apply(task, arguments);
-                        }
-                        if (q.drain && q.tasks.length + workers === 0) {
-                            q.drain();
-                        }
-                        q.process();
-                    };
-                    var cb = only_once(next);
-                    worker(task.data, cb);
-                }
-            },
-            length: function () {
-                return q.tasks.length;
-            },
-            running: function () {
-                return workers;
-            },
-            idle: function() {
-                return q.tasks.length + workers === 0;
-            },
-            pause: function () {
-                if (q.paused === true) { return; }
-                q.paused = true;
-                q.process();
-            },
-            resume: function () {
-                if (q.paused === false) { return; }
-                q.paused = false;
-                q.process();
-            }
-        };
-        return q;
-    };
-    
-    async.priorityQueue = function (worker, concurrency) {
-        
-        function _compareTasks(a, b){
-          return a.priority - b.priority;
-        };
-        
-        function _binarySearch(sequence, item, compare) {
-          var beg = -1,
-              end = sequence.length - 1;
-          while (beg < end) {
-            var mid = beg + ((end - beg + 1) >>> 1);
-            if (compare(item, sequence[mid]) >= 0) {
-              beg = mid;
-            } else {
-              end = mid - 1;
-            }
-          }
-          return beg;
-        }
-        
-        function _insert(q, data, priority, callback) {
-          if (!q.started){
-            q.started = true;
-          }
-          if (!_isArray(data)) {
-              data = [data];
-          }
-          if(data.length == 0) {
-             // call drain immediately if there are no tasks
-             return async.setImmediate(function() {
-                 if (q.drain) {
-                     q.drain();
-                 }
-             });
-          }
-          _each(data, function(task) {
-              var item = {
-                  data: task,
-                  priority: priority,
-                  callback: typeof callback === 'function' ? callback : null
-              };
-              
-              q.tasks.splice(_binarySearch(q.tasks, item, _compareTasks) + 1, 0, item);
-
-              if (q.saturated && q.tasks.length === q.concurrency) {
-                  q.saturated();
-              }
-              async.setImmediate(q.process);
-          });
-        }
-        
-        // Start with a normal queue
-        var q = async.queue(worker, concurrency);
-        
-        // Override push to accept second parameter representing priority
-        q.push = function (data, priority, callback) {
-          _insert(q, data, priority, callback);
-        };
-        
-        // Remove unshift function
-        delete q.unshift;
-
-        return q;
-    };
-
-    async.cargo = function (worker, payload) {
-        var working     = false,
-            tasks       = [];
-
-        var cargo = {
-            tasks: tasks,
-            payload: payload,
-            saturated: null,
-            empty: null,
-            drain: null,
-            drained: true,
-            push: function (data, callback) {
-                if (!_isArray(data)) {
-                    data = [data];
-                }
-                _each(data, function(task) {
-                    tasks.push({
-                        data: task,
-                        callback: typeof callback === 'function' ? callback : null
-                    });
-                    cargo.drained = false;
-                    if (cargo.saturated && tasks.length === payload) {
-                        cargo.saturated();
-                    }
-                });
-                async.setImmediate(cargo.process);
-            },
-            process: function process() {
-                if (working) return;
-                if (tasks.length === 0) {
-                    if(cargo.drain && !cargo.drained) cargo.drain();
-                    cargo.drained = true;
-                    return;
-                }
-
-                var ts = typeof payload === 'number'
-                            ? tasks.splice(0, payload)
-                            : tasks.splice(0, tasks.length);
-
-                var ds = _map(ts, function (task) {
-                    return task.data;
-                });
-
-                if(cargo.empty) cargo.empty();
-                working = true;
-                worker(ds, function () {
-                    working = false;
-
-                    var args = arguments;
-                    _each(ts, function (data) {
-                        if (data.callback) {
-                            data.callback.apply(null, args);
-                        }
-                    });
-
-                    process();
-                });
-            },
-            length: function () {
-                return tasks.length;
-            },
-            running: function () {
-                return working;
-            }
-        };
-        return cargo;
-    };
-
-    var _console_fn = function (name) {
-        return function (fn) {
-            var args = Array.prototype.slice.call(arguments, 1);
-            fn.apply(null, args.concat([function (err) {
-                var args = Array.prototype.slice.call(arguments, 1);
-                if (typeof console !== 'undefined') {
-                    if (err) {
-                        if (console.error) {
-                            console.error(err);
-                        }
-                    }
-                    else if (console[name]) {
-                        _each(args, function (x) {
-                            console[name](x);
-                        });
-                    }
-                }
-            }]));
-        };
-    };
-    async.log = _console_fn('log');
-    async.dir = _console_fn('dir');
-    /*async.info = _console_fn('info');
-    async.warn = _console_fn('warn');
-    async.error = _console_fn('error');*/
-
-    async.memoize = function (fn, hasher) {
-        var memo = {};
-        var queues = {};
-        hasher = hasher || function (x) {
-            return x;
-        };
-        var memoized = function () {
-            var args = Array.prototype.slice.call(arguments);
-            var callback = args.pop();
-            var key = hasher.apply(null, args);
-            if (key in memo) {
-                async.nextTick(function () {
-                    callback.apply(null, memo[key]);
-                });
-            }
-            else if (key in queues) {
-                queues[key].push(callback);
-            }
-            else {
-                queues[key] = [callback];
-                fn.apply(null, args.concat([function () {
-                    memo[key] = arguments;
-                    var q = queues[key];
-                    delete queues[key];
-                    for (var i = 0, l = q.length; i < l; i++) {
-                      q[i].apply(null, arguments);
-                    }
-                }]));
-            }
-        };
-        memoized.memo = memo;
-        memoized.unmemoized = fn;
-        return memoized;
-    };
-
-    async.unmemoize = function (fn) {
-      return function () {
-        return (fn.unmemoized || fn).apply(null, arguments);
-      };
-    };
-
-    async.times = function (count, iterator, callback) {
-        var counter = [];
-        for (var i = 0; i < count; i++) {
-            counter.push(i);
-        }
-        return async.map(counter, iterator, callback);
-    };
-
-    async.timesSeries = function (count, iterator, callback) {
-        var counter = [];
-        for (var i = 0; i < count; i++) {
-            counter.push(i);
-        }
-        return async.mapSeries(counter, iterator, callback);
-    };
-
-    async.seq = function (/* functions... */) {
-        var fns = arguments;
-        return function () {
-            var that = this;
-            var args = Array.prototype.slice.call(arguments);
-            var callback = args.pop();
-            async.reduce(fns, args, function (newargs, fn, cb) {
-                fn.apply(that, newargs.concat([function () {
-                    var err = arguments[0];
-                    var nextargs = Array.prototype.slice.call(arguments, 1);
-                    cb(err, nextargs);
-                }]))
-            },
-            function (err, results) {
-                callback.apply(that, [err].concat(results));
-            });
-        };
-    };
-
-    async.compose = function (/* functions... */) {
-      return async.seq.apply(null, Array.prototype.reverse.call(arguments));
-    };
-
-    var _applyEach = function (eachfn, fns /*args...*/) {
-        var go = function () {
-            var that = this;
-            var args = Array.prototype.slice.call(arguments);
-            var callback = args.pop();
-            return eachfn(fns, function (fn, cb) {
-                fn.apply(that, args.concat([cb]));
-            },
-            callback);
-        };
-        if (arguments.length > 2) {
-            var args = Array.prototype.slice.call(arguments, 2);
-            return go.apply(this, args);
-        }
-        else {
-            return go;
-        }
-    };
-    async.applyEach = doParallel(_applyEach);
-    async.applyEachSeries = doSeries(_applyEach);
-
-    async.forever = function (fn, callback) {
-        function next(err) {
-            if (err) {
-                if (callback) {
-                    return callback(err);
-                }
-                throw err;
-            }
-            fn(next);
-        }
-        next();
-    };
-
-    // Node.js
-    if (typeof module !== 'undefined' && module.exports) {
-        module.exports = async;
-    }
-    // AMD / RequireJS
-    else if (typeof define !== 'undefined' && define.amd) {
-        define([], function () {
-            return async;
-        });
-    }
-    // included directly via <script> tag
-    else {
-        root.async = async;
-    }
-
-}());
-
-}).call(this,require('_process'))
-},{"_process":47}],26:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 'use strict';
 
-module.exports = {
-    Status: require('./lib/core/status'),
-    Action: require('./lib/action'),
-    Sequence: require('./lib/sequence'),
-    Selector: require('./lib/selector'),
-    PrioritySelector: require('./lib/priority_selector'),
-    Parallel: require('./lib/parallel').Parallel,
-    ParallelPolicy: require('./lib/parallel').ParallelPolicy,
-    Decorator: require('./lib/decorator'),
-    WaitAction: require('./lib/wait_action'),
-    Services: require('./lib/services'),
-    log: require('./lib/core/logger'),
-};
+var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ('value' in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
 
-},{"./lib/action":27,"./lib/core/logger":29,"./lib/core/status":30,"./lib/decorator":31,"./lib/parallel":32,"./lib/priority_selector":33,"./lib/selector":34,"./lib/sequence":35,"./lib/services":36,"./lib/wait_action":37}],27:[function(require,module,exports){
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError('Cannot call a class as a function'); } }
+
+var PathFinding = require('pathfinding');
+
+var LevelController = (function () {
+    function LevelController() {
+        _classCallCheck(this, LevelController);
+    }
+
+    // Singleton instance.
+
+    _createClass(LevelController, [{
+        key: 'setup',
+        value: function setup(game) {
+            this._game = game;
+        }
+    }, {
+        key: 'tempLoad',
+        value: function tempLoad(map) {
+            this._map = map;
+
+            this._buildCollisionGrid();
+        }
+    }, {
+        key: '_buildCollisionGrid',
+        value: function _buildCollisionGrid() {
+            var w = this._map.width;var h = this._map.height;
+            this._collisionGridStatic = new PathFinding.Grid(w, h);
+        }
+    }, {
+        key: 'game',
+        get: function get() {
+            return this._game;
+        }
+    }, {
+        key: 'map',
+        get: function get() {
+            return this._map;
+        }
+    }, {
+        key: 'collisionGrid',
+        get: function get() {
+            return this._collisionGridStatic.clone();
+        }
+
+        // loadLevel() {
+        //
+        // }
+    }]);
+
+    return LevelController;
+})();
+
+var levelController = new LevelController();
+
+module.exports = (function () {
+    return levelController;
+})();
+
+},{"pathfinding":74}],6:[function(require,module,exports){
 'use strict';
 
-var inherits = require('inherits'),
-    BaseNode = require('./core/base').BaseNode;
+var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ('value' in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
 
-function Action(params) {
-    var self = this;
-    if (!(self instanceof Action)) {
-        self = new Action(params);
-    } else {
-        BaseNode.call(self, params);
-    }
-    return self;
-}
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError('Cannot call a class as a function'); } }
 
-inherits(Action, BaseNode);
-
-module.exports = Action;
-
-},{"./core/base":28,"inherits":86}],28:[function(require,module,exports){
-'use strict';
-
-var inherits = require('inherits'),
-    assert = require('assert'),
-    Status = require('./status');
-
-function BaseNode(params) {
-    this.status = Status.INVALID;
-
-    params = params || {};
-    this.start = params.start || null;
-    this.update = params.update;
-    this.end = params.end || null;
-
-    assert(this.update, 'Update callback required.');
-}
-
-BaseNode.prototype.tick = function () {
-    if (this.status !== Status.RUNNING) {
-        if (this.start) {
-            this.start();
-        }
-    }
-
-    this.status = this.update();
-    assert(!isNaN(this.status), 'Update must return a Status. Currently returning: ' + this.status);
-
-    if (this.status !== Status.RUNNING) {
-        if (this.end) {
-            this.end();
-        }
-    }
-
-    return this.status;
-};
-
-BaseNode.prototype.isRunning = function () {
-    return this.status === Status.RUNNING;
-};
-
-BaseNode.prototype.isFinished = function () {
-    return (this.status === Status.SUCCESS) ||
-           (this.status === Status.FAILURE);
-};
-
-BaseNode.prototype.abort = function () {
-    assert(this.isRunning(), 'Attempting to abort a non-running node.');
-
-    this.status = Status.ABORTED;
-    this.onAbort();
-
-    if (this.end) {
-        this.end();
-    }
-};
+var tmx = require('tmx-parser'),
+    findIndex = require('lodash.findindex'),
+    forEach = require('lodash.foreach'),
+    path = require('path');
 
 /**
- * Override in sub-classes to recursively handle abort on child nodes.
+ * A class for encapsulating map data and common map operations.
  */
-BaseNode.prototype.onAbort = function () {
 
-};
+var TiledMap = (function () {
+    function TiledMap(map) {
+        _classCallCheck(this, TiledMap);
 
-function Composite(params) {
-    BaseNode.call(this, params);
-    this.children = [];
-}
+        this._map = map;
 
-inherits(Composite, BaseNode);
-
-Composite.prototype.addChild = function (node) {
-    this.children.push(node);
-
-    // Allow chaining.
-    return this;
-};
-
-Composite.prototype.onAbort = function () {
-    for (var i = 0; i < this.children.length; i++) {
-        if (this.children[i].isRunning()) {
-            this.children[i].abort();
-        }
-    }
-};
-
-module.exports = {
-    BaseNode: BaseNode,
-    Composite: Composite
-};
-
-},{"./status":30,"assert":39,"inherits":86}],29:[function(require,module,exports){
-'use strict';
-
-var archy = require('archy'),
-    Composite = require('./base').Composite,
-    Decorator = require('./../decorator');
-
-function getChildren(node) {
-    if (node instanceof Composite) {
-        return node.children.slice(0);
-    } else if (node instanceof Decorator) {
-        return [node.child];
-    } else {
-        return [];
-    }
-}
-
-function recurseNode(node) {
-    var children = getChildren(node);
-    if (children.length === 0) {
-        if (!node) {
-            return '<null node>';
-        } else {
-            return node.constructor.name;
-        }
+        this._buildTilesets();
     }
 
-    for (var i = 0; i < children.length; i++) {
-        children[i] = recurseNode(children[i]);
-    }
-
-    return {
-        label: node.constructor.name,
-        nodes: children
-    };
-}
-
-/**
- * Prints a tree to the console with indentation.
- */
-module.exports = function _log(tree) {
-    var result = recurseNode(tree);
-    result = archy(result);
-    console.log(result);
-};
-
-},{"./../decorator":31,"./base":28,"archy":38}],30:[function(require,module,exports){
-'use strict';
-
-module.exports = {
-    INVALID: 0,
-    SUCCESS: 1,
-    FAILURE: 2,
-    RUNNING: 3,
-    ABORTED: 4
-};
-
-},{}],31:[function(require,module,exports){
-'use strict';
-
-var inherits = require('inherits'),
-    BaseNode = require('./core/base').BaseNode;
-
-function Decorator(params) {
-    BaseNode.call(this, params);
-    this.child = null;
-}
-
-inherits(Decorator, BaseNode);
-
-Decorator.prototype.setChild = function (node) {
-    this.child = node;
-
-    // Allow chaining.
-    return this;
-};
-
-Decorator.prototype.onAbort = function () {
-    if (this.child.isRunning()) {
-        this.child.abort();
-    }
-};
-
-module.exports = Decorator;
-
-},{"./core/base":28,"inherits":86}],32:[function(require,module,exports){
-'use strict';
-
-var Status = require('./core/status'),
-    inherits = require('inherits'),
-    Composite = require('./core/base').Composite;
-
-var ParallelPolicy = {
-    REQUIRE_ONE : 0,
-    REQUIRE_ALL : 1
-};
-
-function Parallel(successPolicy, failurePolicy) {
-    var self = this;
-    if (!(self instanceof Parallel)) {
-        self = new Parallel(successPolicy, failurePolicy);
-    } else {
-        var params = {
-            update: function() {
-                var successCount = 0;
-                var failureCount = 0;
-
-                for (var i = 0; i < self.children.length; i++) {
-                    var node = self.children[i];
-                    if (!node.isFinished()) {
-                        node.tick();
-                    }
-
-                    if (node.status === Status.SUCCESS) {
-                        if (self.successPolicy === ParallelPolicy.REQUIRE_ONE) {
-                            return Status.SUCCESS;
-                        }
-
-                        successCount++;
-                    } else if (node.status === Status.FAILURE) {
-                        if (self.failurePolicy === ParallelPolicy.REQUIRE_ONE) {
-                            return Status.FAILURE;
-                        }
-
-                        failureCount++;
-                    }
-                }
-
-                if ((self.successPolicy === ParallelPolicy.REQUIRE_ALL) &&
-                    (successCount === self.children.length)) {
-                    return Status.SUCCESS;
-                }
-
-                if ((self.failurePolicy === ParallelPolicy.REQUIRE_ALL) &&
-                    (failureCount === self.children.length)) {
-                    return Status.FAILURE;
-                }
-
-                return Status.RUNNING;
-            },
-            end: function() {
-                // Properly shut down all running children if we finish.
-                for (var i = 0; i < self.children.length; i++) {
-                    var node = self.children[i];
-                    if (node.isRunning()) {
-                        node.abort();
-                    }
-                }
-            }
-        };
-
-        Composite.call(self, params);
-        self.currentChildIndex = -1;
-        self.successPolicy = successPolicy || ParallelPolicy.REQUIRE_ONE;
-        self.failurePolicy = failurePolicy || ParallelPolicy.REQUIRE_ONE;
-    }
-    return self;
-}
-
-inherits(Parallel, Composite);
-
-module.exports = {
-    Parallel: Parallel,
-    ParallelPolicy: ParallelPolicy,
-};
-
-},{"./core/base":28,"./core/status":30,"inherits":86}],33:[function(require,module,exports){
-'use strict';
-
-var Status = require('./core/status'),
-    inherits = require('inherits'),
-    assert = require('assert'),
-    Composite = require('./core/base').Composite;
-
-var INVALID_CHILD_INDEX = -1;
-
-function PrioritySelector() {
-    var self = this;
-    if (!(self instanceof PrioritySelector)) {
-        self = new PrioritySelector();
-    } else {
-        var params = {
-            start: function() {
-                assert(self.children.length > 0, 'PrioritySelector has no children.');
-                assert(self.children.length === self.childCheckers.length, 'Number of children must equal number of checker functions.');
-                self.lastRunningChildIndex = INVALID_CHILD_INDEX;
-                self.lastRunningChild = null;
-            },
-            update: function() {
-                for (var i = 0; i < self.children.length; i++) {
-                    var child = self.children[i];
-                    var checker = self.childCheckers[i];
-
-                    // Check higher priority children...
-                    if (i < self.lastRunningChildIndex) {
-                        assert(self.lastRunningChild);
-
-                        // Is a higher priority child able to run?
-                        if (checker()) {
-                            // Abort the previously running child.
-                            if (self.lastRunningChild.isRunning()) {
-                                self.lastRunningChild.abort();
-                            }
-                        } else {
-                            // Check failed - skip to next child.
-                            continue;
-                        }
-                    }
-                    // Currently running child...
-                    else if (i === self.lastRunningChildIndex) {
-                        // Do not call the check function on the currently running child.
-                    }
-                    else {
-                        // Nothing is currently running.
-                        assert(self.lastRunningChildIndex === INVALID_CHILD_INDEX);
-                        assert(self.lastRunningChild === null);
-
-                        // Check failed - skip to next child.
-                        if (!checker()) {
-                            continue;
-                        }
-                    }
-
-                    var status = child.tick();
-
-                    // Progress to the next child on failure.
-                    if (status === Status.FAILURE) {
-                        self.lastRunningChildIndex = INVALID_CHILD_INDEX;
-                        self.lastRunningChild = null;
-                        continue;
-                    }
-
-                    self.lastRunningChildIndex = i;
-                    self.lastRunningChild = child;
-                    return status;
-                }
-
-                // All children failed.
-                return Status.FAILURE;
-            }
-        };
-
-        Composite.call(self, params);
-        self.childCheckers = [];
-        self.lastRunningChildIndex = INVALID_CHILD_INDEX;
-        self.lastRunningChild = null;
-    }
-    return self;
-}
-
-inherits(PrioritySelector, Composite);
-
-/**
- * Overridden addChild method to allow passing a checker function
- * for the given child. When evaluating nodes for priority switching,
- * the checker will be evaluated. If the checker returns true,
- * the currently executing node will be aborted, and the node
- * associated with the checker will be started.
- */
-PrioritySelector.prototype.addChild = function (node, checker) {
-    // If no checker function is provided, use a default one.
-    if (!checker) {
-        this.childCheckers.push(function() {
-            return true;
-        });
-    } else {
-        this.childCheckers.push(checker);
-    }
-    return Composite.prototype.addChild.call(this, node);
-};
-
-module.exports = PrioritySelector;
-
-},{"./core/base":28,"./core/status":30,"assert":39,"inherits":86}],34:[function(require,module,exports){
-'use strict';
-
-var Status = require('./core/status'),
-    inherits = require('inherits'),
-    assert = require('assert'),
-    Composite = require('./core/base').Composite;
-
-function Selector() {
-    var self = this;
-    if (!(self instanceof Selector)) {
-        self = new Selector();
-    } else {
-        var params = {
-            start: function() {
-                assert(self.children.length > 0, 'Selector has no children.');
-                self.currentChildIndex = 0;
-            },
-            update: function() {
-                while (true) {
-                    var status = self.children[self.currentChildIndex].tick();
-
-                    // Progress to next child on failure.
-                    if (status === Status.FAILURE) {
-                        self.currentChildIndex++;
-
-                        // All done?
-                        if (self.currentChildIndex === self.children.length) {
-                            return Status.FAILURE;
-                        }
-                    } else {
-                        return status;
-                    }
-                }
-            }
-        };
-
-        Composite.call(self, params);
-        self.currentChildIndex = -1;
-    }
-    return self;
-}
-
-inherits(Selector, Composite);
-
-module.exports = Selector;
-
-},{"./core/base":28,"./core/status":30,"assert":39,"inherits":86}],35:[function(require,module,exports){
-'use strict';
-
-var Status = require('./core/status'),
-    inherits = require('inherits'),
-    assert = require('assert'),
-    Composite = require('./core/base').Composite;
-
-function Sequence() {
-    var self = this;
-    if (!(self instanceof Sequence)) {
-        self = new Sequence();
-    } else {
-        var params = {
-            start: function() {
-                assert(self.children.length > 0, 'Sequence has no children.');
-                self.currentChildIndex = 0;
-            },
-            update: function() {
-                while (true) {
-                    var status = self.children[self.currentChildIndex].tick();
-
-                    // Progress to next child on success.
-                    if (status === Status.SUCCESS) {
-                        self.currentChildIndex++;
-
-                        // All done?
-                        if (self.currentChildIndex === self.children.length) {
-                            return Status.SUCCESS;
-                        }
-                    } else {
-                        return status;
-                    }
-                }
-            }
-        };
-
-        Composite.call(self, params);
-        self.currentChildIndex = -1;
-
-    }
-    return self;
-}
-
-inherits(Sequence, Composite);
-
-module.exports = Sequence;
-
-},{"./core/base":28,"./core/status":30,"assert":39,"inherits":86}],36:[function(require,module,exports){
-'use strict';
-
-module.exports = {
     /**
-     * A callback for getting the amount of time elapsed
-     * between ticks.
-     *
-     * Time is necessary for certain nodes such as WaitAction.
-     * This callback does not need to be implemented if only
-     * time-independent node types are used.
-     *
-     * This library only provides an interface to the
-     * deltaTime callback, and the actual implementation should
-     * be defined in the user application and set like so:
-     *
-     * bt.Services.deltaTime = function() {
-     * 		var elapsedTime = // calculation
-     * 		return elapsedTime;
-     * }
-     *
-     * The implementation is left to the user application
-     * because time is very application-specific. For example,
-     * games have game loops and already manage a deltaTime
-     * for each frame, while NodeJS applications can calculate elapsed
-     * time with process.hrtime, while  browser applications
-     * would need a different implementation, etc.
+     * Preloads a map file (Tiled TMX format).
      */
-    deltaTime: function() {
-        console.warn('Please implement the deltaTime callback.');
-        return 0;
-    }
-};
 
-},{}],37:[function(require,module,exports){
-'use strict';
+    _createClass(TiledMap, [{
+        key: '_buildTilesets',
+        value: function _buildTilesets() {
+            var _this = this;
 
-var inherits = require('inherits'),
-    Action = require('./action'),
-    Status = require('./core/status'),
-    Services = require('./services');
+            this._tilesetAtlasNames = [];
+            forEach(this._map.tileSets, function (tileset) {
+                var imageName = tileset.image.source;
+                var extension = path.extname(imageName);
+                var atlasName = exports.ATLAS_NAME_PREFIX + path.basename(imageName, extension);
+                _this._tilesetAtlasNames.push(atlasName);
+            });
+        }
+    }, {
+        key: 'getLayerIndex',
 
-function getRandomRange(min, max) {
-    return Math.random() * (max - min) + min;
+        /**
+         * Find the layer index for a given layer name.
+         * @param  {string} layerName The layer name.
+         * @return {number}           The index of the layer, or -1 if not found.
+         */
+        value: function getLayerIndex(layerName) {
+            return findIndex(this._map.layers, function (layer) {
+                return layer.name == layerName;
+            });
+        }
+
+        /**
+         * Get the atlas name for a given tileset index.
+         * @param {number} tilesetIndex The tileset index.
+         * @return {string}             The atlas name, or undefined if not found.
+         */
+    }, {
+        key: 'getTilesetAtlasName',
+        value: function getTilesetAtlasName(tilesetIndex) {
+            return this._tilesetAtlasNames[tilesetIndex];
+        }
+
+        /**
+         * Find the tileset index of a given tile gid.
+         * @param {number} gid The tile global id.
+         * @return {number}    The index of the tileset, of -1 if not found.
+         */
+    }, {
+        key: 'getTilesetIndexForGid',
+        value: function getTilesetIndexForGid(gid) {
+            if (gid <= 0) {
+                return -1;
+            }
+
+            if (this._map.tileSets.length === 0) {
+                console.warn('No tilesets in map.');
+                return -1;
+            }
+
+            var index = findIndex(this._map.tileSets, function (tileset) {
+                return tileset.firstGid > gid;
+            });
+
+            // If not found, this gid is in the last tileset of the list.
+            if (index === -1) {
+                return this._map.tileSets.length - 1;
+            }
+            // Else the index was the previous tileset.
+            else {
+                    return index - 1;
+                }
+        }
+
+        /**
+         * Get the tile information for a given x / y coordinate.
+         * Returns null for empty tiles with no information.
+         * @param  {number} layerIndex The layer index of this tile.
+         * @param  {number} x          The tile x coordinate.
+         * @param  {number} y          The tile y coordinate.
+         * @return {object}            An object with the tile information.
+         */
+    }, {
+        key: 'getTileInfo',
+        value: function getTileInfo(layerIndex, x, y) {
+            var layer = this._map.layers[layerIndex];
+            var tileIndex = y * this.width + x;
+            var tile = layer.tiles[tileIndex];
+
+            // Empty tile.
+            if (!tile) {
+                return null;
+            }
+
+            var tilesetIndex = this.getTilesetIndexForGid(tile.gid);
+            var tileset = this._map.tileSets[tilesetIndex];
+
+            return {
+                tilesetIndex: tilesetIndex,
+                tileGid: tile.gid,
+                tileId: tile.id,
+                tileWidth: tileset.tileWidth,
+                tileHeight: tileset.tileHeight
+            };
+        }
+
+        /**
+         * Is the given tile position within map boundaries?
+         * @param  {number[]}  tilePos The tile grid position.
+         * @return {Boolean}           Returns true if the tile position is valid.
+         */
+    }, {
+        key: 'isValidTilePos',
+        value: function isValidTilePos(tilePos) {
+            return tilePos[0] >= 0 && tilePos[0] < this.width && tilePos[1] >= 0 && tilePos[1] < this.height;
+        }
+
+        /**
+         * Convert a tile position [x,y] to a world (render) position [x,y].
+         * The position will be at the top corner of the tile,
+         * so that tile [0, 0] will return world position [0, 0].
+         * @param  {number[]} tilePos The tile grid position.
+         * @return {number[]}         The world position.
+         */
+    }, {
+        key: 'tileToWorldPos',
+        value: function tileToWorldPos(tilePos) {
+            var x = tilePos[0];var y = tilePos[1];
+            var tw_2 = this.tileWidth / 2;var th_2 = this.tileHeight / 2;
+            return [x * tw_2 - y * tw_2, x * th_2 + y * th_2];
+        }
+
+        /**
+         * Convert a tile position [x,y] to a world (render) position [x,y].
+         * The position will be at the center of the tile.
+         * @param  {number[]} tilePos The tile grid position.
+         * @return {number[]}         The world position.
+         */
+    }, {
+        key: 'tileToWorldPosCenter',
+        value: function tileToWorldPosCenter(tilePos) {
+            var worldPos = this.tileToWorldPos(tilePos);
+            worldPos[1] += this.tileHeight / 2;
+            return worldPos;
+        }
+
+        /**
+         * Convert a tile position [x,y] to a virtual position [x,y].
+         * @param  {number[]} tilePos The tile grid position.
+         * @return {number[]}         The virtual position.
+         */
+    }, {
+        key: 'tileToVirtualPos',
+        value: function tileToVirtualPos(tilePos) {
+            return [(tilePos[0] + 0.5) * exports.VIRTUAL_TILE_SIZE[0], (tilePos[1] + 0.5) * exports.VIRTUAL_TILE_SIZE[1]];
+        }
+
+        /**
+         * Convert a world (render) position [x,y] to a tile grid position [x,y].
+         * @param  {number[]} worldPos The world position.
+         * @return {number[]}          The tile grid position.
+         */
+    }, {
+        key: 'worldToTilePos',
+        value: function worldToTilePos(worldPos) {
+            var x = worldPos[0] / this.tileWidth + worldPos[1] / this.tileHeight;
+            var y = 2 * worldPos[1] / this.tileHeight - x;
+            return [Math.floor(x), Math.floor(y)];
+        }
+
+        /**
+         * Convert a world (render) position [x,y] to a virtual position [x,y].
+         * @param  {number[]} worldPos The world (render) position.
+         * @return {number[]}          The virtual position.
+         */
+    }, {
+        key: 'worldToVirtualPos',
+        value: function worldToVirtualPos(worldPos) {
+            // This is essentially the worldToTilePos calculation without rounding.
+            var x = worldPos[0] / this.tileWidth + worldPos[1] / this.tileHeight;
+            var y = 2 * worldPos[1] / this.tileHeight - x;
+            return [x * exports.VIRTUAL_TILE_SIZE[0], y * exports.VIRTUAL_TILE_SIZE[1]];
+        }
+
+        /**
+         * Convert a virtual position [x,y] to a world (render) position [x,y].
+         * @param  {number[]} virtualPos The virtual position.
+         * @return {number[]}            The world (render) position.
+         */
+    }, {
+        key: 'virtualToWorldPos',
+        value: function virtualToWorldPos(virtualPos) {
+            return this.tileToWorldPos([virtualPos[0] / exports.VIRTUAL_TILE_SIZE[0], virtualPos[1] / exports.VIRTUAL_TILE_SIZE[1]]);
+        }
+
+        /**
+         * Convert a virtual position [x,y] to a tile grid position [x,y].
+         * @param  {number[]} virtualPos The virtual position.
+         * @return {number[]}            The tile grid position.
+         */
+    }, {
+        key: 'virtualToTilePos',
+        value: function virtualToTilePos(virtualPos) {
+            var worldPos = this.virtualToWorldPos(virtualPos);
+            return this.worldToTilePos(worldPos);
+        }
+    }, {
+        key: 'width',
+        get: function get() {
+            return this._map.width;
+        }
+    }, {
+        key: 'height',
+        get: function get() {
+            return this._map.height;
+        }
+    }, {
+        key: 'tileWidth',
+        get: function get() {
+            return this._map.tileWidth;
+        }
+    }, {
+        key: 'tileHeight',
+        get: function get() {
+            return this._map.tileHeight;
+        }
+    }, {
+        key: 'totalWidth',
+        get: function get() {
+            var tw_2 = this.tileWidth / 2;
+            return this.height * tw_2 + this.width * tw_2;
+        }
+    }, {
+        key: 'totalHeight',
+        get: function get() {
+            return Math.max(this.width, this.height) * this.tileHeight;
+        }
+    }]);
+
+    return TiledMap;
+})();
+
+function preloadMap(game, key, url) {
+    game.load.xml(key, url);
 }
 
 /**
- * A leaf node (action) that waits a certain # of
- * seconds before succeeding.
- *
- * Specify only a minWaitTime to get a fixed amount of wait time.
- *
- * Specify both a minWaitTime and a maxWaitTime to get
- * a variable amount of wait time within the range. Actual wait
- * time will be randomized at the start of each new execution.
+ * Create the map.
+ * Creation may be 1 frame delayed, so a callback is provided.
  */
-function WaitAction(minWaitTime, maxWaitTime) {
-    var self = this;
-    if (!(self instanceof WaitAction)) {
-        self = new WaitAction(minWaitTime, maxWaitTime);
-    } else {
-        var params = {
-            start: function() {
-                if (self.useRandomTime) {
-                    self.remainingWaitTime = getRandomRange(self.minWaitTime, self.maxWaitTime);
-                }
-                else {
-                    self.remainingWaitTime = self.minWaitTime;
-                }
-            },
-            update: function() {
-                // Progress time.
-                var deltaTime = Services.deltaTime();
-                self.remainingWaitTime -= deltaTime;
-
-                if (self.remainingWaitTime <= 0.0) {
-                    return Status.SUCCESS;
-                }
-                else {
-                    return Status.RUNNING;
-                }
-            }
-        };
-
-        Action.call(self, params);
-        self.useRandomTime = (typeof maxWaitTime !== 'undefined');
-        self.minWaitTime = minWaitTime;
-        self.maxWaitTime = maxWaitTime;
-        self.remainingWaitTime = 0;
+function createMap(game, key, cb) {
+    var map_data = game.cache.getXML(key);
+    if (!map_data) {
+        return cb(new Error('Map not found in cache: ' + key));
     }
-    return self;
+    var serializer = new XMLSerializer();
+    var map_str = serializer.serializeToString(map_data);
+    tmx.parse(map_str, '', function (err, tmx_map) {
+        var tiled_map = new TiledMap(tmx_map);
+        cb(err, tiled_map);
+    });
 }
 
-inherits(WaitAction, Action);
+/**
+ * A prefix string appended to the name of each atlas.
+ * Useful for setting the common atlas path for all atlas files.
+ */
+exports.ATLAS_NAME_PREFIX = '';
 
-module.exports = WaitAction;
+/**
+ * The size of a single tile in meters in 'virtual' space.
+ * All game logic is performed in virtual space. For rendering,
+ * virtual positions are mapped to world space where the isometric
+ * distortion is applied.
+ */
+exports.VIRTUAL_TILE_SIZE = [1, 1];
 
-},{"./action":27,"./core/status":30,"./services":36,"inherits":86}],38:[function(require,module,exports){
-module.exports = function archy (obj, prefix, opts) {
-    if (prefix === undefined) prefix = '';
-    if (!opts) opts = {};
-    var chr = function (s) {
-        var chars = {
-            '│' : '|',
-            '└' : '`',
-            '├' : '+',
-            '─' : '-',
-            '┬' : '-'
-        };
-        return opts.unicode === false ? chars[s] : s;
-    };
-    
-    if (typeof obj === 'string') obj = { label : obj };
-    
-    var nodes = obj.nodes || [];
-    var lines = (obj.label || '').split('\n');
-    var splitter = '\n' + prefix + (nodes.length ? chr('│') : ' ') + ' ';
-    
-    return prefix
-        + lines.join(splitter) + '\n'
-        + nodes.map(function (node, ix) {
-            var last = ix === nodes.length - 1;
-            var more = node.nodes && node.nodes.length;
-            var prefix_ = prefix + (last ? ' ' : chr('│')) + ' ';
-            
-            return prefix
-                + (last ? chr('└') : chr('├')) + chr('─')
-                + (more ? chr('┬') : chr('─')) + ' '
-                + archy(node, prefix_, opts).slice(prefix.length + 2)
-            ;
-        }).join('')
-    ;
+exports.preloadMap = preloadMap;
+exports.createMap = createMap;
+exports.TiledMap = TiledMap;
+
+},{"lodash.findindex":52,"lodash.foreach":66,"path":32,"tmx-parser":98}],7:[function(require,module,exports){
+'use strict';
+
+var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ('value' in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError('Cannot call a class as a function'); } }
+
+var LevelController = require('./level_controller'),
+    PathFinding = require('pathfinding'),
+    iso = require('./iso_utils'),
+    vec2_normalize = require('gl-vec2/normalize'),
+    vec2_distance = require('gl-vec2/distance'),
+    vec2_subtract = require('gl-vec2/subtract');
+
+var STATES = {
+    Idle: 0,
+    Walk: 1
 };
 
-},{}],39:[function(require,module,exports){
+var Player = (function () {
+    function Player(game, parentGroup) {
+        _classCallCheck(this, Player);
+
+        this._sprite = parentGroup.create(0, 0, 'characters/skeleton');
+        this._sprite.anchor.set(0.5, 0.75);
+
+        this._loadAnimation('idle', true);
+        this._loadAnimation('walk', false);
+
+        this._sprite.animations.play('idle/0');
+
+        game.input.onDown.add(this.tempOnClick, this);
+
+        this._currentState = STATES.Idle;
+        this._currentTilePos = [0, 0];
+        this._currentTargetTilePos = this._currentTilePos.slice();
+        this._currentTargetPos = [0, 0];
+        this._currentDistanceRemainingToTargetPos = 0;
+        this._pathfinder = new PathFinding.AStarFinder({
+            allowDiagonal: true,
+            dontCrossCorners: true
+        });
+        this._currentPath = null;
+        this._currentPathIndex = -1;
+        this._currentMoveDirection = [0, 0];
+        this._currentFacingDirection = iso.FACING_DIRECTIONS.SOUTH;
+
+        this.MOVE_SPEED = 2;
+    }
+
+    _createClass(Player, [{
+        key: '_loadAnimation',
+        value: function _loadAnimation(animName, doesPingPong) {
+            var FRAME_RATE = 10;
+            var LOOP = true;
+            var USE_NUMERIC_INDEX = false;
+            var ZERO_PAD = 3;
+            for (var i = 0; i < 8; i++) {
+                var directionString = animName + '/' + i;
+                var frameNames = Phaser.Animation.generateFrameNames(directionString + '/', 0, 9, '', ZERO_PAD);
+
+                if (doesPingPong) {
+                    var reverseFrameNames = frameNames.slice(1, -1);
+                    reverseFrameNames.reverse();
+                    frameNames = frameNames.concat(reverseFrameNames);
+                }
+
+                this._sprite.animations.add(directionString, frameNames, FRAME_RATE, LOOP, USE_NUMERIC_INDEX);
+            }
+        }
+    }, {
+        key: 'tempOnClick',
+        value: function tempOnClick(pointer) {
+            var map = LevelController.map;
+            var mouseWorldPos = [pointer.worldX, pointer.worldY];
+            var tilePos = map.worldToTilePos(mouseWorldPos);
+            this.requestMove(tilePos);
+        }
+    }, {
+        key: 'update',
+        value: function update(game, dt) {
+            if (this._currentState == STATES.Walk) {
+                this._followPath(dt);
+            }
+
+            // Animation update.
+            switch (this._currentState) {
+                case STATES.Idle:
+                    this._sprite.animations.play('idle' + '/' + this._currentFacingDirection);
+                    break;
+
+                case STATES.Walk:
+                    this._sprite.animations.play('walk' + '/' + this._currentFacingDirection);
+                    break;
+            }
+
+            // let speed = 250;
+            // if (game.input.keyboard.isDown(Phaser.Keyboard.UP)) {
+            //     this.sprite.y -= speed * dt;
+            // } else if (game.input.keyboard.isDown(Phaser.Keyboard.DOWN)) {
+            //     this.sprite.y += speed * dt;
+            // }
+            // if (game.input.keyboard.isDown(Phaser.Keyboard.LEFT)) {
+            //     this.sprite.x -= speed * dt;
+            // } else if (game.input.keyboard.isDown(Phaser.Keyboard.RIGHT)) {
+            //     this.sprite.x += speed * dt;
+            // }
+        }
+    }, {
+        key: 'requestMove',
+        value: function requestMove(targetTilePos) {
+            if (!LevelController.map.isValidTilePos(targetTilePos)) {
+                return;
+            }
+            var path = this._pathfinder.findPath(this._currentTilePos[0], this._currentTilePos[1], targetTilePos[0], targetTilePos[1], LevelController.collisionGrid);
+
+            // No path.
+            if (path.length < 2) {
+                console.log('no path');
+                return;
+            }
+
+            this._currentState = STATES.Walk;
+            this._currentPath = path;
+            this._currentPathIndex = 0;
+            console.log('path found');
+            console.log(path);
+
+            this._setTargetTilePos(path[this._currentPathIndex]);
+        }
+    }, {
+        key: '_setTargetTilePos',
+        value: function _setTargetTilePos(targetTilePos) {
+            // Facing direction.
+            this._setFacingDirection(targetTilePos);
+
+            // Update current grid position.
+            this._currentTilePos = targetTilePos;
+
+            // Target position.
+            this._currentTargetPos = LevelController.map.tileToVirtualPos(targetTilePos);
+            this._currentDistanceRemainingToTargetPos = vec2_distance(this.position, this._currentTargetPos);
+
+            // Move direction.
+            vec2_subtract(this._currentMoveDirection, this._currentTargetPos, this.position);
+            vec2_normalize(this._currentMoveDirection, this._currentMoveDirection);
+            console.log(this._currentMoveDirection);
+        }
+    }, {
+        key: '_setFacingDirection',
+        value: function _setFacingDirection(targetTilePos) {
+            var currentTilePos = LevelController.map.virtualToTilePos(this.position);
+            var newDirection = iso.getFacingDirection(currentTilePos, targetTilePos);
+            if (newDirection !== iso.FACING_DIRECTIONS.INVALID) {
+                this._currentFacingDirection = newDirection;
+            }
+        }
+    }, {
+        key: '_followPath',
+        value: function _followPath(dt) {
+            var moveAmount = this.MOVE_SPEED * dt;
+            this._currentDistanceRemainingToTargetPos -= moveAmount;
+
+            // Arrived at target position?
+            if (this._currentDistanceRemainingToTargetPos <= 0.0) {
+                this.position = this._currentTargetPos;
+                this._currentDistanceRemainingToTargetPos = 0.0;
+
+                // End of path?
+                if (this._isEndOfPath()) {
+                    this._currentPath = null;
+                    this._currentState = STATES.Idle;
+                } else {
+                    // To next node.
+                    this._currentPathIndex++;
+                    this._setTargetTilePos(this._currentPath[this._currentPathIndex]);
+                }
+            } else {
+                var current_pos = this.position;
+                this.position = [current_pos[0] + this._currentMoveDirection[0] * moveAmount, current_pos[1] + this._currentMoveDirection[1] * moveAmount];
+            }
+        }
+    }, {
+        key: '_isEndOfPath',
+        value: function _isEndOfPath() {
+            if (!this._currentPath || this._currentPathIndex + 1 >= this._currentPath.length) {
+                return true;
+            }
+
+            return false;
+        }
+    }, {
+        key: 'position',
+        get: function get() {
+            var worldPos = [this._sprite.position.x, this._sprite.position.y];
+            return LevelController.map.worldToVirtualPos(worldPos);
+        },
+        set: function set(virtualPos) {
+            var worldPos = LevelController.map.virtualToWorldPos(virtualPos);
+            this._sprite.position.set(worldPos[0], worldPos[1]);
+        }
+    }, {
+        key: 'sprite',
+        get: function get() {
+            return this._sprite;
+        }
+    }]);
+
+    return Player;
+})();
+
+exports.Player = Player;
+
+},{"./iso_utils":4,"./level_controller":5,"gl-vec2/distance":49,"gl-vec2/normalize":50,"gl-vec2/subtract":51,"pathfinding":74}],8:[function(require,module,exports){
+
+},{}],9:[function(require,module,exports){
 // http://wiki.commonjs.org/wiki/Unit_Testing/1.0
 //
 // THIS IS NOT TESTED NOR LIKELY TO WORK OUTSIDE V8!
@@ -6351,15 +1211,6277 @@ var objectKeys = Object.keys || function (obj) {
   return keys;
 };
 
-},{"util/":67}],40:[function(require,module,exports){
+},{"util/":48}],10:[function(require,module,exports){
+arguments[4][8][0].apply(exports,arguments)
+},{"dup":8}],11:[function(require,module,exports){
+'use strict';
 
-},{}],41:[function(require,module,exports){
+
+var TYPED_OK =  (typeof Uint8Array !== 'undefined') &&
+                (typeof Uint16Array !== 'undefined') &&
+                (typeof Int32Array !== 'undefined');
+
+
+exports.assign = function (obj /*from1, from2, from3, ...*/) {
+  var sources = Array.prototype.slice.call(arguments, 1);
+  while (sources.length) {
+    var source = sources.shift();
+    if (!source) { continue; }
+
+    if (typeof source !== 'object') {
+      throw new TypeError(source + 'must be non-object');
+    }
+
+    for (var p in source) {
+      if (source.hasOwnProperty(p)) {
+        obj[p] = source[p];
+      }
+    }
+  }
+
+  return obj;
+};
+
+
+// reduce buffer size, avoiding mem copy
+exports.shrinkBuf = function (buf, size) {
+  if (buf.length === size) { return buf; }
+  if (buf.subarray) { return buf.subarray(0, size); }
+  buf.length = size;
+  return buf;
+};
+
+
+var fnTyped = {
+  arraySet: function (dest, src, src_offs, len, dest_offs) {
+    if (src.subarray && dest.subarray) {
+      dest.set(src.subarray(src_offs, src_offs+len), dest_offs);
+      return;
+    }
+    // Fallback to ordinary array
+    for (var i=0; i<len; i++) {
+      dest[dest_offs + i] = src[src_offs + i];
+    }
+  },
+  // Join array of chunks to single array.
+  flattenChunks: function(chunks) {
+    var i, l, len, pos, chunk, result;
+
+    // calculate data length
+    len = 0;
+    for (i=0, l=chunks.length; i<l; i++) {
+      len += chunks[i].length;
+    }
+
+    // join chunks
+    result = new Uint8Array(len);
+    pos = 0;
+    for (i=0, l=chunks.length; i<l; i++) {
+      chunk = chunks[i];
+      result.set(chunk, pos);
+      pos += chunk.length;
+    }
+
+    return result;
+  }
+};
+
+var fnUntyped = {
+  arraySet: function (dest, src, src_offs, len, dest_offs) {
+    for (var i=0; i<len; i++) {
+      dest[dest_offs + i] = src[src_offs + i];
+    }
+  },
+  // Join array of chunks to single array.
+  flattenChunks: function(chunks) {
+    return [].concat.apply([], chunks);
+  }
+};
+
+
+// Enable/Disable typed arrays use, for testing
+//
+exports.setTyped = function (on) {
+  if (on) {
+    exports.Buf8  = Uint8Array;
+    exports.Buf16 = Uint16Array;
+    exports.Buf32 = Int32Array;
+    exports.assign(exports, fnTyped);
+  } else {
+    exports.Buf8  = Array;
+    exports.Buf16 = Array;
+    exports.Buf32 = Array;
+    exports.assign(exports, fnUntyped);
+  }
+};
+
+exports.setTyped(TYPED_OK);
+
+},{}],12:[function(require,module,exports){
+'use strict';
+
+// Note: adler32 takes 12% for level 0 and 2% for level 6.
+// It doesn't worth to make additional optimizationa as in original.
+// Small size is preferable.
+
+function adler32(adler, buf, len, pos) {
+  var s1 = (adler & 0xffff) |0,
+      s2 = ((adler >>> 16) & 0xffff) |0,
+      n = 0;
+
+  while (len !== 0) {
+    // Set limit ~ twice less than 5552, to keep
+    // s2 in 31-bits, because we force signed ints.
+    // in other case %= will fail.
+    n = len > 2000 ? 2000 : len;
+    len -= n;
+
+    do {
+      s1 = (s1 + buf[pos++]) |0;
+      s2 = (s2 + s1) |0;
+    } while (--n);
+
+    s1 %= 65521;
+    s2 %= 65521;
+  }
+
+  return (s1 | (s2 << 16)) |0;
+}
+
+
+module.exports = adler32;
+
+},{}],13:[function(require,module,exports){
+module.exports = {
+
+  /* Allowed flush values; see deflate() and inflate() below for details */
+  Z_NO_FLUSH:         0,
+  Z_PARTIAL_FLUSH:    1,
+  Z_SYNC_FLUSH:       2,
+  Z_FULL_FLUSH:       3,
+  Z_FINISH:           4,
+  Z_BLOCK:            5,
+  Z_TREES:            6,
+
+  /* Return codes for the compression/decompression functions. Negative values
+  * are errors, positive values are used for special but normal events.
+  */
+  Z_OK:               0,
+  Z_STREAM_END:       1,
+  Z_NEED_DICT:        2,
+  Z_ERRNO:           -1,
+  Z_STREAM_ERROR:    -2,
+  Z_DATA_ERROR:      -3,
+  //Z_MEM_ERROR:     -4,
+  Z_BUF_ERROR:       -5,
+  //Z_VERSION_ERROR: -6,
+
+  /* compression levels */
+  Z_NO_COMPRESSION:         0,
+  Z_BEST_SPEED:             1,
+  Z_BEST_COMPRESSION:       9,
+  Z_DEFAULT_COMPRESSION:   -1,
+
+
+  Z_FILTERED:               1,
+  Z_HUFFMAN_ONLY:           2,
+  Z_RLE:                    3,
+  Z_FIXED:                  4,
+  Z_DEFAULT_STRATEGY:       0,
+
+  /* Possible values of the data_type field (though see inflate()) */
+  Z_BINARY:                 0,
+  Z_TEXT:                   1,
+  //Z_ASCII:                1, // = Z_TEXT (deprecated)
+  Z_UNKNOWN:                2,
+
+  /* The deflate compression method */
+  Z_DEFLATED:               8
+  //Z_NULL:                 null // Use -1 or null inline, depending on var type
+};
+
+},{}],14:[function(require,module,exports){
+'use strict';
+
+// Note: we can't get significant speed boost here.
+// So write code to minimize size - no pregenerated tables
+// and array tools dependencies.
+
+
+// Use ordinary array, since untyped makes no boost here
+function makeTable() {
+  var c, table = [];
+
+  for (var n =0; n < 256; n++) {
+    c = n;
+    for (var k =0; k < 8; k++) {
+      c = ((c&1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
+    }
+    table[n] = c;
+  }
+
+  return table;
+}
+
+// Create table on load. Just 255 signed longs. Not a problem.
+var crcTable = makeTable();
+
+
+function crc32(crc, buf, len, pos) {
+  var t = crcTable,
+      end = pos + len;
+
+  crc = crc ^ (-1);
+
+  for (var i = pos; i < end; i++) {
+    crc = (crc >>> 8) ^ t[(crc ^ buf[i]) & 0xFF];
+  }
+
+  return (crc ^ (-1)); // >>> 0;
+}
+
+
+module.exports = crc32;
+
+},{}],15:[function(require,module,exports){
+'use strict';
+
+var utils   = require('../utils/common');
+var trees   = require('./trees');
+var adler32 = require('./adler32');
+var crc32   = require('./crc32');
+var msg   = require('./messages');
+
+/* Public constants ==========================================================*/
+/* ===========================================================================*/
+
+
+/* Allowed flush values; see deflate() and inflate() below for details */
+var Z_NO_FLUSH      = 0;
+var Z_PARTIAL_FLUSH = 1;
+//var Z_SYNC_FLUSH    = 2;
+var Z_FULL_FLUSH    = 3;
+var Z_FINISH        = 4;
+var Z_BLOCK         = 5;
+//var Z_TREES         = 6;
+
+
+/* Return codes for the compression/decompression functions. Negative values
+ * are errors, positive values are used for special but normal events.
+ */
+var Z_OK            = 0;
+var Z_STREAM_END    = 1;
+//var Z_NEED_DICT     = 2;
+//var Z_ERRNO         = -1;
+var Z_STREAM_ERROR  = -2;
+var Z_DATA_ERROR    = -3;
+//var Z_MEM_ERROR     = -4;
+var Z_BUF_ERROR     = -5;
+//var Z_VERSION_ERROR = -6;
+
+
+/* compression levels */
+//var Z_NO_COMPRESSION      = 0;
+//var Z_BEST_SPEED          = 1;
+//var Z_BEST_COMPRESSION    = 9;
+var Z_DEFAULT_COMPRESSION = -1;
+
+
+var Z_FILTERED            = 1;
+var Z_HUFFMAN_ONLY        = 2;
+var Z_RLE                 = 3;
+var Z_FIXED               = 4;
+var Z_DEFAULT_STRATEGY    = 0;
+
+/* Possible values of the data_type field (though see inflate()) */
+//var Z_BINARY              = 0;
+//var Z_TEXT                = 1;
+//var Z_ASCII               = 1; // = Z_TEXT
+var Z_UNKNOWN             = 2;
+
+
+/* The deflate compression method */
+var Z_DEFLATED  = 8;
+
+/*============================================================================*/
+
+
+var MAX_MEM_LEVEL = 9;
+/* Maximum value for memLevel in deflateInit2 */
+var MAX_WBITS = 15;
+/* 32K LZ77 window */
+var DEF_MEM_LEVEL = 8;
+
+
+var LENGTH_CODES  = 29;
+/* number of length codes, not counting the special END_BLOCK code */
+var LITERALS      = 256;
+/* number of literal bytes 0..255 */
+var L_CODES       = LITERALS + 1 + LENGTH_CODES;
+/* number of Literal or Length codes, including the END_BLOCK code */
+var D_CODES       = 30;
+/* number of distance codes */
+var BL_CODES      = 19;
+/* number of codes used to transfer the bit lengths */
+var HEAP_SIZE     = 2*L_CODES + 1;
+/* maximum heap size */
+var MAX_BITS  = 15;
+/* All codes must not exceed MAX_BITS bits */
+
+var MIN_MATCH = 3;
+var MAX_MATCH = 258;
+var MIN_LOOKAHEAD = (MAX_MATCH + MIN_MATCH + 1);
+
+var PRESET_DICT = 0x20;
+
+var INIT_STATE = 42;
+var EXTRA_STATE = 69;
+var NAME_STATE = 73;
+var COMMENT_STATE = 91;
+var HCRC_STATE = 103;
+var BUSY_STATE = 113;
+var FINISH_STATE = 666;
+
+var BS_NEED_MORE      = 1; /* block not completed, need more input or more output */
+var BS_BLOCK_DONE     = 2; /* block flush performed */
+var BS_FINISH_STARTED = 3; /* finish started, need only more output at next deflate */
+var BS_FINISH_DONE    = 4; /* finish done, accept no more input or output */
+
+var OS_CODE = 0x03; // Unix :) . Don't detect, use this default.
+
+function err(strm, errorCode) {
+  strm.msg = msg[errorCode];
+  return errorCode;
+}
+
+function rank(f) {
+  return ((f) << 1) - ((f) > 4 ? 9 : 0);
+}
+
+function zero(buf) { var len = buf.length; while (--len >= 0) { buf[len] = 0; } }
+
+
+/* =========================================================================
+ * Flush as much pending output as possible. All deflate() output goes
+ * through this function so some applications may wish to modify it
+ * to avoid allocating a large strm->output buffer and copying into it.
+ * (See also read_buf()).
+ */
+function flush_pending(strm) {
+  var s = strm.state;
+
+  //_tr_flush_bits(s);
+  var len = s.pending;
+  if (len > strm.avail_out) {
+    len = strm.avail_out;
+  }
+  if (len === 0) { return; }
+
+  utils.arraySet(strm.output, s.pending_buf, s.pending_out, len, strm.next_out);
+  strm.next_out += len;
+  s.pending_out += len;
+  strm.total_out += len;
+  strm.avail_out -= len;
+  s.pending -= len;
+  if (s.pending === 0) {
+    s.pending_out = 0;
+  }
+}
+
+
+function flush_block_only (s, last) {
+  trees._tr_flush_block(s, (s.block_start >= 0 ? s.block_start : -1), s.strstart - s.block_start, last);
+  s.block_start = s.strstart;
+  flush_pending(s.strm);
+}
+
+
+function put_byte(s, b) {
+  s.pending_buf[s.pending++] = b;
+}
+
+
+/* =========================================================================
+ * Put a short in the pending buffer. The 16-bit value is put in MSB order.
+ * IN assertion: the stream state is correct and there is enough room in
+ * pending_buf.
+ */
+function putShortMSB(s, b) {
+//  put_byte(s, (Byte)(b >> 8));
+//  put_byte(s, (Byte)(b & 0xff));
+  s.pending_buf[s.pending++] = (b >>> 8) & 0xff;
+  s.pending_buf[s.pending++] = b & 0xff;
+}
+
+
+/* ===========================================================================
+ * Read a new buffer from the current input stream, update the adler32
+ * and total number of bytes read.  All deflate() input goes through
+ * this function so some applications may wish to modify it to avoid
+ * allocating a large strm->input buffer and copying from it.
+ * (See also flush_pending()).
+ */
+function read_buf(strm, buf, start, size) {
+  var len = strm.avail_in;
+
+  if (len > size) { len = size; }
+  if (len === 0) { return 0; }
+
+  strm.avail_in -= len;
+
+  utils.arraySet(buf, strm.input, strm.next_in, len, start);
+  if (strm.state.wrap === 1) {
+    strm.adler = adler32(strm.adler, buf, len, start);
+  }
+
+  else if (strm.state.wrap === 2) {
+    strm.adler = crc32(strm.adler, buf, len, start);
+  }
+
+  strm.next_in += len;
+  strm.total_in += len;
+
+  return len;
+}
+
+
+/* ===========================================================================
+ * Set match_start to the longest match starting at the given string and
+ * return its length. Matches shorter or equal to prev_length are discarded,
+ * in which case the result is equal to prev_length and match_start is
+ * garbage.
+ * IN assertions: cur_match is the head of the hash chain for the current
+ *   string (strstart) and its distance is <= MAX_DIST, and prev_length >= 1
+ * OUT assertion: the match length is not greater than s->lookahead.
+ */
+function longest_match(s, cur_match) {
+  var chain_length = s.max_chain_length;      /* max hash chain length */
+  var scan = s.strstart; /* current string */
+  var match;                       /* matched string */
+  var len;                           /* length of current match */
+  var best_len = s.prev_length;              /* best match length so far */
+  var nice_match = s.nice_match;             /* stop if match long enough */
+  var limit = (s.strstart > (s.w_size - MIN_LOOKAHEAD)) ?
+      s.strstart - (s.w_size - MIN_LOOKAHEAD) : 0/*NIL*/;
+
+  var _win = s.window; // shortcut
+
+  var wmask = s.w_mask;
+  var prev  = s.prev;
+
+  /* Stop when cur_match becomes <= limit. To simplify the code,
+   * we prevent matches with the string of window index 0.
+   */
+
+  var strend = s.strstart + MAX_MATCH;
+  var scan_end1  = _win[scan + best_len - 1];
+  var scan_end   = _win[scan + best_len];
+
+  /* The code is optimized for HASH_BITS >= 8 and MAX_MATCH-2 multiple of 16.
+   * It is easy to get rid of this optimization if necessary.
+   */
+  // Assert(s->hash_bits >= 8 && MAX_MATCH == 258, "Code too clever");
+
+  /* Do not waste too much time if we already have a good match: */
+  if (s.prev_length >= s.good_match) {
+    chain_length >>= 2;
+  }
+  /* Do not look for matches beyond the end of the input. This is necessary
+   * to make deflate deterministic.
+   */
+  if (nice_match > s.lookahead) { nice_match = s.lookahead; }
+
+  // Assert((ulg)s->strstart <= s->window_size-MIN_LOOKAHEAD, "need lookahead");
+
+  do {
+    // Assert(cur_match < s->strstart, "no future");
+    match = cur_match;
+
+    /* Skip to next match if the match length cannot increase
+     * or if the match length is less than 2.  Note that the checks below
+     * for insufficient lookahead only occur occasionally for performance
+     * reasons.  Therefore uninitialized memory will be accessed, and
+     * conditional jumps will be made that depend on those values.
+     * However the length of the match is limited to the lookahead, so
+     * the output of deflate is not affected by the uninitialized values.
+     */
+
+    if (_win[match + best_len]     !== scan_end  ||
+        _win[match + best_len - 1] !== scan_end1 ||
+        _win[match]                !== _win[scan] ||
+        _win[++match]              !== _win[scan + 1]) {
+      continue;
+    }
+
+    /* The check at best_len-1 can be removed because it will be made
+     * again later. (This heuristic is not always a win.)
+     * It is not necessary to compare scan[2] and match[2] since they
+     * are always equal when the other bytes match, given that
+     * the hash keys are equal and that HASH_BITS >= 8.
+     */
+    scan += 2;
+    match++;
+    // Assert(*scan == *match, "match[2]?");
+
+    /* We check for insufficient lookahead only every 8th comparison;
+     * the 256th check will be made at strstart+258.
+     */
+    do {
+      /*jshint noempty:false*/
+    } while (_win[++scan] === _win[++match] && _win[++scan] === _win[++match] &&
+             _win[++scan] === _win[++match] && _win[++scan] === _win[++match] &&
+             _win[++scan] === _win[++match] && _win[++scan] === _win[++match] &&
+             _win[++scan] === _win[++match] && _win[++scan] === _win[++match] &&
+             scan < strend);
+
+    // Assert(scan <= s->window+(unsigned)(s->window_size-1), "wild scan");
+
+    len = MAX_MATCH - (strend - scan);
+    scan = strend - MAX_MATCH;
+
+    if (len > best_len) {
+      s.match_start = cur_match;
+      best_len = len;
+      if (len >= nice_match) {
+        break;
+      }
+      scan_end1  = _win[scan + best_len - 1];
+      scan_end   = _win[scan + best_len];
+    }
+  } while ((cur_match = prev[cur_match & wmask]) > limit && --chain_length !== 0);
+
+  if (best_len <= s.lookahead) {
+    return best_len;
+  }
+  return s.lookahead;
+}
+
+
+/* ===========================================================================
+ * Fill the window when the lookahead becomes insufficient.
+ * Updates strstart and lookahead.
+ *
+ * IN assertion: lookahead < MIN_LOOKAHEAD
+ * OUT assertions: strstart <= window_size-MIN_LOOKAHEAD
+ *    At least one byte has been read, or avail_in == 0; reads are
+ *    performed for at least two bytes (required for the zip translate_eol
+ *    option -- not supported here).
+ */
+function fill_window(s) {
+  var _w_size = s.w_size;
+  var p, n, m, more, str;
+
+  //Assert(s->lookahead < MIN_LOOKAHEAD, "already enough lookahead");
+
+  do {
+    more = s.window_size - s.lookahead - s.strstart;
+
+    // JS ints have 32 bit, block below not needed
+    /* Deal with !@#$% 64K limit: */
+    //if (sizeof(int) <= 2) {
+    //    if (more == 0 && s->strstart == 0 && s->lookahead == 0) {
+    //        more = wsize;
+    //
+    //  } else if (more == (unsigned)(-1)) {
+    //        /* Very unlikely, but possible on 16 bit machine if
+    //         * strstart == 0 && lookahead == 1 (input done a byte at time)
+    //         */
+    //        more--;
+    //    }
+    //}
+
+
+    /* If the window is almost full and there is insufficient lookahead,
+     * move the upper half to the lower one to make room in the upper half.
+     */
+    if (s.strstart >= _w_size + (_w_size - MIN_LOOKAHEAD)) {
+
+      utils.arraySet(s.window, s.window, _w_size, _w_size, 0);
+      s.match_start -= _w_size;
+      s.strstart -= _w_size;
+      /* we now have strstart >= MAX_DIST */
+      s.block_start -= _w_size;
+
+      /* Slide the hash table (could be avoided with 32 bit values
+       at the expense of memory usage). We slide even when level == 0
+       to keep the hash table consistent if we switch back to level > 0
+       later. (Using level 0 permanently is not an optimal usage of
+       zlib, so we don't care about this pathological case.)
+       */
+
+      n = s.hash_size;
+      p = n;
+      do {
+        m = s.head[--p];
+        s.head[p] = (m >= _w_size ? m - _w_size : 0);
+      } while (--n);
+
+      n = _w_size;
+      p = n;
+      do {
+        m = s.prev[--p];
+        s.prev[p] = (m >= _w_size ? m - _w_size : 0);
+        /* If n is not on any hash chain, prev[n] is garbage but
+         * its value will never be used.
+         */
+      } while (--n);
+
+      more += _w_size;
+    }
+    if (s.strm.avail_in === 0) {
+      break;
+    }
+
+    /* If there was no sliding:
+     *    strstart <= WSIZE+MAX_DIST-1 && lookahead <= MIN_LOOKAHEAD - 1 &&
+     *    more == window_size - lookahead - strstart
+     * => more >= window_size - (MIN_LOOKAHEAD-1 + WSIZE + MAX_DIST-1)
+     * => more >= window_size - 2*WSIZE + 2
+     * In the BIG_MEM or MMAP case (not yet supported),
+     *   window_size == input_size + MIN_LOOKAHEAD  &&
+     *   strstart + s->lookahead <= input_size => more >= MIN_LOOKAHEAD.
+     * Otherwise, window_size == 2*WSIZE so more >= 2.
+     * If there was sliding, more >= WSIZE. So in all cases, more >= 2.
+     */
+    //Assert(more >= 2, "more < 2");
+    n = read_buf(s.strm, s.window, s.strstart + s.lookahead, more);
+    s.lookahead += n;
+
+    /* Initialize the hash value now that we have some input: */
+    if (s.lookahead + s.insert >= MIN_MATCH) {
+      str = s.strstart - s.insert;
+      s.ins_h = s.window[str];
+
+      /* UPDATE_HASH(s, s->ins_h, s->window[str + 1]); */
+      s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[str + 1]) & s.hash_mask;
+//#if MIN_MATCH != 3
+//        Call update_hash() MIN_MATCH-3 more times
+//#endif
+      while (s.insert) {
+        /* UPDATE_HASH(s, s->ins_h, s->window[str + MIN_MATCH-1]); */
+        s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[str + MIN_MATCH-1]) & s.hash_mask;
+
+        s.prev[str & s.w_mask] = s.head[s.ins_h];
+        s.head[s.ins_h] = str;
+        str++;
+        s.insert--;
+        if (s.lookahead + s.insert < MIN_MATCH) {
+          break;
+        }
+      }
+    }
+    /* If the whole input has less than MIN_MATCH bytes, ins_h is garbage,
+     * but this is not important since only literal bytes will be emitted.
+     */
+
+  } while (s.lookahead < MIN_LOOKAHEAD && s.strm.avail_in !== 0);
+
+  /* If the WIN_INIT bytes after the end of the current data have never been
+   * written, then zero those bytes in order to avoid memory check reports of
+   * the use of uninitialized (or uninitialised as Julian writes) bytes by
+   * the longest match routines.  Update the high water mark for the next
+   * time through here.  WIN_INIT is set to MAX_MATCH since the longest match
+   * routines allow scanning to strstart + MAX_MATCH, ignoring lookahead.
+   */
+//  if (s.high_water < s.window_size) {
+//    var curr = s.strstart + s.lookahead;
+//    var init = 0;
+//
+//    if (s.high_water < curr) {
+//      /* Previous high water mark below current data -- zero WIN_INIT
+//       * bytes or up to end of window, whichever is less.
+//       */
+//      init = s.window_size - curr;
+//      if (init > WIN_INIT)
+//        init = WIN_INIT;
+//      zmemzero(s->window + curr, (unsigned)init);
+//      s->high_water = curr + init;
+//    }
+//    else if (s->high_water < (ulg)curr + WIN_INIT) {
+//      /* High water mark at or above current data, but below current data
+//       * plus WIN_INIT -- zero out to current data plus WIN_INIT, or up
+//       * to end of window, whichever is less.
+//       */
+//      init = (ulg)curr + WIN_INIT - s->high_water;
+//      if (init > s->window_size - s->high_water)
+//        init = s->window_size - s->high_water;
+//      zmemzero(s->window + s->high_water, (unsigned)init);
+//      s->high_water += init;
+//    }
+//  }
+//
+//  Assert((ulg)s->strstart <= s->window_size - MIN_LOOKAHEAD,
+//    "not enough room for search");
+}
+
+/* ===========================================================================
+ * Copy without compression as much as possible from the input stream, return
+ * the current block state.
+ * This function does not insert new strings in the dictionary since
+ * uncompressible data is probably not useful. This function is used
+ * only for the level=0 compression option.
+ * NOTE: this function should be optimized to avoid extra copying from
+ * window to pending_buf.
+ */
+function deflate_stored(s, flush) {
+  /* Stored blocks are limited to 0xffff bytes, pending_buf is limited
+   * to pending_buf_size, and each stored block has a 5 byte header:
+   */
+  var max_block_size = 0xffff;
+
+  if (max_block_size > s.pending_buf_size - 5) {
+    max_block_size = s.pending_buf_size - 5;
+  }
+
+  /* Copy as much as possible from input to output: */
+  for (;;) {
+    /* Fill the window as much as possible: */
+    if (s.lookahead <= 1) {
+
+      //Assert(s->strstart < s->w_size+MAX_DIST(s) ||
+      //  s->block_start >= (long)s->w_size, "slide too late");
+//      if (!(s.strstart < s.w_size + (s.w_size - MIN_LOOKAHEAD) ||
+//        s.block_start >= s.w_size)) {
+//        throw  new Error("slide too late");
+//      }
+
+      fill_window(s);
+      if (s.lookahead === 0 && flush === Z_NO_FLUSH) {
+        return BS_NEED_MORE;
+      }
+
+      if (s.lookahead === 0) {
+        break;
+      }
+      /* flush the current block */
+    }
+    //Assert(s->block_start >= 0L, "block gone");
+//    if (s.block_start < 0) throw new Error("block gone");
+
+    s.strstart += s.lookahead;
+    s.lookahead = 0;
+
+    /* Emit a stored block if pending_buf will be full: */
+    var max_start = s.block_start + max_block_size;
+
+    if (s.strstart === 0 || s.strstart >= max_start) {
+      /* strstart == 0 is possible when wraparound on 16-bit machine */
+      s.lookahead = s.strstart - max_start;
+      s.strstart = max_start;
+      /*** FLUSH_BLOCK(s, 0); ***/
+      flush_block_only(s, false);
+      if (s.strm.avail_out === 0) {
+        return BS_NEED_MORE;
+      }
+      /***/
+
+
+    }
+    /* Flush if we may have to slide, otherwise block_start may become
+     * negative and the data will be gone:
+     */
+    if (s.strstart - s.block_start >= (s.w_size - MIN_LOOKAHEAD)) {
+      /*** FLUSH_BLOCK(s, 0); ***/
+      flush_block_only(s, false);
+      if (s.strm.avail_out === 0) {
+        return BS_NEED_MORE;
+      }
+      /***/
+    }
+  }
+
+  s.insert = 0;
+
+  if (flush === Z_FINISH) {
+    /*** FLUSH_BLOCK(s, 1); ***/
+    flush_block_only(s, true);
+    if (s.strm.avail_out === 0) {
+      return BS_FINISH_STARTED;
+    }
+    /***/
+    return BS_FINISH_DONE;
+  }
+
+  if (s.strstart > s.block_start) {
+    /*** FLUSH_BLOCK(s, 0); ***/
+    flush_block_only(s, false);
+    if (s.strm.avail_out === 0) {
+      return BS_NEED_MORE;
+    }
+    /***/
+  }
+
+  return BS_NEED_MORE;
+}
+
+/* ===========================================================================
+ * Compress as much as possible from the input stream, return the current
+ * block state.
+ * This function does not perform lazy evaluation of matches and inserts
+ * new strings in the dictionary only for unmatched strings or for short
+ * matches. It is used only for the fast compression options.
+ */
+function deflate_fast(s, flush) {
+  var hash_head;        /* head of the hash chain */
+  var bflush;           /* set if current block must be flushed */
+
+  for (;;) {
+    /* Make sure that we always have enough lookahead, except
+     * at the end of the input file. We need MAX_MATCH bytes
+     * for the next match, plus MIN_MATCH bytes to insert the
+     * string following the next match.
+     */
+    if (s.lookahead < MIN_LOOKAHEAD) {
+      fill_window(s);
+      if (s.lookahead < MIN_LOOKAHEAD && flush === Z_NO_FLUSH) {
+        return BS_NEED_MORE;
+      }
+      if (s.lookahead === 0) {
+        break; /* flush the current block */
+      }
+    }
+
+    /* Insert the string window[strstart .. strstart+2] in the
+     * dictionary, and set hash_head to the head of the hash chain:
+     */
+    hash_head = 0/*NIL*/;
+    if (s.lookahead >= MIN_MATCH) {
+      /*** INSERT_STRING(s, s.strstart, hash_head); ***/
+      s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[s.strstart + MIN_MATCH - 1]) & s.hash_mask;
+      hash_head = s.prev[s.strstart & s.w_mask] = s.head[s.ins_h];
+      s.head[s.ins_h] = s.strstart;
+      /***/
+    }
+
+    /* Find the longest match, discarding those <= prev_length.
+     * At this point we have always match_length < MIN_MATCH
+     */
+    if (hash_head !== 0/*NIL*/ && ((s.strstart - hash_head) <= (s.w_size - MIN_LOOKAHEAD))) {
+      /* To simplify the code, we prevent matches with the string
+       * of window index 0 (in particular we have to avoid a match
+       * of the string with itself at the start of the input file).
+       */
+      s.match_length = longest_match(s, hash_head);
+      /* longest_match() sets match_start */
+    }
+    if (s.match_length >= MIN_MATCH) {
+      // check_match(s, s.strstart, s.match_start, s.match_length); // for debug only
+
+      /*** _tr_tally_dist(s, s.strstart - s.match_start,
+                     s.match_length - MIN_MATCH, bflush); ***/
+      bflush = trees._tr_tally(s, s.strstart - s.match_start, s.match_length - MIN_MATCH);
+
+      s.lookahead -= s.match_length;
+
+      /* Insert new strings in the hash table only if the match length
+       * is not too large. This saves time but degrades compression.
+       */
+      if (s.match_length <= s.max_lazy_match/*max_insert_length*/ && s.lookahead >= MIN_MATCH) {
+        s.match_length--; /* string at strstart already in table */
+        do {
+          s.strstart++;
+          /*** INSERT_STRING(s, s.strstart, hash_head); ***/
+          s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[s.strstart + MIN_MATCH - 1]) & s.hash_mask;
+          hash_head = s.prev[s.strstart & s.w_mask] = s.head[s.ins_h];
+          s.head[s.ins_h] = s.strstart;
+          /***/
+          /* strstart never exceeds WSIZE-MAX_MATCH, so there are
+           * always MIN_MATCH bytes ahead.
+           */
+        } while (--s.match_length !== 0);
+        s.strstart++;
+      } else
+      {
+        s.strstart += s.match_length;
+        s.match_length = 0;
+        s.ins_h = s.window[s.strstart];
+        /* UPDATE_HASH(s, s.ins_h, s.window[s.strstart+1]); */
+        s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[s.strstart + 1]) & s.hash_mask;
+
+//#if MIN_MATCH != 3
+//                Call UPDATE_HASH() MIN_MATCH-3 more times
+//#endif
+        /* If lookahead < MIN_MATCH, ins_h is garbage, but it does not
+         * matter since it will be recomputed at next deflate call.
+         */
+      }
+    } else {
+      /* No match, output a literal byte */
+      //Tracevv((stderr,"%c", s.window[s.strstart]));
+      /*** _tr_tally_lit(s, s.window[s.strstart], bflush); ***/
+      bflush = trees._tr_tally(s, 0, s.window[s.strstart]);
+
+      s.lookahead--;
+      s.strstart++;
+    }
+    if (bflush) {
+      /*** FLUSH_BLOCK(s, 0); ***/
+      flush_block_only(s, false);
+      if (s.strm.avail_out === 0) {
+        return BS_NEED_MORE;
+      }
+      /***/
+    }
+  }
+  s.insert = ((s.strstart < (MIN_MATCH-1)) ? s.strstart : MIN_MATCH-1);
+  if (flush === Z_FINISH) {
+    /*** FLUSH_BLOCK(s, 1); ***/
+    flush_block_only(s, true);
+    if (s.strm.avail_out === 0) {
+      return BS_FINISH_STARTED;
+    }
+    /***/
+    return BS_FINISH_DONE;
+  }
+  if (s.last_lit) {
+    /*** FLUSH_BLOCK(s, 0); ***/
+    flush_block_only(s, false);
+    if (s.strm.avail_out === 0) {
+      return BS_NEED_MORE;
+    }
+    /***/
+  }
+  return BS_BLOCK_DONE;
+}
+
+/* ===========================================================================
+ * Same as above, but achieves better compression. We use a lazy
+ * evaluation for matches: a match is finally adopted only if there is
+ * no better match at the next window position.
+ */
+function deflate_slow(s, flush) {
+  var hash_head;          /* head of hash chain */
+  var bflush;              /* set if current block must be flushed */
+
+  var max_insert;
+
+  /* Process the input block. */
+  for (;;) {
+    /* Make sure that we always have enough lookahead, except
+     * at the end of the input file. We need MAX_MATCH bytes
+     * for the next match, plus MIN_MATCH bytes to insert the
+     * string following the next match.
+     */
+    if (s.lookahead < MIN_LOOKAHEAD) {
+      fill_window(s);
+      if (s.lookahead < MIN_LOOKAHEAD && flush === Z_NO_FLUSH) {
+        return BS_NEED_MORE;
+      }
+      if (s.lookahead === 0) { break; } /* flush the current block */
+    }
+
+    /* Insert the string window[strstart .. strstart+2] in the
+     * dictionary, and set hash_head to the head of the hash chain:
+     */
+    hash_head = 0/*NIL*/;
+    if (s.lookahead >= MIN_MATCH) {
+      /*** INSERT_STRING(s, s.strstart, hash_head); ***/
+      s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[s.strstart + MIN_MATCH - 1]) & s.hash_mask;
+      hash_head = s.prev[s.strstart & s.w_mask] = s.head[s.ins_h];
+      s.head[s.ins_h] = s.strstart;
+      /***/
+    }
+
+    /* Find the longest match, discarding those <= prev_length.
+     */
+    s.prev_length = s.match_length;
+    s.prev_match = s.match_start;
+    s.match_length = MIN_MATCH-1;
+
+    if (hash_head !== 0/*NIL*/ && s.prev_length < s.max_lazy_match &&
+        s.strstart - hash_head <= (s.w_size-MIN_LOOKAHEAD)/*MAX_DIST(s)*/) {
+      /* To simplify the code, we prevent matches with the string
+       * of window index 0 (in particular we have to avoid a match
+       * of the string with itself at the start of the input file).
+       */
+      s.match_length = longest_match(s, hash_head);
+      /* longest_match() sets match_start */
+
+      if (s.match_length <= 5 &&
+         (s.strategy === Z_FILTERED || (s.match_length === MIN_MATCH && s.strstart - s.match_start > 4096/*TOO_FAR*/))) {
+
+        /* If prev_match is also MIN_MATCH, match_start is garbage
+         * but we will ignore the current match anyway.
+         */
+        s.match_length = MIN_MATCH-1;
+      }
+    }
+    /* If there was a match at the previous step and the current
+     * match is not better, output the previous match:
+     */
+    if (s.prev_length >= MIN_MATCH && s.match_length <= s.prev_length) {
+      max_insert = s.strstart + s.lookahead - MIN_MATCH;
+      /* Do not insert strings in hash table beyond this. */
+
+      //check_match(s, s.strstart-1, s.prev_match, s.prev_length);
+
+      /***_tr_tally_dist(s, s.strstart - 1 - s.prev_match,
+                     s.prev_length - MIN_MATCH, bflush);***/
+      bflush = trees._tr_tally(s, s.strstart - 1- s.prev_match, s.prev_length - MIN_MATCH);
+      /* Insert in hash table all strings up to the end of the match.
+       * strstart-1 and strstart are already inserted. If there is not
+       * enough lookahead, the last two strings are not inserted in
+       * the hash table.
+       */
+      s.lookahead -= s.prev_length-1;
+      s.prev_length -= 2;
+      do {
+        if (++s.strstart <= max_insert) {
+          /*** INSERT_STRING(s, s.strstart, hash_head); ***/
+          s.ins_h = ((s.ins_h << s.hash_shift) ^ s.window[s.strstart + MIN_MATCH - 1]) & s.hash_mask;
+          hash_head = s.prev[s.strstart & s.w_mask] = s.head[s.ins_h];
+          s.head[s.ins_h] = s.strstart;
+          /***/
+        }
+      } while (--s.prev_length !== 0);
+      s.match_available = 0;
+      s.match_length = MIN_MATCH-1;
+      s.strstart++;
+
+      if (bflush) {
+        /*** FLUSH_BLOCK(s, 0); ***/
+        flush_block_only(s, false);
+        if (s.strm.avail_out === 0) {
+          return BS_NEED_MORE;
+        }
+        /***/
+      }
+
+    } else if (s.match_available) {
+      /* If there was no match at the previous position, output a
+       * single literal. If there was a match but the current match
+       * is longer, truncate the previous match to a single literal.
+       */
+      //Tracevv((stderr,"%c", s->window[s->strstart-1]));
+      /*** _tr_tally_lit(s, s.window[s.strstart-1], bflush); ***/
+      bflush = trees._tr_tally(s, 0, s.window[s.strstart-1]);
+
+      if (bflush) {
+        /*** FLUSH_BLOCK_ONLY(s, 0) ***/
+        flush_block_only(s, false);
+        /***/
+      }
+      s.strstart++;
+      s.lookahead--;
+      if (s.strm.avail_out === 0) {
+        return BS_NEED_MORE;
+      }
+    } else {
+      /* There is no previous match to compare with, wait for
+       * the next step to decide.
+       */
+      s.match_available = 1;
+      s.strstart++;
+      s.lookahead--;
+    }
+  }
+  //Assert (flush != Z_NO_FLUSH, "no flush?");
+  if (s.match_available) {
+    //Tracevv((stderr,"%c", s->window[s->strstart-1]));
+    /*** _tr_tally_lit(s, s.window[s.strstart-1], bflush); ***/
+    bflush = trees._tr_tally(s, 0, s.window[s.strstart-1]);
+
+    s.match_available = 0;
+  }
+  s.insert = s.strstart < MIN_MATCH-1 ? s.strstart : MIN_MATCH-1;
+  if (flush === Z_FINISH) {
+    /*** FLUSH_BLOCK(s, 1); ***/
+    flush_block_only(s, true);
+    if (s.strm.avail_out === 0) {
+      return BS_FINISH_STARTED;
+    }
+    /***/
+    return BS_FINISH_DONE;
+  }
+  if (s.last_lit) {
+    /*** FLUSH_BLOCK(s, 0); ***/
+    flush_block_only(s, false);
+    if (s.strm.avail_out === 0) {
+      return BS_NEED_MORE;
+    }
+    /***/
+  }
+
+  return BS_BLOCK_DONE;
+}
+
+
+/* ===========================================================================
+ * For Z_RLE, simply look for runs of bytes, generate matches only of distance
+ * one.  Do not maintain a hash table.  (It will be regenerated if this run of
+ * deflate switches away from Z_RLE.)
+ */
+function deflate_rle(s, flush) {
+  var bflush;            /* set if current block must be flushed */
+  var prev;              /* byte at distance one to match */
+  var scan, strend;      /* scan goes up to strend for length of run */
+
+  var _win = s.window;
+
+  for (;;) {
+    /* Make sure that we always have enough lookahead, except
+     * at the end of the input file. We need MAX_MATCH bytes
+     * for the longest run, plus one for the unrolled loop.
+     */
+    if (s.lookahead <= MAX_MATCH) {
+      fill_window(s);
+      if (s.lookahead <= MAX_MATCH && flush === Z_NO_FLUSH) {
+        return BS_NEED_MORE;
+      }
+      if (s.lookahead === 0) { break; } /* flush the current block */
+    }
+
+    /* See how many times the previous byte repeats */
+    s.match_length = 0;
+    if (s.lookahead >= MIN_MATCH && s.strstart > 0) {
+      scan = s.strstart - 1;
+      prev = _win[scan];
+      if (prev === _win[++scan] && prev === _win[++scan] && prev === _win[++scan]) {
+        strend = s.strstart + MAX_MATCH;
+        do {
+          /*jshint noempty:false*/
+        } while (prev === _win[++scan] && prev === _win[++scan] &&
+                 prev === _win[++scan] && prev === _win[++scan] &&
+                 prev === _win[++scan] && prev === _win[++scan] &&
+                 prev === _win[++scan] && prev === _win[++scan] &&
+                 scan < strend);
+        s.match_length = MAX_MATCH - (strend - scan);
+        if (s.match_length > s.lookahead) {
+          s.match_length = s.lookahead;
+        }
+      }
+      //Assert(scan <= s->window+(uInt)(s->window_size-1), "wild scan");
+    }
+
+    /* Emit match if have run of MIN_MATCH or longer, else emit literal */
+    if (s.match_length >= MIN_MATCH) {
+      //check_match(s, s.strstart, s.strstart - 1, s.match_length);
+
+      /*** _tr_tally_dist(s, 1, s.match_length - MIN_MATCH, bflush); ***/
+      bflush = trees._tr_tally(s, 1, s.match_length - MIN_MATCH);
+
+      s.lookahead -= s.match_length;
+      s.strstart += s.match_length;
+      s.match_length = 0;
+    } else {
+      /* No match, output a literal byte */
+      //Tracevv((stderr,"%c", s->window[s->strstart]));
+      /*** _tr_tally_lit(s, s.window[s.strstart], bflush); ***/
+      bflush = trees._tr_tally(s, 0, s.window[s.strstart]);
+
+      s.lookahead--;
+      s.strstart++;
+    }
+    if (bflush) {
+      /*** FLUSH_BLOCK(s, 0); ***/
+      flush_block_only(s, false);
+      if (s.strm.avail_out === 0) {
+        return BS_NEED_MORE;
+      }
+      /***/
+    }
+  }
+  s.insert = 0;
+  if (flush === Z_FINISH) {
+    /*** FLUSH_BLOCK(s, 1); ***/
+    flush_block_only(s, true);
+    if (s.strm.avail_out === 0) {
+      return BS_FINISH_STARTED;
+    }
+    /***/
+    return BS_FINISH_DONE;
+  }
+  if (s.last_lit) {
+    /*** FLUSH_BLOCK(s, 0); ***/
+    flush_block_only(s, false);
+    if (s.strm.avail_out === 0) {
+      return BS_NEED_MORE;
+    }
+    /***/
+  }
+  return BS_BLOCK_DONE;
+}
+
+/* ===========================================================================
+ * For Z_HUFFMAN_ONLY, do not look for matches.  Do not maintain a hash table.
+ * (It will be regenerated if this run of deflate switches away from Huffman.)
+ */
+function deflate_huff(s, flush) {
+  var bflush;             /* set if current block must be flushed */
+
+  for (;;) {
+    /* Make sure that we have a literal to write. */
+    if (s.lookahead === 0) {
+      fill_window(s);
+      if (s.lookahead === 0) {
+        if (flush === Z_NO_FLUSH) {
+          return BS_NEED_MORE;
+        }
+        break;      /* flush the current block */
+      }
+    }
+
+    /* Output a literal byte */
+    s.match_length = 0;
+    //Tracevv((stderr,"%c", s->window[s->strstart]));
+    /*** _tr_tally_lit(s, s.window[s.strstart], bflush); ***/
+    bflush = trees._tr_tally(s, 0, s.window[s.strstart]);
+    s.lookahead--;
+    s.strstart++;
+    if (bflush) {
+      /*** FLUSH_BLOCK(s, 0); ***/
+      flush_block_only(s, false);
+      if (s.strm.avail_out === 0) {
+        return BS_NEED_MORE;
+      }
+      /***/
+    }
+  }
+  s.insert = 0;
+  if (flush === Z_FINISH) {
+    /*** FLUSH_BLOCK(s, 1); ***/
+    flush_block_only(s, true);
+    if (s.strm.avail_out === 0) {
+      return BS_FINISH_STARTED;
+    }
+    /***/
+    return BS_FINISH_DONE;
+  }
+  if (s.last_lit) {
+    /*** FLUSH_BLOCK(s, 0); ***/
+    flush_block_only(s, false);
+    if (s.strm.avail_out === 0) {
+      return BS_NEED_MORE;
+    }
+    /***/
+  }
+  return BS_BLOCK_DONE;
+}
+
+/* Values for max_lazy_match, good_match and max_chain_length, depending on
+ * the desired pack level (0..9). The values given below have been tuned to
+ * exclude worst case performance for pathological files. Better values may be
+ * found for specific files.
+ */
+var Config = function (good_length, max_lazy, nice_length, max_chain, func) {
+  this.good_length = good_length;
+  this.max_lazy = max_lazy;
+  this.nice_length = nice_length;
+  this.max_chain = max_chain;
+  this.func = func;
+};
+
+var configuration_table;
+
+configuration_table = [
+  /*      good lazy nice chain */
+  new Config(0, 0, 0, 0, deflate_stored),          /* 0 store only */
+  new Config(4, 4, 8, 4, deflate_fast),            /* 1 max speed, no lazy matches */
+  new Config(4, 5, 16, 8, deflate_fast),           /* 2 */
+  new Config(4, 6, 32, 32, deflate_fast),          /* 3 */
+
+  new Config(4, 4, 16, 16, deflate_slow),          /* 4 lazy matches */
+  new Config(8, 16, 32, 32, deflate_slow),         /* 5 */
+  new Config(8, 16, 128, 128, deflate_slow),       /* 6 */
+  new Config(8, 32, 128, 256, deflate_slow),       /* 7 */
+  new Config(32, 128, 258, 1024, deflate_slow),    /* 8 */
+  new Config(32, 258, 258, 4096, deflate_slow)     /* 9 max compression */
+];
+
+
+/* ===========================================================================
+ * Initialize the "longest match" routines for a new zlib stream
+ */
+function lm_init(s) {
+  s.window_size = 2 * s.w_size;
+
+  /*** CLEAR_HASH(s); ***/
+  zero(s.head); // Fill with NIL (= 0);
+
+  /* Set the default configuration parameters:
+   */
+  s.max_lazy_match = configuration_table[s.level].max_lazy;
+  s.good_match = configuration_table[s.level].good_length;
+  s.nice_match = configuration_table[s.level].nice_length;
+  s.max_chain_length = configuration_table[s.level].max_chain;
+
+  s.strstart = 0;
+  s.block_start = 0;
+  s.lookahead = 0;
+  s.insert = 0;
+  s.match_length = s.prev_length = MIN_MATCH - 1;
+  s.match_available = 0;
+  s.ins_h = 0;
+}
+
+
+function DeflateState() {
+  this.strm = null;            /* pointer back to this zlib stream */
+  this.status = 0;            /* as the name implies */
+  this.pending_buf = null;      /* output still pending */
+  this.pending_buf_size = 0;  /* size of pending_buf */
+  this.pending_out = 0;       /* next pending byte to output to the stream */
+  this.pending = 0;           /* nb of bytes in the pending buffer */
+  this.wrap = 0;              /* bit 0 true for zlib, bit 1 true for gzip */
+  this.gzhead = null;         /* gzip header information to write */
+  this.gzindex = 0;           /* where in extra, name, or comment */
+  this.method = Z_DEFLATED; /* can only be DEFLATED */
+  this.last_flush = -1;   /* value of flush param for previous deflate call */
+
+  this.w_size = 0;  /* LZ77 window size (32K by default) */
+  this.w_bits = 0;  /* log2(w_size)  (8..16) */
+  this.w_mask = 0;  /* w_size - 1 */
+
+  this.window = null;
+  /* Sliding window. Input bytes are read into the second half of the window,
+   * and move to the first half later to keep a dictionary of at least wSize
+   * bytes. With this organization, matches are limited to a distance of
+   * wSize-MAX_MATCH bytes, but this ensures that IO is always
+   * performed with a length multiple of the block size.
+   */
+
+  this.window_size = 0;
+  /* Actual size of window: 2*wSize, except when the user input buffer
+   * is directly used as sliding window.
+   */
+
+  this.prev = null;
+  /* Link to older string with same hash index. To limit the size of this
+   * array to 64K, this link is maintained only for the last 32K strings.
+   * An index in this array is thus a window index modulo 32K.
+   */
+
+  this.head = null;   /* Heads of the hash chains or NIL. */
+
+  this.ins_h = 0;       /* hash index of string to be inserted */
+  this.hash_size = 0;   /* number of elements in hash table */
+  this.hash_bits = 0;   /* log2(hash_size) */
+  this.hash_mask = 0;   /* hash_size-1 */
+
+  this.hash_shift = 0;
+  /* Number of bits by which ins_h must be shifted at each input
+   * step. It must be such that after MIN_MATCH steps, the oldest
+   * byte no longer takes part in the hash key, that is:
+   *   hash_shift * MIN_MATCH >= hash_bits
+   */
+
+  this.block_start = 0;
+  /* Window position at the beginning of the current output block. Gets
+   * negative when the window is moved backwards.
+   */
+
+  this.match_length = 0;      /* length of best match */
+  this.prev_match = 0;        /* previous match */
+  this.match_available = 0;   /* set if previous match exists */
+  this.strstart = 0;          /* start of string to insert */
+  this.match_start = 0;       /* start of matching string */
+  this.lookahead = 0;         /* number of valid bytes ahead in window */
+
+  this.prev_length = 0;
+  /* Length of the best match at previous step. Matches not greater than this
+   * are discarded. This is used in the lazy match evaluation.
+   */
+
+  this.max_chain_length = 0;
+  /* To speed up deflation, hash chains are never searched beyond this
+   * length.  A higher limit improves compression ratio but degrades the
+   * speed.
+   */
+
+  this.max_lazy_match = 0;
+  /* Attempt to find a better match only when the current match is strictly
+   * smaller than this value. This mechanism is used only for compression
+   * levels >= 4.
+   */
+  // That's alias to max_lazy_match, don't use directly
+  //this.max_insert_length = 0;
+  /* Insert new strings in the hash table only if the match length is not
+   * greater than this length. This saves time but degrades compression.
+   * max_insert_length is used only for compression levels <= 3.
+   */
+
+  this.level = 0;     /* compression level (1..9) */
+  this.strategy = 0;  /* favor or force Huffman coding*/
+
+  this.good_match = 0;
+  /* Use a faster search when the previous match is longer than this */
+
+  this.nice_match = 0; /* Stop searching when current match exceeds this */
+
+              /* used by trees.c: */
+
+  /* Didn't use ct_data typedef below to suppress compiler warning */
+
+  // struct ct_data_s dyn_ltree[HEAP_SIZE];   /* literal and length tree */
+  // struct ct_data_s dyn_dtree[2*D_CODES+1]; /* distance tree */
+  // struct ct_data_s bl_tree[2*BL_CODES+1];  /* Huffman tree for bit lengths */
+
+  // Use flat array of DOUBLE size, with interleaved fata,
+  // because JS does not support effective
+  this.dyn_ltree  = new utils.Buf16(HEAP_SIZE * 2);
+  this.dyn_dtree  = new utils.Buf16((2*D_CODES+1) * 2);
+  this.bl_tree    = new utils.Buf16((2*BL_CODES+1) * 2);
+  zero(this.dyn_ltree);
+  zero(this.dyn_dtree);
+  zero(this.bl_tree);
+
+  this.l_desc   = null;         /* desc. for literal tree */
+  this.d_desc   = null;         /* desc. for distance tree */
+  this.bl_desc  = null;         /* desc. for bit length tree */
+
+  //ush bl_count[MAX_BITS+1];
+  this.bl_count = new utils.Buf16(MAX_BITS+1);
+  /* number of codes at each bit length for an optimal tree */
+
+  //int heap[2*L_CODES+1];      /* heap used to build the Huffman trees */
+  this.heap = new utils.Buf16(2*L_CODES+1);  /* heap used to build the Huffman trees */
+  zero(this.heap);
+
+  this.heap_len = 0;               /* number of elements in the heap */
+  this.heap_max = 0;               /* element of largest frequency */
+  /* The sons of heap[n] are heap[2*n] and heap[2*n+1]. heap[0] is not used.
+   * The same heap array is used to build all trees.
+   */
+
+  this.depth = new utils.Buf16(2*L_CODES+1); //uch depth[2*L_CODES+1];
+  zero(this.depth);
+  /* Depth of each subtree used as tie breaker for trees of equal frequency
+   */
+
+  this.l_buf = 0;          /* buffer index for literals or lengths */
+
+  this.lit_bufsize = 0;
+  /* Size of match buffer for literals/lengths.  There are 4 reasons for
+   * limiting lit_bufsize to 64K:
+   *   - frequencies can be kept in 16 bit counters
+   *   - if compression is not successful for the first block, all input
+   *     data is still in the window so we can still emit a stored block even
+   *     when input comes from standard input.  (This can also be done for
+   *     all blocks if lit_bufsize is not greater than 32K.)
+   *   - if compression is not successful for a file smaller than 64K, we can
+   *     even emit a stored file instead of a stored block (saving 5 bytes).
+   *     This is applicable only for zip (not gzip or zlib).
+   *   - creating new Huffman trees less frequently may not provide fast
+   *     adaptation to changes in the input data statistics. (Take for
+   *     example a binary file with poorly compressible code followed by
+   *     a highly compressible string table.) Smaller buffer sizes give
+   *     fast adaptation but have of course the overhead of transmitting
+   *     trees more frequently.
+   *   - I can't count above 4
+   */
+
+  this.last_lit = 0;      /* running index in l_buf */
+
+  this.d_buf = 0;
+  /* Buffer index for distances. To simplify the code, d_buf and l_buf have
+   * the same number of elements. To use different lengths, an extra flag
+   * array would be necessary.
+   */
+
+  this.opt_len = 0;       /* bit length of current block with optimal trees */
+  this.static_len = 0;    /* bit length of current block with static trees */
+  this.matches = 0;       /* number of string matches in current block */
+  this.insert = 0;        /* bytes at end of window left to insert */
+
+
+  this.bi_buf = 0;
+  /* Output buffer. bits are inserted starting at the bottom (least
+   * significant bits).
+   */
+  this.bi_valid = 0;
+  /* Number of valid bits in bi_buf.  All bits above the last valid bit
+   * are always zero.
+   */
+
+  // Used for window memory init. We safely ignore it for JS. That makes
+  // sense only for pointers and memory check tools.
+  //this.high_water = 0;
+  /* High water mark offset in window for initialized bytes -- bytes above
+   * this are set to zero in order to avoid memory check warnings when
+   * longest match routines access bytes past the input.  This is then
+   * updated to the new high water mark.
+   */
+}
+
+
+function deflateResetKeep(strm) {
+  var s;
+
+  if (!strm || !strm.state) {
+    return err(strm, Z_STREAM_ERROR);
+  }
+
+  strm.total_in = strm.total_out = 0;
+  strm.data_type = Z_UNKNOWN;
+
+  s = strm.state;
+  s.pending = 0;
+  s.pending_out = 0;
+
+  if (s.wrap < 0) {
+    s.wrap = -s.wrap;
+    /* was made negative by deflate(..., Z_FINISH); */
+  }
+  s.status = (s.wrap ? INIT_STATE : BUSY_STATE);
+  strm.adler = (s.wrap === 2) ?
+    0  // crc32(0, Z_NULL, 0)
+  :
+    1; // adler32(0, Z_NULL, 0)
+  s.last_flush = Z_NO_FLUSH;
+  trees._tr_init(s);
+  return Z_OK;
+}
+
+
+function deflateReset(strm) {
+  var ret = deflateResetKeep(strm);
+  if (ret === Z_OK) {
+    lm_init(strm.state);
+  }
+  return ret;
+}
+
+
+function deflateSetHeader(strm, head) {
+  if (!strm || !strm.state) { return Z_STREAM_ERROR; }
+  if (strm.state.wrap !== 2) { return Z_STREAM_ERROR; }
+  strm.state.gzhead = head;
+  return Z_OK;
+}
+
+
+function deflateInit2(strm, level, method, windowBits, memLevel, strategy) {
+  if (!strm) { // === Z_NULL
+    return Z_STREAM_ERROR;
+  }
+  var wrap = 1;
+
+  if (level === Z_DEFAULT_COMPRESSION) {
+    level = 6;
+  }
+
+  if (windowBits < 0) { /* suppress zlib wrapper */
+    wrap = 0;
+    windowBits = -windowBits;
+  }
+
+  else if (windowBits > 15) {
+    wrap = 2;           /* write gzip wrapper instead */
+    windowBits -= 16;
+  }
+
+
+  if (memLevel < 1 || memLevel > MAX_MEM_LEVEL || method !== Z_DEFLATED ||
+    windowBits < 8 || windowBits > 15 || level < 0 || level > 9 ||
+    strategy < 0 || strategy > Z_FIXED) {
+    return err(strm, Z_STREAM_ERROR);
+  }
+
+
+  if (windowBits === 8) {
+    windowBits = 9;
+  }
+  /* until 256-byte window bug fixed */
+
+  var s = new DeflateState();
+
+  strm.state = s;
+  s.strm = strm;
+
+  s.wrap = wrap;
+  s.gzhead = null;
+  s.w_bits = windowBits;
+  s.w_size = 1 << s.w_bits;
+  s.w_mask = s.w_size - 1;
+
+  s.hash_bits = memLevel + 7;
+  s.hash_size = 1 << s.hash_bits;
+  s.hash_mask = s.hash_size - 1;
+  s.hash_shift = ~~((s.hash_bits + MIN_MATCH - 1) / MIN_MATCH);
+
+  s.window = new utils.Buf8(s.w_size * 2);
+  s.head = new utils.Buf16(s.hash_size);
+  s.prev = new utils.Buf16(s.w_size);
+
+  // Don't need mem init magic for JS.
+  //s.high_water = 0;  /* nothing written to s->window yet */
+
+  s.lit_bufsize = 1 << (memLevel + 6); /* 16K elements by default */
+
+  s.pending_buf_size = s.lit_bufsize * 4;
+  s.pending_buf = new utils.Buf8(s.pending_buf_size);
+
+  s.d_buf = s.lit_bufsize >> 1;
+  s.l_buf = (1 + 2) * s.lit_bufsize;
+
+  s.level = level;
+  s.strategy = strategy;
+  s.method = method;
+
+  return deflateReset(strm);
+}
+
+function deflateInit(strm, level) {
+  return deflateInit2(strm, level, Z_DEFLATED, MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY);
+}
+
+
+function deflate(strm, flush) {
+  var old_flush, s;
+  var beg, val; // for gzip header write only
+
+  if (!strm || !strm.state ||
+    flush > Z_BLOCK || flush < 0) {
+    return strm ? err(strm, Z_STREAM_ERROR) : Z_STREAM_ERROR;
+  }
+
+  s = strm.state;
+
+  if (!strm.output ||
+      (!strm.input && strm.avail_in !== 0) ||
+      (s.status === FINISH_STATE && flush !== Z_FINISH)) {
+    return err(strm, (strm.avail_out === 0) ? Z_BUF_ERROR : Z_STREAM_ERROR);
+  }
+
+  s.strm = strm; /* just in case */
+  old_flush = s.last_flush;
+  s.last_flush = flush;
+
+  /* Write the header */
+  if (s.status === INIT_STATE) {
+
+    if (s.wrap === 2) { // GZIP header
+      strm.adler = 0;  //crc32(0L, Z_NULL, 0);
+      put_byte(s, 31);
+      put_byte(s, 139);
+      put_byte(s, 8);
+      if (!s.gzhead) { // s->gzhead == Z_NULL
+        put_byte(s, 0);
+        put_byte(s, 0);
+        put_byte(s, 0);
+        put_byte(s, 0);
+        put_byte(s, 0);
+        put_byte(s, s.level === 9 ? 2 :
+                    (s.strategy >= Z_HUFFMAN_ONLY || s.level < 2 ?
+                     4 : 0));
+        put_byte(s, OS_CODE);
+        s.status = BUSY_STATE;
+      }
+      else {
+        put_byte(s, (s.gzhead.text ? 1 : 0) +
+                    (s.gzhead.hcrc ? 2 : 0) +
+                    (!s.gzhead.extra ? 0 : 4) +
+                    (!s.gzhead.name ? 0 : 8) +
+                    (!s.gzhead.comment ? 0 : 16)
+                );
+        put_byte(s, s.gzhead.time & 0xff);
+        put_byte(s, (s.gzhead.time >> 8) & 0xff);
+        put_byte(s, (s.gzhead.time >> 16) & 0xff);
+        put_byte(s, (s.gzhead.time >> 24) & 0xff);
+        put_byte(s, s.level === 9 ? 2 :
+                    (s.strategy >= Z_HUFFMAN_ONLY || s.level < 2 ?
+                     4 : 0));
+        put_byte(s, s.gzhead.os & 0xff);
+        if (s.gzhead.extra && s.gzhead.extra.length) {
+          put_byte(s, s.gzhead.extra.length & 0xff);
+          put_byte(s, (s.gzhead.extra.length >> 8) & 0xff);
+        }
+        if (s.gzhead.hcrc) {
+          strm.adler = crc32(strm.adler, s.pending_buf, s.pending, 0);
+        }
+        s.gzindex = 0;
+        s.status = EXTRA_STATE;
+      }
+    }
+    else // DEFLATE header
+    {
+      var header = (Z_DEFLATED + ((s.w_bits - 8) << 4)) << 8;
+      var level_flags = -1;
+
+      if (s.strategy >= Z_HUFFMAN_ONLY || s.level < 2) {
+        level_flags = 0;
+      } else if (s.level < 6) {
+        level_flags = 1;
+      } else if (s.level === 6) {
+        level_flags = 2;
+      } else {
+        level_flags = 3;
+      }
+      header |= (level_flags << 6);
+      if (s.strstart !== 0) { header |= PRESET_DICT; }
+      header += 31 - (header % 31);
+
+      s.status = BUSY_STATE;
+      putShortMSB(s, header);
+
+      /* Save the adler32 of the preset dictionary: */
+      if (s.strstart !== 0) {
+        putShortMSB(s, strm.adler >>> 16);
+        putShortMSB(s, strm.adler & 0xffff);
+      }
+      strm.adler = 1; // adler32(0L, Z_NULL, 0);
+    }
+  }
+
+//#ifdef GZIP
+  if (s.status === EXTRA_STATE) {
+    if (s.gzhead.extra/* != Z_NULL*/) {
+      beg = s.pending;  /* start of bytes to update crc */
+
+      while (s.gzindex < (s.gzhead.extra.length & 0xffff)) {
+        if (s.pending === s.pending_buf_size) {
+          if (s.gzhead.hcrc && s.pending > beg) {
+            strm.adler = crc32(strm.adler, s.pending_buf, s.pending - beg, beg);
+          }
+          flush_pending(strm);
+          beg = s.pending;
+          if (s.pending === s.pending_buf_size) {
+            break;
+          }
+        }
+        put_byte(s, s.gzhead.extra[s.gzindex] & 0xff);
+        s.gzindex++;
+      }
+      if (s.gzhead.hcrc && s.pending > beg) {
+        strm.adler = crc32(strm.adler, s.pending_buf, s.pending - beg, beg);
+      }
+      if (s.gzindex === s.gzhead.extra.length) {
+        s.gzindex = 0;
+        s.status = NAME_STATE;
+      }
+    }
+    else {
+      s.status = NAME_STATE;
+    }
+  }
+  if (s.status === NAME_STATE) {
+    if (s.gzhead.name/* != Z_NULL*/) {
+      beg = s.pending;  /* start of bytes to update crc */
+      //int val;
+
+      do {
+        if (s.pending === s.pending_buf_size) {
+          if (s.gzhead.hcrc && s.pending > beg) {
+            strm.adler = crc32(strm.adler, s.pending_buf, s.pending - beg, beg);
+          }
+          flush_pending(strm);
+          beg = s.pending;
+          if (s.pending === s.pending_buf_size) {
+            val = 1;
+            break;
+          }
+        }
+        // JS specific: little magic to add zero terminator to end of string
+        if (s.gzindex < s.gzhead.name.length) {
+          val = s.gzhead.name.charCodeAt(s.gzindex++) & 0xff;
+        } else {
+          val = 0;
+        }
+        put_byte(s, val);
+      } while (val !== 0);
+
+      if (s.gzhead.hcrc && s.pending > beg) {
+        strm.adler = crc32(strm.adler, s.pending_buf, s.pending - beg, beg);
+      }
+      if (val === 0) {
+        s.gzindex = 0;
+        s.status = COMMENT_STATE;
+      }
+    }
+    else {
+      s.status = COMMENT_STATE;
+    }
+  }
+  if (s.status === COMMENT_STATE) {
+    if (s.gzhead.comment/* != Z_NULL*/) {
+      beg = s.pending;  /* start of bytes to update crc */
+      //int val;
+
+      do {
+        if (s.pending === s.pending_buf_size) {
+          if (s.gzhead.hcrc && s.pending > beg) {
+            strm.adler = crc32(strm.adler, s.pending_buf, s.pending - beg, beg);
+          }
+          flush_pending(strm);
+          beg = s.pending;
+          if (s.pending === s.pending_buf_size) {
+            val = 1;
+            break;
+          }
+        }
+        // JS specific: little magic to add zero terminator to end of string
+        if (s.gzindex < s.gzhead.comment.length) {
+          val = s.gzhead.comment.charCodeAt(s.gzindex++) & 0xff;
+        } else {
+          val = 0;
+        }
+        put_byte(s, val);
+      } while (val !== 0);
+
+      if (s.gzhead.hcrc && s.pending > beg) {
+        strm.adler = crc32(strm.adler, s.pending_buf, s.pending - beg, beg);
+      }
+      if (val === 0) {
+        s.status = HCRC_STATE;
+      }
+    }
+    else {
+      s.status = HCRC_STATE;
+    }
+  }
+  if (s.status === HCRC_STATE) {
+    if (s.gzhead.hcrc) {
+      if (s.pending + 2 > s.pending_buf_size) {
+        flush_pending(strm);
+      }
+      if (s.pending + 2 <= s.pending_buf_size) {
+        put_byte(s, strm.adler & 0xff);
+        put_byte(s, (strm.adler >> 8) & 0xff);
+        strm.adler = 0; //crc32(0L, Z_NULL, 0);
+        s.status = BUSY_STATE;
+      }
+    }
+    else {
+      s.status = BUSY_STATE;
+    }
+  }
+//#endif
+
+  /* Flush as much pending output as possible */
+  if (s.pending !== 0) {
+    flush_pending(strm);
+    if (strm.avail_out === 0) {
+      /* Since avail_out is 0, deflate will be called again with
+       * more output space, but possibly with both pending and
+       * avail_in equal to zero. There won't be anything to do,
+       * but this is not an error situation so make sure we
+       * return OK instead of BUF_ERROR at next call of deflate:
+       */
+      s.last_flush = -1;
+      return Z_OK;
+    }
+
+    /* Make sure there is something to do and avoid duplicate consecutive
+     * flushes. For repeated and useless calls with Z_FINISH, we keep
+     * returning Z_STREAM_END instead of Z_BUF_ERROR.
+     */
+  } else if (strm.avail_in === 0 && rank(flush) <= rank(old_flush) &&
+    flush !== Z_FINISH) {
+    return err(strm, Z_BUF_ERROR);
+  }
+
+  /* User must not provide more input after the first FINISH: */
+  if (s.status === FINISH_STATE && strm.avail_in !== 0) {
+    return err(strm, Z_BUF_ERROR);
+  }
+
+  /* Start a new block or continue the current one.
+   */
+  if (strm.avail_in !== 0 || s.lookahead !== 0 ||
+    (flush !== Z_NO_FLUSH && s.status !== FINISH_STATE)) {
+    var bstate = (s.strategy === Z_HUFFMAN_ONLY) ? deflate_huff(s, flush) :
+      (s.strategy === Z_RLE ? deflate_rle(s, flush) :
+        configuration_table[s.level].func(s, flush));
+
+    if (bstate === BS_FINISH_STARTED || bstate === BS_FINISH_DONE) {
+      s.status = FINISH_STATE;
+    }
+    if (bstate === BS_NEED_MORE || bstate === BS_FINISH_STARTED) {
+      if (strm.avail_out === 0) {
+        s.last_flush = -1;
+        /* avoid BUF_ERROR next call, see above */
+      }
+      return Z_OK;
+      /* If flush != Z_NO_FLUSH && avail_out == 0, the next call
+       * of deflate should use the same flush parameter to make sure
+       * that the flush is complete. So we don't have to output an
+       * empty block here, this will be done at next call. This also
+       * ensures that for a very small output buffer, we emit at most
+       * one empty block.
+       */
+    }
+    if (bstate === BS_BLOCK_DONE) {
+      if (flush === Z_PARTIAL_FLUSH) {
+        trees._tr_align(s);
+      }
+      else if (flush !== Z_BLOCK) { /* FULL_FLUSH or SYNC_FLUSH */
+
+        trees._tr_stored_block(s, 0, 0, false);
+        /* For a full flush, this empty block will be recognized
+         * as a special marker by inflate_sync().
+         */
+        if (flush === Z_FULL_FLUSH) {
+          /*** CLEAR_HASH(s); ***/             /* forget history */
+          zero(s.head); // Fill with NIL (= 0);
+
+          if (s.lookahead === 0) {
+            s.strstart = 0;
+            s.block_start = 0;
+            s.insert = 0;
+          }
+        }
+      }
+      flush_pending(strm);
+      if (strm.avail_out === 0) {
+        s.last_flush = -1; /* avoid BUF_ERROR at next call, see above */
+        return Z_OK;
+      }
+    }
+  }
+  //Assert(strm->avail_out > 0, "bug2");
+  //if (strm.avail_out <= 0) { throw new Error("bug2");}
+
+  if (flush !== Z_FINISH) { return Z_OK; }
+  if (s.wrap <= 0) { return Z_STREAM_END; }
+
+  /* Write the trailer */
+  if (s.wrap === 2) {
+    put_byte(s, strm.adler & 0xff);
+    put_byte(s, (strm.adler >> 8) & 0xff);
+    put_byte(s, (strm.adler >> 16) & 0xff);
+    put_byte(s, (strm.adler >> 24) & 0xff);
+    put_byte(s, strm.total_in & 0xff);
+    put_byte(s, (strm.total_in >> 8) & 0xff);
+    put_byte(s, (strm.total_in >> 16) & 0xff);
+    put_byte(s, (strm.total_in >> 24) & 0xff);
+  }
+  else
+  {
+    putShortMSB(s, strm.adler >>> 16);
+    putShortMSB(s, strm.adler & 0xffff);
+  }
+
+  flush_pending(strm);
+  /* If avail_out is zero, the application will call deflate again
+   * to flush the rest.
+   */
+  if (s.wrap > 0) { s.wrap = -s.wrap; }
+  /* write the trailer only once! */
+  return s.pending !== 0 ? Z_OK : Z_STREAM_END;
+}
+
+function deflateEnd(strm) {
+  var status;
+
+  if (!strm/*== Z_NULL*/ || !strm.state/*== Z_NULL*/) {
+    return Z_STREAM_ERROR;
+  }
+
+  status = strm.state.status;
+  if (status !== INIT_STATE &&
+    status !== EXTRA_STATE &&
+    status !== NAME_STATE &&
+    status !== COMMENT_STATE &&
+    status !== HCRC_STATE &&
+    status !== BUSY_STATE &&
+    status !== FINISH_STATE
+  ) {
+    return err(strm, Z_STREAM_ERROR);
+  }
+
+  strm.state = null;
+
+  return status === BUSY_STATE ? err(strm, Z_DATA_ERROR) : Z_OK;
+}
+
+/* =========================================================================
+ * Copy the source state to the destination state
+ */
+//function deflateCopy(dest, source) {
+//
+//}
+
+exports.deflateInit = deflateInit;
+exports.deflateInit2 = deflateInit2;
+exports.deflateReset = deflateReset;
+exports.deflateResetKeep = deflateResetKeep;
+exports.deflateSetHeader = deflateSetHeader;
+exports.deflate = deflate;
+exports.deflateEnd = deflateEnd;
+exports.deflateInfo = 'pako deflate (from Nodeca project)';
+
+/* Not implemented
+exports.deflateBound = deflateBound;
+exports.deflateCopy = deflateCopy;
+exports.deflateSetDictionary = deflateSetDictionary;
+exports.deflateParams = deflateParams;
+exports.deflatePending = deflatePending;
+exports.deflatePrime = deflatePrime;
+exports.deflateTune = deflateTune;
+*/
+
+},{"../utils/common":11,"./adler32":12,"./crc32":14,"./messages":19,"./trees":20}],16:[function(require,module,exports){
+'use strict';
+
+// See state defs from inflate.js
+var BAD = 30;       /* got a data error -- remain here until reset */
+var TYPE = 12;      /* i: waiting for type bits, including last-flag bit */
+
+/*
+   Decode literal, length, and distance codes and write out the resulting
+   literal and match bytes until either not enough input or output is
+   available, an end-of-block is encountered, or a data error is encountered.
+   When large enough input and output buffers are supplied to inflate(), for
+   example, a 16K input buffer and a 64K output buffer, more than 95% of the
+   inflate execution time is spent in this routine.
+
+   Entry assumptions:
+
+        state.mode === LEN
+        strm.avail_in >= 6
+        strm.avail_out >= 258
+        start >= strm.avail_out
+        state.bits < 8
+
+   On return, state.mode is one of:
+
+        LEN -- ran out of enough output space or enough available input
+        TYPE -- reached end of block code, inflate() to interpret next block
+        BAD -- error in block data
+
+   Notes:
+
+    - The maximum input bits used by a length/distance pair is 15 bits for the
+      length code, 5 bits for the length extra, 15 bits for the distance code,
+      and 13 bits for the distance extra.  This totals 48 bits, or six bytes.
+      Therefore if strm.avail_in >= 6, then there is enough input to avoid
+      checking for available input while decoding.
+
+    - The maximum bytes that a single length/distance pair can output is 258
+      bytes, which is the maximum length that can be coded.  inflate_fast()
+      requires strm.avail_out >= 258 for each loop to avoid checking for
+      output space.
+ */
+module.exports = function inflate_fast(strm, start) {
+  var state;
+  var _in;                    /* local strm.input */
+  var last;                   /* have enough input while in < last */
+  var _out;                   /* local strm.output */
+  var beg;                    /* inflate()'s initial strm.output */
+  var end;                    /* while out < end, enough space available */
+//#ifdef INFLATE_STRICT
+  var dmax;                   /* maximum distance from zlib header */
+//#endif
+  var wsize;                  /* window size or zero if not using window */
+  var whave;                  /* valid bytes in the window */
+  var wnext;                  /* window write index */
+  // Use `s_window` instead `window`, avoid conflict with instrumentation tools
+  var s_window;               /* allocated sliding window, if wsize != 0 */
+  var hold;                   /* local strm.hold */
+  var bits;                   /* local strm.bits */
+  var lcode;                  /* local strm.lencode */
+  var dcode;                  /* local strm.distcode */
+  var lmask;                  /* mask for first level of length codes */
+  var dmask;                  /* mask for first level of distance codes */
+  var here;                   /* retrieved table entry */
+  var op;                     /* code bits, operation, extra bits, or */
+                              /*  window position, window bytes to copy */
+  var len;                    /* match length, unused bytes */
+  var dist;                   /* match distance */
+  var from;                   /* where to copy match from */
+  var from_source;
+
+
+  var input, output; // JS specific, because we have no pointers
+
+  /* copy state to local variables */
+  state = strm.state;
+  //here = state.here;
+  _in = strm.next_in;
+  input = strm.input;
+  last = _in + (strm.avail_in - 5);
+  _out = strm.next_out;
+  output = strm.output;
+  beg = _out - (start - strm.avail_out);
+  end = _out + (strm.avail_out - 257);
+//#ifdef INFLATE_STRICT
+  dmax = state.dmax;
+//#endif
+  wsize = state.wsize;
+  whave = state.whave;
+  wnext = state.wnext;
+  s_window = state.window;
+  hold = state.hold;
+  bits = state.bits;
+  lcode = state.lencode;
+  dcode = state.distcode;
+  lmask = (1 << state.lenbits) - 1;
+  dmask = (1 << state.distbits) - 1;
+
+
+  /* decode literals and length/distances until end-of-block or not enough
+     input data or output space */
+
+  top:
+  do {
+    if (bits < 15) {
+      hold += input[_in++] << bits;
+      bits += 8;
+      hold += input[_in++] << bits;
+      bits += 8;
+    }
+
+    here = lcode[hold & lmask];
+
+    dolen:
+    for (;;) { // Goto emulation
+      op = here >>> 24/*here.bits*/;
+      hold >>>= op;
+      bits -= op;
+      op = (here >>> 16) & 0xff/*here.op*/;
+      if (op === 0) {                          /* literal */
+        //Tracevv((stderr, here.val >= 0x20 && here.val < 0x7f ?
+        //        "inflate:         literal '%c'\n" :
+        //        "inflate:         literal 0x%02x\n", here.val));
+        output[_out++] = here & 0xffff/*here.val*/;
+      }
+      else if (op & 16) {                     /* length base */
+        len = here & 0xffff/*here.val*/;
+        op &= 15;                           /* number of extra bits */
+        if (op) {
+          if (bits < op) {
+            hold += input[_in++] << bits;
+            bits += 8;
+          }
+          len += hold & ((1 << op) - 1);
+          hold >>>= op;
+          bits -= op;
+        }
+        //Tracevv((stderr, "inflate:         length %u\n", len));
+        if (bits < 15) {
+          hold += input[_in++] << bits;
+          bits += 8;
+          hold += input[_in++] << bits;
+          bits += 8;
+        }
+        here = dcode[hold & dmask];
+
+        dodist:
+        for (;;) { // goto emulation
+          op = here >>> 24/*here.bits*/;
+          hold >>>= op;
+          bits -= op;
+          op = (here >>> 16) & 0xff/*here.op*/;
+
+          if (op & 16) {                      /* distance base */
+            dist = here & 0xffff/*here.val*/;
+            op &= 15;                       /* number of extra bits */
+            if (bits < op) {
+              hold += input[_in++] << bits;
+              bits += 8;
+              if (bits < op) {
+                hold += input[_in++] << bits;
+                bits += 8;
+              }
+            }
+            dist += hold & ((1 << op) - 1);
+//#ifdef INFLATE_STRICT
+            if (dist > dmax) {
+              strm.msg = 'invalid distance too far back';
+              state.mode = BAD;
+              break top;
+            }
+//#endif
+            hold >>>= op;
+            bits -= op;
+            //Tracevv((stderr, "inflate:         distance %u\n", dist));
+            op = _out - beg;                /* max distance in output */
+            if (dist > op) {                /* see if copy from window */
+              op = dist - op;               /* distance back in window */
+              if (op > whave) {
+                if (state.sane) {
+                  strm.msg = 'invalid distance too far back';
+                  state.mode = BAD;
+                  break top;
+                }
+
+// (!) This block is disabled in zlib defailts,
+// don't enable it for binary compatibility
+//#ifdef INFLATE_ALLOW_INVALID_DISTANCE_TOOFAR_ARRR
+//                if (len <= op - whave) {
+//                  do {
+//                    output[_out++] = 0;
+//                  } while (--len);
+//                  continue top;
+//                }
+//                len -= op - whave;
+//                do {
+//                  output[_out++] = 0;
+//                } while (--op > whave);
+//                if (op === 0) {
+//                  from = _out - dist;
+//                  do {
+//                    output[_out++] = output[from++];
+//                  } while (--len);
+//                  continue top;
+//                }
+//#endif
+              }
+              from = 0; // window index
+              from_source = s_window;
+              if (wnext === 0) {           /* very common case */
+                from += wsize - op;
+                if (op < len) {         /* some from window */
+                  len -= op;
+                  do {
+                    output[_out++] = s_window[from++];
+                  } while (--op);
+                  from = _out - dist;  /* rest from output */
+                  from_source = output;
+                }
+              }
+              else if (wnext < op) {      /* wrap around window */
+                from += wsize + wnext - op;
+                op -= wnext;
+                if (op < len) {         /* some from end of window */
+                  len -= op;
+                  do {
+                    output[_out++] = s_window[from++];
+                  } while (--op);
+                  from = 0;
+                  if (wnext < len) {  /* some from start of window */
+                    op = wnext;
+                    len -= op;
+                    do {
+                      output[_out++] = s_window[from++];
+                    } while (--op);
+                    from = _out - dist;      /* rest from output */
+                    from_source = output;
+                  }
+                }
+              }
+              else {                      /* contiguous in window */
+                from += wnext - op;
+                if (op < len) {         /* some from window */
+                  len -= op;
+                  do {
+                    output[_out++] = s_window[from++];
+                  } while (--op);
+                  from = _out - dist;  /* rest from output */
+                  from_source = output;
+                }
+              }
+              while (len > 2) {
+                output[_out++] = from_source[from++];
+                output[_out++] = from_source[from++];
+                output[_out++] = from_source[from++];
+                len -= 3;
+              }
+              if (len) {
+                output[_out++] = from_source[from++];
+                if (len > 1) {
+                  output[_out++] = from_source[from++];
+                }
+              }
+            }
+            else {
+              from = _out - dist;          /* copy direct from output */
+              do {                        /* minimum length is three */
+                output[_out++] = output[from++];
+                output[_out++] = output[from++];
+                output[_out++] = output[from++];
+                len -= 3;
+              } while (len > 2);
+              if (len) {
+                output[_out++] = output[from++];
+                if (len > 1) {
+                  output[_out++] = output[from++];
+                }
+              }
+            }
+          }
+          else if ((op & 64) === 0) {          /* 2nd level distance code */
+            here = dcode[(here & 0xffff)/*here.val*/ + (hold & ((1 << op) - 1))];
+            continue dodist;
+          }
+          else {
+            strm.msg = 'invalid distance code';
+            state.mode = BAD;
+            break top;
+          }
+
+          break; // need to emulate goto via "continue"
+        }
+      }
+      else if ((op & 64) === 0) {              /* 2nd level length code */
+        here = lcode[(here & 0xffff)/*here.val*/ + (hold & ((1 << op) - 1))];
+        continue dolen;
+      }
+      else if (op & 32) {                     /* end-of-block */
+        //Tracevv((stderr, "inflate:         end of block\n"));
+        state.mode = TYPE;
+        break top;
+      }
+      else {
+        strm.msg = 'invalid literal/length code';
+        state.mode = BAD;
+        break top;
+      }
+
+      break; // need to emulate goto via "continue"
+    }
+  } while (_in < last && _out < end);
+
+  /* return unused bytes (on entry, bits < 8, so in won't go too far back) */
+  len = bits >> 3;
+  _in -= len;
+  bits -= len << 3;
+  hold &= (1 << bits) - 1;
+
+  /* update state and return */
+  strm.next_in = _in;
+  strm.next_out = _out;
+  strm.avail_in = (_in < last ? 5 + (last - _in) : 5 - (_in - last));
+  strm.avail_out = (_out < end ? 257 + (end - _out) : 257 - (_out - end));
+  state.hold = hold;
+  state.bits = bits;
+  return;
+};
+
+},{}],17:[function(require,module,exports){
+'use strict';
+
+
+var utils = require('../utils/common');
+var adler32 = require('./adler32');
+var crc32   = require('./crc32');
+var inflate_fast = require('./inffast');
+var inflate_table = require('./inftrees');
+
+var CODES = 0;
+var LENS = 1;
+var DISTS = 2;
+
+/* Public constants ==========================================================*/
+/* ===========================================================================*/
+
+
+/* Allowed flush values; see deflate() and inflate() below for details */
+//var Z_NO_FLUSH      = 0;
+//var Z_PARTIAL_FLUSH = 1;
+//var Z_SYNC_FLUSH    = 2;
+//var Z_FULL_FLUSH    = 3;
+var Z_FINISH        = 4;
+var Z_BLOCK         = 5;
+var Z_TREES         = 6;
+
+
+/* Return codes for the compression/decompression functions. Negative values
+ * are errors, positive values are used for special but normal events.
+ */
+var Z_OK            = 0;
+var Z_STREAM_END    = 1;
+var Z_NEED_DICT     = 2;
+//var Z_ERRNO         = -1;
+var Z_STREAM_ERROR  = -2;
+var Z_DATA_ERROR    = -3;
+var Z_MEM_ERROR     = -4;
+var Z_BUF_ERROR     = -5;
+//var Z_VERSION_ERROR = -6;
+
+/* The deflate compression method */
+var Z_DEFLATED  = 8;
+
+
+/* STATES ====================================================================*/
+/* ===========================================================================*/
+
+
+var    HEAD = 1;       /* i: waiting for magic header */
+var    FLAGS = 2;      /* i: waiting for method and flags (gzip) */
+var    TIME = 3;       /* i: waiting for modification time (gzip) */
+var    OS = 4;         /* i: waiting for extra flags and operating system (gzip) */
+var    EXLEN = 5;      /* i: waiting for extra length (gzip) */
+var    EXTRA = 6;      /* i: waiting for extra bytes (gzip) */
+var    NAME = 7;       /* i: waiting for end of file name (gzip) */
+var    COMMENT = 8;    /* i: waiting for end of comment (gzip) */
+var    HCRC = 9;       /* i: waiting for header crc (gzip) */
+var    DICTID = 10;    /* i: waiting for dictionary check value */
+var    DICT = 11;      /* waiting for inflateSetDictionary() call */
+var        TYPE = 12;      /* i: waiting for type bits, including last-flag bit */
+var        TYPEDO = 13;    /* i: same, but skip check to exit inflate on new block */
+var        STORED = 14;    /* i: waiting for stored size (length and complement) */
+var        COPY_ = 15;     /* i/o: same as COPY below, but only first time in */
+var        COPY = 16;      /* i/o: waiting for input or output to copy stored block */
+var        TABLE = 17;     /* i: waiting for dynamic block table lengths */
+var        LENLENS = 18;   /* i: waiting for code length code lengths */
+var        CODELENS = 19;  /* i: waiting for length/lit and distance code lengths */
+var            LEN_ = 20;      /* i: same as LEN below, but only first time in */
+var            LEN = 21;       /* i: waiting for length/lit/eob code */
+var            LENEXT = 22;    /* i: waiting for length extra bits */
+var            DIST = 23;      /* i: waiting for distance code */
+var            DISTEXT = 24;   /* i: waiting for distance extra bits */
+var            MATCH = 25;     /* o: waiting for output space to copy string */
+var            LIT = 26;       /* o: waiting for output space to write literal */
+var    CHECK = 27;     /* i: waiting for 32-bit check value */
+var    LENGTH = 28;    /* i: waiting for 32-bit length (gzip) */
+var    DONE = 29;      /* finished check, done -- remain here until reset */
+var    BAD = 30;       /* got a data error -- remain here until reset */
+var    MEM = 31;       /* got an inflate() memory error -- remain here until reset */
+var    SYNC = 32;      /* looking for synchronization bytes to restart inflate() */
+
+/* ===========================================================================*/
+
+
+
+var ENOUGH_LENS = 852;
+var ENOUGH_DISTS = 592;
+//var ENOUGH =  (ENOUGH_LENS+ENOUGH_DISTS);
+
+var MAX_WBITS = 15;
+/* 32K LZ77 window */
+var DEF_WBITS = MAX_WBITS;
+
+
+function ZSWAP32(q) {
+  return  (((q >>> 24) & 0xff) +
+          ((q >>> 8) & 0xff00) +
+          ((q & 0xff00) << 8) +
+          ((q & 0xff) << 24));
+}
+
+
+function InflateState() {
+  this.mode = 0;             /* current inflate mode */
+  this.last = false;          /* true if processing last block */
+  this.wrap = 0;              /* bit 0 true for zlib, bit 1 true for gzip */
+  this.havedict = false;      /* true if dictionary provided */
+  this.flags = 0;             /* gzip header method and flags (0 if zlib) */
+  this.dmax = 0;              /* zlib header max distance (INFLATE_STRICT) */
+  this.check = 0;             /* protected copy of check value */
+  this.total = 0;             /* protected copy of output count */
+  // TODO: may be {}
+  this.head = null;           /* where to save gzip header information */
+
+  /* sliding window */
+  this.wbits = 0;             /* log base 2 of requested window size */
+  this.wsize = 0;             /* window size or zero if not using window */
+  this.whave = 0;             /* valid bytes in the window */
+  this.wnext = 0;             /* window write index */
+  this.window = null;         /* allocated sliding window, if needed */
+
+  /* bit accumulator */
+  this.hold = 0;              /* input bit accumulator */
+  this.bits = 0;              /* number of bits in "in" */
+
+  /* for string and stored block copying */
+  this.length = 0;            /* literal or length of data to copy */
+  this.offset = 0;            /* distance back to copy string from */
+
+  /* for table and code decoding */
+  this.extra = 0;             /* extra bits needed */
+
+  /* fixed and dynamic code tables */
+  this.lencode = null;          /* starting table for length/literal codes */
+  this.distcode = null;         /* starting table for distance codes */
+  this.lenbits = 0;           /* index bits for lencode */
+  this.distbits = 0;          /* index bits for distcode */
+
+  /* dynamic table building */
+  this.ncode = 0;             /* number of code length code lengths */
+  this.nlen = 0;              /* number of length code lengths */
+  this.ndist = 0;             /* number of distance code lengths */
+  this.have = 0;              /* number of code lengths in lens[] */
+  this.next = null;              /* next available space in codes[] */
+
+  this.lens = new utils.Buf16(320); /* temporary storage for code lengths */
+  this.work = new utils.Buf16(288); /* work area for code table building */
+
+  /*
+   because we don't have pointers in js, we use lencode and distcode directly
+   as buffers so we don't need codes
+  */
+  //this.codes = new utils.Buf32(ENOUGH);       /* space for code tables */
+  this.lendyn = null;              /* dynamic table for length/literal codes (JS specific) */
+  this.distdyn = null;             /* dynamic table for distance codes (JS specific) */
+  this.sane = 0;                   /* if false, allow invalid distance too far */
+  this.back = 0;                   /* bits back of last unprocessed length/lit */
+  this.was = 0;                    /* initial length of match */
+}
+
+function inflateResetKeep(strm) {
+  var state;
+
+  if (!strm || !strm.state) { return Z_STREAM_ERROR; }
+  state = strm.state;
+  strm.total_in = strm.total_out = state.total = 0;
+  strm.msg = ''; /*Z_NULL*/
+  if (state.wrap) {       /* to support ill-conceived Java test suite */
+    strm.adler = state.wrap & 1;
+  }
+  state.mode = HEAD;
+  state.last = 0;
+  state.havedict = 0;
+  state.dmax = 32768;
+  state.head = null/*Z_NULL*/;
+  state.hold = 0;
+  state.bits = 0;
+  //state.lencode = state.distcode = state.next = state.codes;
+  state.lencode = state.lendyn = new utils.Buf32(ENOUGH_LENS);
+  state.distcode = state.distdyn = new utils.Buf32(ENOUGH_DISTS);
+
+  state.sane = 1;
+  state.back = -1;
+  //Tracev((stderr, "inflate: reset\n"));
+  return Z_OK;
+}
+
+function inflateReset(strm) {
+  var state;
+
+  if (!strm || !strm.state) { return Z_STREAM_ERROR; }
+  state = strm.state;
+  state.wsize = 0;
+  state.whave = 0;
+  state.wnext = 0;
+  return inflateResetKeep(strm);
+
+}
+
+function inflateReset2(strm, windowBits) {
+  var wrap;
+  var state;
+
+  /* get the state */
+  if (!strm || !strm.state) { return Z_STREAM_ERROR; }
+  state = strm.state;
+
+  /* extract wrap request from windowBits parameter */
+  if (windowBits < 0) {
+    wrap = 0;
+    windowBits = -windowBits;
+  }
+  else {
+    wrap = (windowBits >> 4) + 1;
+    if (windowBits < 48) {
+      windowBits &= 15;
+    }
+  }
+
+  /* set number of window bits, free window if different */
+  if (windowBits && (windowBits < 8 || windowBits > 15)) {
+    return Z_STREAM_ERROR;
+  }
+  if (state.window !== null && state.wbits !== windowBits) {
+    state.window = null;
+  }
+
+  /* update state and reset the rest of it */
+  state.wrap = wrap;
+  state.wbits = windowBits;
+  return inflateReset(strm);
+}
+
+function inflateInit2(strm, windowBits) {
+  var ret;
+  var state;
+
+  if (!strm) { return Z_STREAM_ERROR; }
+  //strm.msg = Z_NULL;                 /* in case we return an error */
+
+  state = new InflateState();
+
+  //if (state === Z_NULL) return Z_MEM_ERROR;
+  //Tracev((stderr, "inflate: allocated\n"));
+  strm.state = state;
+  state.window = null/*Z_NULL*/;
+  ret = inflateReset2(strm, windowBits);
+  if (ret !== Z_OK) {
+    strm.state = null/*Z_NULL*/;
+  }
+  return ret;
+}
+
+function inflateInit(strm) {
+  return inflateInit2(strm, DEF_WBITS);
+}
+
+
+/*
+ Return state with length and distance decoding tables and index sizes set to
+ fixed code decoding.  Normally this returns fixed tables from inffixed.h.
+ If BUILDFIXED is defined, then instead this routine builds the tables the
+ first time it's called, and returns those tables the first time and
+ thereafter.  This reduces the size of the code by about 2K bytes, in
+ exchange for a little execution time.  However, BUILDFIXED should not be
+ used for threaded applications, since the rewriting of the tables and virgin
+ may not be thread-safe.
+ */
+var virgin = true;
+
+var lenfix, distfix; // We have no pointers in JS, so keep tables separate
+
+function fixedtables(state) {
+  /* build fixed huffman tables if first call (may not be thread safe) */
+  if (virgin) {
+    var sym;
+
+    lenfix = new utils.Buf32(512);
+    distfix = new utils.Buf32(32);
+
+    /* literal/length table */
+    sym = 0;
+    while (sym < 144) { state.lens[sym++] = 8; }
+    while (sym < 256) { state.lens[sym++] = 9; }
+    while (sym < 280) { state.lens[sym++] = 7; }
+    while (sym < 288) { state.lens[sym++] = 8; }
+
+    inflate_table(LENS,  state.lens, 0, 288, lenfix,   0, state.work, {bits: 9});
+
+    /* distance table */
+    sym = 0;
+    while (sym < 32) { state.lens[sym++] = 5; }
+
+    inflate_table(DISTS, state.lens, 0, 32,   distfix, 0, state.work, {bits: 5});
+
+    /* do this just once */
+    virgin = false;
+  }
+
+  state.lencode = lenfix;
+  state.lenbits = 9;
+  state.distcode = distfix;
+  state.distbits = 5;
+}
+
+
+/*
+ Update the window with the last wsize (normally 32K) bytes written before
+ returning.  If window does not exist yet, create it.  This is only called
+ when a window is already in use, or when output has been written during this
+ inflate call, but the end of the deflate stream has not been reached yet.
+ It is also called to create a window for dictionary data when a dictionary
+ is loaded.
+
+ Providing output buffers larger than 32K to inflate() should provide a speed
+ advantage, since only the last 32K of output is copied to the sliding window
+ upon return from inflate(), and since all distances after the first 32K of
+ output will fall in the output data, making match copies simpler and faster.
+ The advantage may be dependent on the size of the processor's data caches.
+ */
+function updatewindow(strm, src, end, copy) {
+  var dist;
+  var state = strm.state;
+
+  /* if it hasn't been done already, allocate space for the window */
+  if (state.window === null) {
+    state.wsize = 1 << state.wbits;
+    state.wnext = 0;
+    state.whave = 0;
+
+    state.window = new utils.Buf8(state.wsize);
+  }
+
+  /* copy state->wsize or less output bytes into the circular window */
+  if (copy >= state.wsize) {
+    utils.arraySet(state.window,src, end - state.wsize, state.wsize, 0);
+    state.wnext = 0;
+    state.whave = state.wsize;
+  }
+  else {
+    dist = state.wsize - state.wnext;
+    if (dist > copy) {
+      dist = copy;
+    }
+    //zmemcpy(state->window + state->wnext, end - copy, dist);
+    utils.arraySet(state.window,src, end - copy, dist, state.wnext);
+    copy -= dist;
+    if (copy) {
+      //zmemcpy(state->window, end - copy, copy);
+      utils.arraySet(state.window,src, end - copy, copy, 0);
+      state.wnext = copy;
+      state.whave = state.wsize;
+    }
+    else {
+      state.wnext += dist;
+      if (state.wnext === state.wsize) { state.wnext = 0; }
+      if (state.whave < state.wsize) { state.whave += dist; }
+    }
+  }
+  return 0;
+}
+
+function inflate(strm, flush) {
+  var state;
+  var input, output;          // input/output buffers
+  var next;                   /* next input INDEX */
+  var put;                    /* next output INDEX */
+  var have, left;             /* available input and output */
+  var hold;                   /* bit buffer */
+  var bits;                   /* bits in bit buffer */
+  var _in, _out;              /* save starting available input and output */
+  var copy;                   /* number of stored or match bytes to copy */
+  var from;                   /* where to copy match bytes from */
+  var from_source;
+  var here = 0;               /* current decoding table entry */
+  var here_bits, here_op, here_val; // paked "here" denormalized (JS specific)
+  //var last;                   /* parent table entry */
+  var last_bits, last_op, last_val; // paked "last" denormalized (JS specific)
+  var len;                    /* length to copy for repeats, bits to drop */
+  var ret;                    /* return code */
+  var hbuf = new utils.Buf8(4);    /* buffer for gzip header crc calculation */
+  var opts;
+
+  var n; // temporary var for NEED_BITS
+
+  var order = /* permutation of code lengths */
+    [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+
+
+  if (!strm || !strm.state || !strm.output ||
+      (!strm.input && strm.avail_in !== 0)) {
+    return Z_STREAM_ERROR;
+  }
+
+  state = strm.state;
+  if (state.mode === TYPE) { state.mode = TYPEDO; }    /* skip check */
+
+
+  //--- LOAD() ---
+  put = strm.next_out;
+  output = strm.output;
+  left = strm.avail_out;
+  next = strm.next_in;
+  input = strm.input;
+  have = strm.avail_in;
+  hold = state.hold;
+  bits = state.bits;
+  //---
+
+  _in = have;
+  _out = left;
+  ret = Z_OK;
+
+  inf_leave: // goto emulation
+  for (;;) {
+    switch (state.mode) {
+    case HEAD:
+      if (state.wrap === 0) {
+        state.mode = TYPEDO;
+        break;
+      }
+      //=== NEEDBITS(16);
+      while (bits < 16) {
+        if (have === 0) { break inf_leave; }
+        have--;
+        hold += input[next++] << bits;
+        bits += 8;
+      }
+      //===//
+      if ((state.wrap & 2) && hold === 0x8b1f) {  /* gzip header */
+        state.check = 0/*crc32(0L, Z_NULL, 0)*/;
+        //=== CRC2(state.check, hold);
+        hbuf[0] = hold & 0xff;
+        hbuf[1] = (hold >>> 8) & 0xff;
+        state.check = crc32(state.check, hbuf, 2, 0);
+        //===//
+
+        //=== INITBITS();
+        hold = 0;
+        bits = 0;
+        //===//
+        state.mode = FLAGS;
+        break;
+      }
+      state.flags = 0;           /* expect zlib header */
+      if (state.head) {
+        state.head.done = false;
+      }
+      if (!(state.wrap & 1) ||   /* check if zlib header allowed */
+        (((hold & 0xff)/*BITS(8)*/ << 8) + (hold >> 8)) % 31) {
+        strm.msg = 'incorrect header check';
+        state.mode = BAD;
+        break;
+      }
+      if ((hold & 0x0f)/*BITS(4)*/ !== Z_DEFLATED) {
+        strm.msg = 'unknown compression method';
+        state.mode = BAD;
+        break;
+      }
+      //--- DROPBITS(4) ---//
+      hold >>>= 4;
+      bits -= 4;
+      //---//
+      len = (hold & 0x0f)/*BITS(4)*/ + 8;
+      if (state.wbits === 0) {
+        state.wbits = len;
+      }
+      else if (len > state.wbits) {
+        strm.msg = 'invalid window size';
+        state.mode = BAD;
+        break;
+      }
+      state.dmax = 1 << len;
+      //Tracev((stderr, "inflate:   zlib header ok\n"));
+      strm.adler = state.check = 1/*adler32(0L, Z_NULL, 0)*/;
+      state.mode = hold & 0x200 ? DICTID : TYPE;
+      //=== INITBITS();
+      hold = 0;
+      bits = 0;
+      //===//
+      break;
+    case FLAGS:
+      //=== NEEDBITS(16); */
+      while (bits < 16) {
+        if (have === 0) { break inf_leave; }
+        have--;
+        hold += input[next++] << bits;
+        bits += 8;
+      }
+      //===//
+      state.flags = hold;
+      if ((state.flags & 0xff) !== Z_DEFLATED) {
+        strm.msg = 'unknown compression method';
+        state.mode = BAD;
+        break;
+      }
+      if (state.flags & 0xe000) {
+        strm.msg = 'unknown header flags set';
+        state.mode = BAD;
+        break;
+      }
+      if (state.head) {
+        state.head.text = ((hold >> 8) & 1);
+      }
+      if (state.flags & 0x0200) {
+        //=== CRC2(state.check, hold);
+        hbuf[0] = hold & 0xff;
+        hbuf[1] = (hold >>> 8) & 0xff;
+        state.check = crc32(state.check, hbuf, 2, 0);
+        //===//
+      }
+      //=== INITBITS();
+      hold = 0;
+      bits = 0;
+      //===//
+      state.mode = TIME;
+      /* falls through */
+    case TIME:
+      //=== NEEDBITS(32); */
+      while (bits < 32) {
+        if (have === 0) { break inf_leave; }
+        have--;
+        hold += input[next++] << bits;
+        bits += 8;
+      }
+      //===//
+      if (state.head) {
+        state.head.time = hold;
+      }
+      if (state.flags & 0x0200) {
+        //=== CRC4(state.check, hold)
+        hbuf[0] = hold & 0xff;
+        hbuf[1] = (hold >>> 8) & 0xff;
+        hbuf[2] = (hold >>> 16) & 0xff;
+        hbuf[3] = (hold >>> 24) & 0xff;
+        state.check = crc32(state.check, hbuf, 4, 0);
+        //===
+      }
+      //=== INITBITS();
+      hold = 0;
+      bits = 0;
+      //===//
+      state.mode = OS;
+      /* falls through */
+    case OS:
+      //=== NEEDBITS(16); */
+      while (bits < 16) {
+        if (have === 0) { break inf_leave; }
+        have--;
+        hold += input[next++] << bits;
+        bits += 8;
+      }
+      //===//
+      if (state.head) {
+        state.head.xflags = (hold & 0xff);
+        state.head.os = (hold >> 8);
+      }
+      if (state.flags & 0x0200) {
+        //=== CRC2(state.check, hold);
+        hbuf[0] = hold & 0xff;
+        hbuf[1] = (hold >>> 8) & 0xff;
+        state.check = crc32(state.check, hbuf, 2, 0);
+        //===//
+      }
+      //=== INITBITS();
+      hold = 0;
+      bits = 0;
+      //===//
+      state.mode = EXLEN;
+      /* falls through */
+    case EXLEN:
+      if (state.flags & 0x0400) {
+        //=== NEEDBITS(16); */
+        while (bits < 16) {
+          if (have === 0) { break inf_leave; }
+          have--;
+          hold += input[next++] << bits;
+          bits += 8;
+        }
+        //===//
+        state.length = hold;
+        if (state.head) {
+          state.head.extra_len = hold;
+        }
+        if (state.flags & 0x0200) {
+          //=== CRC2(state.check, hold);
+          hbuf[0] = hold & 0xff;
+          hbuf[1] = (hold >>> 8) & 0xff;
+          state.check = crc32(state.check, hbuf, 2, 0);
+          //===//
+        }
+        //=== INITBITS();
+        hold = 0;
+        bits = 0;
+        //===//
+      }
+      else if (state.head) {
+        state.head.extra = null/*Z_NULL*/;
+      }
+      state.mode = EXTRA;
+      /* falls through */
+    case EXTRA:
+      if (state.flags & 0x0400) {
+        copy = state.length;
+        if (copy > have) { copy = have; }
+        if (copy) {
+          if (state.head) {
+            len = state.head.extra_len - state.length;
+            if (!state.head.extra) {
+              // Use untyped array for more conveniend processing later
+              state.head.extra = new Array(state.head.extra_len);
+            }
+            utils.arraySet(
+              state.head.extra,
+              input,
+              next,
+              // extra field is limited to 65536 bytes
+              // - no need for additional size check
+              copy,
+              /*len + copy > state.head.extra_max - len ? state.head.extra_max : copy,*/
+              len
+            );
+            //zmemcpy(state.head.extra + len, next,
+            //        len + copy > state.head.extra_max ?
+            //        state.head.extra_max - len : copy);
+          }
+          if (state.flags & 0x0200) {
+            state.check = crc32(state.check, input, copy, next);
+          }
+          have -= copy;
+          next += copy;
+          state.length -= copy;
+        }
+        if (state.length) { break inf_leave; }
+      }
+      state.length = 0;
+      state.mode = NAME;
+      /* falls through */
+    case NAME:
+      if (state.flags & 0x0800) {
+        if (have === 0) { break inf_leave; }
+        copy = 0;
+        do {
+          // TODO: 2 or 1 bytes?
+          len = input[next + copy++];
+          /* use constant limit because in js we should not preallocate memory */
+          if (state.head && len &&
+              (state.length < 65536 /*state.head.name_max*/)) {
+            state.head.name += String.fromCharCode(len);
+          }
+        } while (len && copy < have);
+
+        if (state.flags & 0x0200) {
+          state.check = crc32(state.check, input, copy, next);
+        }
+        have -= copy;
+        next += copy;
+        if (len) { break inf_leave; }
+      }
+      else if (state.head) {
+        state.head.name = null;
+      }
+      state.length = 0;
+      state.mode = COMMENT;
+      /* falls through */
+    case COMMENT:
+      if (state.flags & 0x1000) {
+        if (have === 0) { break inf_leave; }
+        copy = 0;
+        do {
+          len = input[next + copy++];
+          /* use constant limit because in js we should not preallocate memory */
+          if (state.head && len &&
+              (state.length < 65536 /*state.head.comm_max*/)) {
+            state.head.comment += String.fromCharCode(len);
+          }
+        } while (len && copy < have);
+        if (state.flags & 0x0200) {
+          state.check = crc32(state.check, input, copy, next);
+        }
+        have -= copy;
+        next += copy;
+        if (len) { break inf_leave; }
+      }
+      else if (state.head) {
+        state.head.comment = null;
+      }
+      state.mode = HCRC;
+      /* falls through */
+    case HCRC:
+      if (state.flags & 0x0200) {
+        //=== NEEDBITS(16); */
+        while (bits < 16) {
+          if (have === 0) { break inf_leave; }
+          have--;
+          hold += input[next++] << bits;
+          bits += 8;
+        }
+        //===//
+        if (hold !== (state.check & 0xffff)) {
+          strm.msg = 'header crc mismatch';
+          state.mode = BAD;
+          break;
+        }
+        //=== INITBITS();
+        hold = 0;
+        bits = 0;
+        //===//
+      }
+      if (state.head) {
+        state.head.hcrc = ((state.flags >> 9) & 1);
+        state.head.done = true;
+      }
+      strm.adler = state.check = 0 /*crc32(0L, Z_NULL, 0)*/;
+      state.mode = TYPE;
+      break;
+    case DICTID:
+      //=== NEEDBITS(32); */
+      while (bits < 32) {
+        if (have === 0) { break inf_leave; }
+        have--;
+        hold += input[next++] << bits;
+        bits += 8;
+      }
+      //===//
+      strm.adler = state.check = ZSWAP32(hold);
+      //=== INITBITS();
+      hold = 0;
+      bits = 0;
+      //===//
+      state.mode = DICT;
+      /* falls through */
+    case DICT:
+      if (state.havedict === 0) {
+        //--- RESTORE() ---
+        strm.next_out = put;
+        strm.avail_out = left;
+        strm.next_in = next;
+        strm.avail_in = have;
+        state.hold = hold;
+        state.bits = bits;
+        //---
+        return Z_NEED_DICT;
+      }
+      strm.adler = state.check = 1/*adler32(0L, Z_NULL, 0)*/;
+      state.mode = TYPE;
+      /* falls through */
+    case TYPE:
+      if (flush === Z_BLOCK || flush === Z_TREES) { break inf_leave; }
+      /* falls through */
+    case TYPEDO:
+      if (state.last) {
+        //--- BYTEBITS() ---//
+        hold >>>= bits & 7;
+        bits -= bits & 7;
+        //---//
+        state.mode = CHECK;
+        break;
+      }
+      //=== NEEDBITS(3); */
+      while (bits < 3) {
+        if (have === 0) { break inf_leave; }
+        have--;
+        hold += input[next++] << bits;
+        bits += 8;
+      }
+      //===//
+      state.last = (hold & 0x01)/*BITS(1)*/;
+      //--- DROPBITS(1) ---//
+      hold >>>= 1;
+      bits -= 1;
+      //---//
+
+      switch ((hold & 0x03)/*BITS(2)*/) {
+      case 0:                             /* stored block */
+        //Tracev((stderr, "inflate:     stored block%s\n",
+        //        state.last ? " (last)" : ""));
+        state.mode = STORED;
+        break;
+      case 1:                             /* fixed block */
+        fixedtables(state);
+        //Tracev((stderr, "inflate:     fixed codes block%s\n",
+        //        state.last ? " (last)" : ""));
+        state.mode = LEN_;             /* decode codes */
+        if (flush === Z_TREES) {
+          //--- DROPBITS(2) ---//
+          hold >>>= 2;
+          bits -= 2;
+          //---//
+          break inf_leave;
+        }
+        break;
+      case 2:                             /* dynamic block */
+        //Tracev((stderr, "inflate:     dynamic codes block%s\n",
+        //        state.last ? " (last)" : ""));
+        state.mode = TABLE;
+        break;
+      case 3:
+        strm.msg = 'invalid block type';
+        state.mode = BAD;
+      }
+      //--- DROPBITS(2) ---//
+      hold >>>= 2;
+      bits -= 2;
+      //---//
+      break;
+    case STORED:
+      //--- BYTEBITS() ---// /* go to byte boundary */
+      hold >>>= bits & 7;
+      bits -= bits & 7;
+      //---//
+      //=== NEEDBITS(32); */
+      while (bits < 32) {
+        if (have === 0) { break inf_leave; }
+        have--;
+        hold += input[next++] << bits;
+        bits += 8;
+      }
+      //===//
+      if ((hold & 0xffff) !== ((hold >>> 16) ^ 0xffff)) {
+        strm.msg = 'invalid stored block lengths';
+        state.mode = BAD;
+        break;
+      }
+      state.length = hold & 0xffff;
+      //Tracev((stderr, "inflate:       stored length %u\n",
+      //        state.length));
+      //=== INITBITS();
+      hold = 0;
+      bits = 0;
+      //===//
+      state.mode = COPY_;
+      if (flush === Z_TREES) { break inf_leave; }
+      /* falls through */
+    case COPY_:
+      state.mode = COPY;
+      /* falls through */
+    case COPY:
+      copy = state.length;
+      if (copy) {
+        if (copy > have) { copy = have; }
+        if (copy > left) { copy = left; }
+        if (copy === 0) { break inf_leave; }
+        //--- zmemcpy(put, next, copy); ---
+        utils.arraySet(output, input, next, copy, put);
+        //---//
+        have -= copy;
+        next += copy;
+        left -= copy;
+        put += copy;
+        state.length -= copy;
+        break;
+      }
+      //Tracev((stderr, "inflate:       stored end\n"));
+      state.mode = TYPE;
+      break;
+    case TABLE:
+      //=== NEEDBITS(14); */
+      while (bits < 14) {
+        if (have === 0) { break inf_leave; }
+        have--;
+        hold += input[next++] << bits;
+        bits += 8;
+      }
+      //===//
+      state.nlen = (hold & 0x1f)/*BITS(5)*/ + 257;
+      //--- DROPBITS(5) ---//
+      hold >>>= 5;
+      bits -= 5;
+      //---//
+      state.ndist = (hold & 0x1f)/*BITS(5)*/ + 1;
+      //--- DROPBITS(5) ---//
+      hold >>>= 5;
+      bits -= 5;
+      //---//
+      state.ncode = (hold & 0x0f)/*BITS(4)*/ + 4;
+      //--- DROPBITS(4) ---//
+      hold >>>= 4;
+      bits -= 4;
+      //---//
+//#ifndef PKZIP_BUG_WORKAROUND
+      if (state.nlen > 286 || state.ndist > 30) {
+        strm.msg = 'too many length or distance symbols';
+        state.mode = BAD;
+        break;
+      }
+//#endif
+      //Tracev((stderr, "inflate:       table sizes ok\n"));
+      state.have = 0;
+      state.mode = LENLENS;
+      /* falls through */
+    case LENLENS:
+      while (state.have < state.ncode) {
+        //=== NEEDBITS(3);
+        while (bits < 3) {
+          if (have === 0) { break inf_leave; }
+          have--;
+          hold += input[next++] << bits;
+          bits += 8;
+        }
+        //===//
+        state.lens[order[state.have++]] = (hold & 0x07);//BITS(3);
+        //--- DROPBITS(3) ---//
+        hold >>>= 3;
+        bits -= 3;
+        //---//
+      }
+      while (state.have < 19) {
+        state.lens[order[state.have++]] = 0;
+      }
+      // We have separate tables & no pointers. 2 commented lines below not needed.
+      //state.next = state.codes;
+      //state.lencode = state.next;
+      // Switch to use dynamic table
+      state.lencode = state.lendyn;
+      state.lenbits = 7;
+
+      opts = {bits: state.lenbits};
+      ret = inflate_table(CODES, state.lens, 0, 19, state.lencode, 0, state.work, opts);
+      state.lenbits = opts.bits;
+
+      if (ret) {
+        strm.msg = 'invalid code lengths set';
+        state.mode = BAD;
+        break;
+      }
+      //Tracev((stderr, "inflate:       code lengths ok\n"));
+      state.have = 0;
+      state.mode = CODELENS;
+      /* falls through */
+    case CODELENS:
+      while (state.have < state.nlen + state.ndist) {
+        for (;;) {
+          here = state.lencode[hold & ((1 << state.lenbits) - 1)];/*BITS(state.lenbits)*/
+          here_bits = here >>> 24;
+          here_op = (here >>> 16) & 0xff;
+          here_val = here & 0xffff;
+
+          if ((here_bits) <= bits) { break; }
+          //--- PULLBYTE() ---//
+          if (have === 0) { break inf_leave; }
+          have--;
+          hold += input[next++] << bits;
+          bits += 8;
+          //---//
+        }
+        if (here_val < 16) {
+          //--- DROPBITS(here.bits) ---//
+          hold >>>= here_bits;
+          bits -= here_bits;
+          //---//
+          state.lens[state.have++] = here_val;
+        }
+        else {
+          if (here_val === 16) {
+            //=== NEEDBITS(here.bits + 2);
+            n = here_bits + 2;
+            while (bits < n) {
+              if (have === 0) { break inf_leave; }
+              have--;
+              hold += input[next++] << bits;
+              bits += 8;
+            }
+            //===//
+            //--- DROPBITS(here.bits) ---//
+            hold >>>= here_bits;
+            bits -= here_bits;
+            //---//
+            if (state.have === 0) {
+              strm.msg = 'invalid bit length repeat';
+              state.mode = BAD;
+              break;
+            }
+            len = state.lens[state.have - 1];
+            copy = 3 + (hold & 0x03);//BITS(2);
+            //--- DROPBITS(2) ---//
+            hold >>>= 2;
+            bits -= 2;
+            //---//
+          }
+          else if (here_val === 17) {
+            //=== NEEDBITS(here.bits + 3);
+            n = here_bits + 3;
+            while (bits < n) {
+              if (have === 0) { break inf_leave; }
+              have--;
+              hold += input[next++] << bits;
+              bits += 8;
+            }
+            //===//
+            //--- DROPBITS(here.bits) ---//
+            hold >>>= here_bits;
+            bits -= here_bits;
+            //---//
+            len = 0;
+            copy = 3 + (hold & 0x07);//BITS(3);
+            //--- DROPBITS(3) ---//
+            hold >>>= 3;
+            bits -= 3;
+            //---//
+          }
+          else {
+            //=== NEEDBITS(here.bits + 7);
+            n = here_bits + 7;
+            while (bits < n) {
+              if (have === 0) { break inf_leave; }
+              have--;
+              hold += input[next++] << bits;
+              bits += 8;
+            }
+            //===//
+            //--- DROPBITS(here.bits) ---//
+            hold >>>= here_bits;
+            bits -= here_bits;
+            //---//
+            len = 0;
+            copy = 11 + (hold & 0x7f);//BITS(7);
+            //--- DROPBITS(7) ---//
+            hold >>>= 7;
+            bits -= 7;
+            //---//
+          }
+          if (state.have + copy > state.nlen + state.ndist) {
+            strm.msg = 'invalid bit length repeat';
+            state.mode = BAD;
+            break;
+          }
+          while (copy--) {
+            state.lens[state.have++] = len;
+          }
+        }
+      }
+
+      /* handle error breaks in while */
+      if (state.mode === BAD) { break; }
+
+      /* check for end-of-block code (better have one) */
+      if (state.lens[256] === 0) {
+        strm.msg = 'invalid code -- missing end-of-block';
+        state.mode = BAD;
+        break;
+      }
+
+      /* build code tables -- note: do not change the lenbits or distbits
+         values here (9 and 6) without reading the comments in inftrees.h
+         concerning the ENOUGH constants, which depend on those values */
+      state.lenbits = 9;
+
+      opts = {bits: state.lenbits};
+      ret = inflate_table(LENS, state.lens, 0, state.nlen, state.lencode, 0, state.work, opts);
+      // We have separate tables & no pointers. 2 commented lines below not needed.
+      // state.next_index = opts.table_index;
+      state.lenbits = opts.bits;
+      // state.lencode = state.next;
+
+      if (ret) {
+        strm.msg = 'invalid literal/lengths set';
+        state.mode = BAD;
+        break;
+      }
+
+      state.distbits = 6;
+      //state.distcode.copy(state.codes);
+      // Switch to use dynamic table
+      state.distcode = state.distdyn;
+      opts = {bits: state.distbits};
+      ret = inflate_table(DISTS, state.lens, state.nlen, state.ndist, state.distcode, 0, state.work, opts);
+      // We have separate tables & no pointers. 2 commented lines below not needed.
+      // state.next_index = opts.table_index;
+      state.distbits = opts.bits;
+      // state.distcode = state.next;
+
+      if (ret) {
+        strm.msg = 'invalid distances set';
+        state.mode = BAD;
+        break;
+      }
+      //Tracev((stderr, 'inflate:       codes ok\n'));
+      state.mode = LEN_;
+      if (flush === Z_TREES) { break inf_leave; }
+      /* falls through */
+    case LEN_:
+      state.mode = LEN;
+      /* falls through */
+    case LEN:
+      if (have >= 6 && left >= 258) {
+        //--- RESTORE() ---
+        strm.next_out = put;
+        strm.avail_out = left;
+        strm.next_in = next;
+        strm.avail_in = have;
+        state.hold = hold;
+        state.bits = bits;
+        //---
+        inflate_fast(strm, _out);
+        //--- LOAD() ---
+        put = strm.next_out;
+        output = strm.output;
+        left = strm.avail_out;
+        next = strm.next_in;
+        input = strm.input;
+        have = strm.avail_in;
+        hold = state.hold;
+        bits = state.bits;
+        //---
+
+        if (state.mode === TYPE) {
+          state.back = -1;
+        }
+        break;
+      }
+      state.back = 0;
+      for (;;) {
+        here = state.lencode[hold & ((1 << state.lenbits) -1)];  /*BITS(state.lenbits)*/
+        here_bits = here >>> 24;
+        here_op = (here >>> 16) & 0xff;
+        here_val = here & 0xffff;
+
+        if (here_bits <= bits) { break; }
+        //--- PULLBYTE() ---//
+        if (have === 0) { break inf_leave; }
+        have--;
+        hold += input[next++] << bits;
+        bits += 8;
+        //---//
+      }
+      if (here_op && (here_op & 0xf0) === 0) {
+        last_bits = here_bits;
+        last_op = here_op;
+        last_val = here_val;
+        for (;;) {
+          here = state.lencode[last_val +
+                  ((hold & ((1 << (last_bits + last_op)) -1))/*BITS(last.bits + last.op)*/ >> last_bits)];
+          here_bits = here >>> 24;
+          here_op = (here >>> 16) & 0xff;
+          here_val = here & 0xffff;
+
+          if ((last_bits + here_bits) <= bits) { break; }
+          //--- PULLBYTE() ---//
+          if (have === 0) { break inf_leave; }
+          have--;
+          hold += input[next++] << bits;
+          bits += 8;
+          //---//
+        }
+        //--- DROPBITS(last.bits) ---//
+        hold >>>= last_bits;
+        bits -= last_bits;
+        //---//
+        state.back += last_bits;
+      }
+      //--- DROPBITS(here.bits) ---//
+      hold >>>= here_bits;
+      bits -= here_bits;
+      //---//
+      state.back += here_bits;
+      state.length = here_val;
+      if (here_op === 0) {
+        //Tracevv((stderr, here.val >= 0x20 && here.val < 0x7f ?
+        //        "inflate:         literal '%c'\n" :
+        //        "inflate:         literal 0x%02x\n", here.val));
+        state.mode = LIT;
+        break;
+      }
+      if (here_op & 32) {
+        //Tracevv((stderr, "inflate:         end of block\n"));
+        state.back = -1;
+        state.mode = TYPE;
+        break;
+      }
+      if (here_op & 64) {
+        strm.msg = 'invalid literal/length code';
+        state.mode = BAD;
+        break;
+      }
+      state.extra = here_op & 15;
+      state.mode = LENEXT;
+      /* falls through */
+    case LENEXT:
+      if (state.extra) {
+        //=== NEEDBITS(state.extra);
+        n = state.extra;
+        while (bits < n) {
+          if (have === 0) { break inf_leave; }
+          have--;
+          hold += input[next++] << bits;
+          bits += 8;
+        }
+        //===//
+        state.length += hold & ((1 << state.extra) -1)/*BITS(state.extra)*/;
+        //--- DROPBITS(state.extra) ---//
+        hold >>>= state.extra;
+        bits -= state.extra;
+        //---//
+        state.back += state.extra;
+      }
+      //Tracevv((stderr, "inflate:         length %u\n", state.length));
+      state.was = state.length;
+      state.mode = DIST;
+      /* falls through */
+    case DIST:
+      for (;;) {
+        here = state.distcode[hold & ((1 << state.distbits) -1)];/*BITS(state.distbits)*/
+        here_bits = here >>> 24;
+        here_op = (here >>> 16) & 0xff;
+        here_val = here & 0xffff;
+
+        if ((here_bits) <= bits) { break; }
+        //--- PULLBYTE() ---//
+        if (have === 0) { break inf_leave; }
+        have--;
+        hold += input[next++] << bits;
+        bits += 8;
+        //---//
+      }
+      if ((here_op & 0xf0) === 0) {
+        last_bits = here_bits;
+        last_op = here_op;
+        last_val = here_val;
+        for (;;) {
+          here = state.distcode[last_val +
+                  ((hold & ((1 << (last_bits + last_op)) -1))/*BITS(last.bits + last.op)*/ >> last_bits)];
+          here_bits = here >>> 24;
+          here_op = (here >>> 16) & 0xff;
+          here_val = here & 0xffff;
+
+          if ((last_bits + here_bits) <= bits) { break; }
+          //--- PULLBYTE() ---//
+          if (have === 0) { break inf_leave; }
+          have--;
+          hold += input[next++] << bits;
+          bits += 8;
+          //---//
+        }
+        //--- DROPBITS(last.bits) ---//
+        hold >>>= last_bits;
+        bits -= last_bits;
+        //---//
+        state.back += last_bits;
+      }
+      //--- DROPBITS(here.bits) ---//
+      hold >>>= here_bits;
+      bits -= here_bits;
+      //---//
+      state.back += here_bits;
+      if (here_op & 64) {
+        strm.msg = 'invalid distance code';
+        state.mode = BAD;
+        break;
+      }
+      state.offset = here_val;
+      state.extra = (here_op) & 15;
+      state.mode = DISTEXT;
+      /* falls through */
+    case DISTEXT:
+      if (state.extra) {
+        //=== NEEDBITS(state.extra);
+        n = state.extra;
+        while (bits < n) {
+          if (have === 0) { break inf_leave; }
+          have--;
+          hold += input[next++] << bits;
+          bits += 8;
+        }
+        //===//
+        state.offset += hold & ((1 << state.extra) -1)/*BITS(state.extra)*/;
+        //--- DROPBITS(state.extra) ---//
+        hold >>>= state.extra;
+        bits -= state.extra;
+        //---//
+        state.back += state.extra;
+      }
+//#ifdef INFLATE_STRICT
+      if (state.offset > state.dmax) {
+        strm.msg = 'invalid distance too far back';
+        state.mode = BAD;
+        break;
+      }
+//#endif
+      //Tracevv((stderr, "inflate:         distance %u\n", state.offset));
+      state.mode = MATCH;
+      /* falls through */
+    case MATCH:
+      if (left === 0) { break inf_leave; }
+      copy = _out - left;
+      if (state.offset > copy) {         /* copy from window */
+        copy = state.offset - copy;
+        if (copy > state.whave) {
+          if (state.sane) {
+            strm.msg = 'invalid distance too far back';
+            state.mode = BAD;
+            break;
+          }
+// (!) This block is disabled in zlib defailts,
+// don't enable it for binary compatibility
+//#ifdef INFLATE_ALLOW_INVALID_DISTANCE_TOOFAR_ARRR
+//          Trace((stderr, "inflate.c too far\n"));
+//          copy -= state.whave;
+//          if (copy > state.length) { copy = state.length; }
+//          if (copy > left) { copy = left; }
+//          left -= copy;
+//          state.length -= copy;
+//          do {
+//            output[put++] = 0;
+//          } while (--copy);
+//          if (state.length === 0) { state.mode = LEN; }
+//          break;
+//#endif
+        }
+        if (copy > state.wnext) {
+          copy -= state.wnext;
+          from = state.wsize - copy;
+        }
+        else {
+          from = state.wnext - copy;
+        }
+        if (copy > state.length) { copy = state.length; }
+        from_source = state.window;
+      }
+      else {                              /* copy from output */
+        from_source = output;
+        from = put - state.offset;
+        copy = state.length;
+      }
+      if (copy > left) { copy = left; }
+      left -= copy;
+      state.length -= copy;
+      do {
+        output[put++] = from_source[from++];
+      } while (--copy);
+      if (state.length === 0) { state.mode = LEN; }
+      break;
+    case LIT:
+      if (left === 0) { break inf_leave; }
+      output[put++] = state.length;
+      left--;
+      state.mode = LEN;
+      break;
+    case CHECK:
+      if (state.wrap) {
+        //=== NEEDBITS(32);
+        while (bits < 32) {
+          if (have === 0) { break inf_leave; }
+          have--;
+          // Use '|' insdead of '+' to make sure that result is signed
+          hold |= input[next++] << bits;
+          bits += 8;
+        }
+        //===//
+        _out -= left;
+        strm.total_out += _out;
+        state.total += _out;
+        if (_out) {
+          strm.adler = state.check =
+              /*UPDATE(state.check, put - _out, _out);*/
+              (state.flags ? crc32(state.check, output, _out, put - _out) : adler32(state.check, output, _out, put - _out));
+
+        }
+        _out = left;
+        // NB: crc32 stored as signed 32-bit int, ZSWAP32 returns signed too
+        if ((state.flags ? hold : ZSWAP32(hold)) !== state.check) {
+          strm.msg = 'incorrect data check';
+          state.mode = BAD;
+          break;
+        }
+        //=== INITBITS();
+        hold = 0;
+        bits = 0;
+        //===//
+        //Tracev((stderr, "inflate:   check matches trailer\n"));
+      }
+      state.mode = LENGTH;
+      /* falls through */
+    case LENGTH:
+      if (state.wrap && state.flags) {
+        //=== NEEDBITS(32);
+        while (bits < 32) {
+          if (have === 0) { break inf_leave; }
+          have--;
+          hold += input[next++] << bits;
+          bits += 8;
+        }
+        //===//
+        if (hold !== (state.total & 0xffffffff)) {
+          strm.msg = 'incorrect length check';
+          state.mode = BAD;
+          break;
+        }
+        //=== INITBITS();
+        hold = 0;
+        bits = 0;
+        //===//
+        //Tracev((stderr, "inflate:   length matches trailer\n"));
+      }
+      state.mode = DONE;
+      /* falls through */
+    case DONE:
+      ret = Z_STREAM_END;
+      break inf_leave;
+    case BAD:
+      ret = Z_DATA_ERROR;
+      break inf_leave;
+    case MEM:
+      return Z_MEM_ERROR;
+    case SYNC:
+      /* falls through */
+    default:
+      return Z_STREAM_ERROR;
+    }
+  }
+
+  // inf_leave <- here is real place for "goto inf_leave", emulated via "break inf_leave"
+
+  /*
+     Return from inflate(), updating the total counts and the check value.
+     If there was no progress during the inflate() call, return a buffer
+     error.  Call updatewindow() to create and/or update the window state.
+     Note: a memory error from inflate() is non-recoverable.
+   */
+
+  //--- RESTORE() ---
+  strm.next_out = put;
+  strm.avail_out = left;
+  strm.next_in = next;
+  strm.avail_in = have;
+  state.hold = hold;
+  state.bits = bits;
+  //---
+
+  if (state.wsize || (_out !== strm.avail_out && state.mode < BAD &&
+                      (state.mode < CHECK || flush !== Z_FINISH))) {
+    if (updatewindow(strm, strm.output, strm.next_out, _out - strm.avail_out)) {
+      state.mode = MEM;
+      return Z_MEM_ERROR;
+    }
+  }
+  _in -= strm.avail_in;
+  _out -= strm.avail_out;
+  strm.total_in += _in;
+  strm.total_out += _out;
+  state.total += _out;
+  if (state.wrap && _out) {
+    strm.adler = state.check = /*UPDATE(state.check, strm.next_out - _out, _out);*/
+      (state.flags ? crc32(state.check, output, _out, strm.next_out - _out) : adler32(state.check, output, _out, strm.next_out - _out));
+  }
+  strm.data_type = state.bits + (state.last ? 64 : 0) +
+                    (state.mode === TYPE ? 128 : 0) +
+                    (state.mode === LEN_ || state.mode === COPY_ ? 256 : 0);
+  if (((_in === 0 && _out === 0) || flush === Z_FINISH) && ret === Z_OK) {
+    ret = Z_BUF_ERROR;
+  }
+  return ret;
+}
+
+function inflateEnd(strm) {
+
+  if (!strm || !strm.state /*|| strm->zfree == (free_func)0*/) {
+    return Z_STREAM_ERROR;
+  }
+
+  var state = strm.state;
+  if (state.window) {
+    state.window = null;
+  }
+  strm.state = null;
+  return Z_OK;
+}
+
+function inflateGetHeader(strm, head) {
+  var state;
+
+  /* check state */
+  if (!strm || !strm.state) { return Z_STREAM_ERROR; }
+  state = strm.state;
+  if ((state.wrap & 2) === 0) { return Z_STREAM_ERROR; }
+
+  /* save header structure */
+  state.head = head;
+  head.done = false;
+  return Z_OK;
+}
+
+
+exports.inflateReset = inflateReset;
+exports.inflateReset2 = inflateReset2;
+exports.inflateResetKeep = inflateResetKeep;
+exports.inflateInit = inflateInit;
+exports.inflateInit2 = inflateInit2;
+exports.inflate = inflate;
+exports.inflateEnd = inflateEnd;
+exports.inflateGetHeader = inflateGetHeader;
+exports.inflateInfo = 'pako inflate (from Nodeca project)';
+
+/* Not implemented
+exports.inflateCopy = inflateCopy;
+exports.inflateGetDictionary = inflateGetDictionary;
+exports.inflateMark = inflateMark;
+exports.inflatePrime = inflatePrime;
+exports.inflateSetDictionary = inflateSetDictionary;
+exports.inflateSync = inflateSync;
+exports.inflateSyncPoint = inflateSyncPoint;
+exports.inflateUndermine = inflateUndermine;
+*/
+
+},{"../utils/common":11,"./adler32":12,"./crc32":14,"./inffast":16,"./inftrees":18}],18:[function(require,module,exports){
+'use strict';
+
+
+var utils = require('../utils/common');
+
+var MAXBITS = 15;
+var ENOUGH_LENS = 852;
+var ENOUGH_DISTS = 592;
+//var ENOUGH = (ENOUGH_LENS+ENOUGH_DISTS);
+
+var CODES = 0;
+var LENS = 1;
+var DISTS = 2;
+
+var lbase = [ /* Length codes 257..285 base */
+  3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
+  35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258, 0, 0
+];
+
+var lext = [ /* Length codes 257..285 extra */
+  16, 16, 16, 16, 16, 16, 16, 16, 17, 17, 17, 17, 18, 18, 18, 18,
+  19, 19, 19, 19, 20, 20, 20, 20, 21, 21, 21, 21, 16, 72, 78
+];
+
+var dbase = [ /* Distance codes 0..29 base */
+  1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
+  257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145,
+  8193, 12289, 16385, 24577, 0, 0
+];
+
+var dext = [ /* Distance codes 0..29 extra */
+  16, 16, 16, 16, 17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22,
+  23, 23, 24, 24, 25, 25, 26, 26, 27, 27,
+  28, 28, 29, 29, 64, 64
+];
+
+module.exports = function inflate_table(type, lens, lens_index, codes, table, table_index, work, opts)
+{
+  var bits = opts.bits;
+      //here = opts.here; /* table entry for duplication */
+
+  var len = 0;               /* a code's length in bits */
+  var sym = 0;               /* index of code symbols */
+  var min = 0, max = 0;          /* minimum and maximum code lengths */
+  var root = 0;              /* number of index bits for root table */
+  var curr = 0;              /* number of index bits for current table */
+  var drop = 0;              /* code bits to drop for sub-table */
+  var left = 0;                   /* number of prefix codes available */
+  var used = 0;              /* code entries in table used */
+  var huff = 0;              /* Huffman code */
+  var incr;              /* for incrementing code, index */
+  var fill;              /* index for replicating entries */
+  var low;               /* low bits for current root entry */
+  var mask;              /* mask for low root bits */
+  var next;             /* next available space in table */
+  var base = null;     /* base value table to use */
+  var base_index = 0;
+//  var shoextra;    /* extra bits table to use */
+  var end;                    /* use base and extra for symbol > end */
+  var count = new utils.Buf16(MAXBITS+1); //[MAXBITS+1];    /* number of codes of each length */
+  var offs = new utils.Buf16(MAXBITS+1); //[MAXBITS+1];     /* offsets in table for each length */
+  var extra = null;
+  var extra_index = 0;
+
+  var here_bits, here_op, here_val;
+
+  /*
+   Process a set of code lengths to create a canonical Huffman code.  The
+   code lengths are lens[0..codes-1].  Each length corresponds to the
+   symbols 0..codes-1.  The Huffman code is generated by first sorting the
+   symbols by length from short to long, and retaining the symbol order
+   for codes with equal lengths.  Then the code starts with all zero bits
+   for the first code of the shortest length, and the codes are integer
+   increments for the same length, and zeros are appended as the length
+   increases.  For the deflate format, these bits are stored backwards
+   from their more natural integer increment ordering, and so when the
+   decoding tables are built in the large loop below, the integer codes
+   are incremented backwards.
+
+   This routine assumes, but does not check, that all of the entries in
+   lens[] are in the range 0..MAXBITS.  The caller must assure this.
+   1..MAXBITS is interpreted as that code length.  zero means that that
+   symbol does not occur in this code.
+
+   The codes are sorted by computing a count of codes for each length,
+   creating from that a table of starting indices for each length in the
+   sorted table, and then entering the symbols in order in the sorted
+   table.  The sorted table is work[], with that space being provided by
+   the caller.
+
+   The length counts are used for other purposes as well, i.e. finding
+   the minimum and maximum length codes, determining if there are any
+   codes at all, checking for a valid set of lengths, and looking ahead
+   at length counts to determine sub-table sizes when building the
+   decoding tables.
+   */
+
+  /* accumulate lengths for codes (assumes lens[] all in 0..MAXBITS) */
+  for (len = 0; len <= MAXBITS; len++) {
+    count[len] = 0;
+  }
+  for (sym = 0; sym < codes; sym++) {
+    count[lens[lens_index + sym]]++;
+  }
+
+  /* bound code lengths, force root to be within code lengths */
+  root = bits;
+  for (max = MAXBITS; max >= 1; max--) {
+    if (count[max] !== 0) { break; }
+  }
+  if (root > max) {
+    root = max;
+  }
+  if (max === 0) {                     /* no symbols to code at all */
+    //table.op[opts.table_index] = 64;  //here.op = (var char)64;    /* invalid code marker */
+    //table.bits[opts.table_index] = 1;   //here.bits = (var char)1;
+    //table.val[opts.table_index++] = 0;   //here.val = (var short)0;
+    table[table_index++] = (1 << 24) | (64 << 16) | 0;
+
+
+    //table.op[opts.table_index] = 64;
+    //table.bits[opts.table_index] = 1;
+    //table.val[opts.table_index++] = 0;
+    table[table_index++] = (1 << 24) | (64 << 16) | 0;
+
+    opts.bits = 1;
+    return 0;     /* no symbols, but wait for decoding to report error */
+  }
+  for (min = 1; min < max; min++) {
+    if (count[min] !== 0) { break; }
+  }
+  if (root < min) {
+    root = min;
+  }
+
+  /* check for an over-subscribed or incomplete set of lengths */
+  left = 1;
+  for (len = 1; len <= MAXBITS; len++) {
+    left <<= 1;
+    left -= count[len];
+    if (left < 0) {
+      return -1;
+    }        /* over-subscribed */
+  }
+  if (left > 0 && (type === CODES || max !== 1)) {
+    return -1;                      /* incomplete set */
+  }
+
+  /* generate offsets into symbol table for each length for sorting */
+  offs[1] = 0;
+  for (len = 1; len < MAXBITS; len++) {
+    offs[len + 1] = offs[len] + count[len];
+  }
+
+  /* sort symbols by length, by symbol order within each length */
+  for (sym = 0; sym < codes; sym++) {
+    if (lens[lens_index + sym] !== 0) {
+      work[offs[lens[lens_index + sym]]++] = sym;
+    }
+  }
+
+  /*
+   Create and fill in decoding tables.  In this loop, the table being
+   filled is at next and has curr index bits.  The code being used is huff
+   with length len.  That code is converted to an index by dropping drop
+   bits off of the bottom.  For codes where len is less than drop + curr,
+   those top drop + curr - len bits are incremented through all values to
+   fill the table with replicated entries.
+
+   root is the number of index bits for the root table.  When len exceeds
+   root, sub-tables are created pointed to by the root entry with an index
+   of the low root bits of huff.  This is saved in low to check for when a
+   new sub-table should be started.  drop is zero when the root table is
+   being filled, and drop is root when sub-tables are being filled.
+
+   When a new sub-table is needed, it is necessary to look ahead in the
+   code lengths to determine what size sub-table is needed.  The length
+   counts are used for this, and so count[] is decremented as codes are
+   entered in the tables.
+
+   used keeps track of how many table entries have been allocated from the
+   provided *table space.  It is checked for LENS and DIST tables against
+   the constants ENOUGH_LENS and ENOUGH_DISTS to guard against changes in
+   the initial root table size constants.  See the comments in inftrees.h
+   for more information.
+
+   sym increments through all symbols, and the loop terminates when
+   all codes of length max, i.e. all codes, have been processed.  This
+   routine permits incomplete codes, so another loop after this one fills
+   in the rest of the decoding tables with invalid code markers.
+   */
+
+  /* set up for code type */
+  // poor man optimization - use if-else instead of switch,
+  // to avoid deopts in old v8
+  if (type === CODES) {
+    base = extra = work;    /* dummy value--not used */
+    end = 19;
+
+  } else if (type === LENS) {
+    base = lbase;
+    base_index -= 257;
+    extra = lext;
+    extra_index -= 257;
+    end = 256;
+
+  } else {                    /* DISTS */
+    base = dbase;
+    extra = dext;
+    end = -1;
+  }
+
+  /* initialize opts for loop */
+  huff = 0;                   /* starting code */
+  sym = 0;                    /* starting code symbol */
+  len = min;                  /* starting code length */
+  next = table_index;              /* current table to fill in */
+  curr = root;                /* current table index bits */
+  drop = 0;                   /* current bits to drop from code for index */
+  low = -1;                   /* trigger new sub-table when len > root */
+  used = 1 << root;          /* use root table entries */
+  mask = used - 1;            /* mask for comparing low */
+
+  /* check available table space */
+  if ((type === LENS && used > ENOUGH_LENS) ||
+    (type === DISTS && used > ENOUGH_DISTS)) {
+    return 1;
+  }
+
+  var i=0;
+  /* process all codes and make table entries */
+  for (;;) {
+    i++;
+    /* create table entry */
+    here_bits = len - drop;
+    if (work[sym] < end) {
+      here_op = 0;
+      here_val = work[sym];
+    }
+    else if (work[sym] > end) {
+      here_op = extra[extra_index + work[sym]];
+      here_val = base[base_index + work[sym]];
+    }
+    else {
+      here_op = 32 + 64;         /* end of block */
+      here_val = 0;
+    }
+
+    /* replicate for those indices with low len bits equal to huff */
+    incr = 1 << (len - drop);
+    fill = 1 << curr;
+    min = fill;                 /* save offset to next table */
+    do {
+      fill -= incr;
+      table[next + (huff >> drop) + fill] = (here_bits << 24) | (here_op << 16) | here_val |0;
+    } while (fill !== 0);
+
+    /* backwards increment the len-bit code huff */
+    incr = 1 << (len - 1);
+    while (huff & incr) {
+      incr >>= 1;
+    }
+    if (incr !== 0) {
+      huff &= incr - 1;
+      huff += incr;
+    } else {
+      huff = 0;
+    }
+
+    /* go to next symbol, update count, len */
+    sym++;
+    if (--count[len] === 0) {
+      if (len === max) { break; }
+      len = lens[lens_index + work[sym]];
+    }
+
+    /* create new sub-table if needed */
+    if (len > root && (huff & mask) !== low) {
+      /* if first time, transition to sub-tables */
+      if (drop === 0) {
+        drop = root;
+      }
+
+      /* increment past last table */
+      next += min;            /* here min is 1 << curr */
+
+      /* determine length of next table */
+      curr = len - drop;
+      left = 1 << curr;
+      while (curr + drop < max) {
+        left -= count[curr + drop];
+        if (left <= 0) { break; }
+        curr++;
+        left <<= 1;
+      }
+
+      /* check for enough space */
+      used += 1 << curr;
+      if ((type === LENS && used > ENOUGH_LENS) ||
+        (type === DISTS && used > ENOUGH_DISTS)) {
+        return 1;
+      }
+
+      /* point entry in root table to sub-table */
+      low = huff & mask;
+      /*table.op[low] = curr;
+      table.bits[low] = root;
+      table.val[low] = next - opts.table_index;*/
+      table[low] = (root << 24) | (curr << 16) | (next - table_index) |0;
+    }
+  }
+
+  /* fill in remaining table entry if code is incomplete (guaranteed to have
+   at most one remaining entry, since if the code is incomplete, the
+   maximum code length that was allowed to get this far is one bit) */
+  if (huff !== 0) {
+    //table.op[next + huff] = 64;            /* invalid code marker */
+    //table.bits[next + huff] = len - drop;
+    //table.val[next + huff] = 0;
+    table[next + huff] = ((len - drop) << 24) | (64 << 16) |0;
+  }
+
+  /* set return parameters */
+  //opts.table_index += used;
+  opts.bits = root;
+  return 0;
+};
+
+},{"../utils/common":11}],19:[function(require,module,exports){
+'use strict';
+
+module.exports = {
+  '2':    'need dictionary',     /* Z_NEED_DICT       2  */
+  '1':    'stream end',          /* Z_STREAM_END      1  */
+  '0':    '',                    /* Z_OK              0  */
+  '-1':   'file error',          /* Z_ERRNO         (-1) */
+  '-2':   'stream error',        /* Z_STREAM_ERROR  (-2) */
+  '-3':   'data error',          /* Z_DATA_ERROR    (-3) */
+  '-4':   'insufficient memory', /* Z_MEM_ERROR     (-4) */
+  '-5':   'buffer error',        /* Z_BUF_ERROR     (-5) */
+  '-6':   'incompatible version' /* Z_VERSION_ERROR (-6) */
+};
+
+},{}],20:[function(require,module,exports){
+'use strict';
+
+
+var utils = require('../utils/common');
+
+/* Public constants ==========================================================*/
+/* ===========================================================================*/
+
+
+//var Z_FILTERED          = 1;
+//var Z_HUFFMAN_ONLY      = 2;
+//var Z_RLE               = 3;
+var Z_FIXED               = 4;
+//var Z_DEFAULT_STRATEGY  = 0;
+
+/* Possible values of the data_type field (though see inflate()) */
+var Z_BINARY              = 0;
+var Z_TEXT                = 1;
+//var Z_ASCII             = 1; // = Z_TEXT
+var Z_UNKNOWN             = 2;
+
+/*============================================================================*/
+
+
+function zero(buf) { var len = buf.length; while (--len >= 0) { buf[len] = 0; } }
+
+// From zutil.h
+
+var STORED_BLOCK = 0;
+var STATIC_TREES = 1;
+var DYN_TREES    = 2;
+/* The three kinds of block type */
+
+var MIN_MATCH    = 3;
+var MAX_MATCH    = 258;
+/* The minimum and maximum match lengths */
+
+// From deflate.h
+/* ===========================================================================
+ * Internal compression state.
+ */
+
+var LENGTH_CODES  = 29;
+/* number of length codes, not counting the special END_BLOCK code */
+
+var LITERALS      = 256;
+/* number of literal bytes 0..255 */
+
+var L_CODES       = LITERALS + 1 + LENGTH_CODES;
+/* number of Literal or Length codes, including the END_BLOCK code */
+
+var D_CODES       = 30;
+/* number of distance codes */
+
+var BL_CODES      = 19;
+/* number of codes used to transfer the bit lengths */
+
+var HEAP_SIZE     = 2*L_CODES + 1;
+/* maximum heap size */
+
+var MAX_BITS      = 15;
+/* All codes must not exceed MAX_BITS bits */
+
+var Buf_size      = 16;
+/* size of bit buffer in bi_buf */
+
+
+/* ===========================================================================
+ * Constants
+ */
+
+var MAX_BL_BITS = 7;
+/* Bit length codes must not exceed MAX_BL_BITS bits */
+
+var END_BLOCK   = 256;
+/* end of block literal code */
+
+var REP_3_6     = 16;
+/* repeat previous bit length 3-6 times (2 bits of repeat count) */
+
+var REPZ_3_10   = 17;
+/* repeat a zero length 3-10 times  (3 bits of repeat count) */
+
+var REPZ_11_138 = 18;
+/* repeat a zero length 11-138 times  (7 bits of repeat count) */
+
+var extra_lbits =   /* extra bits for each length code */
+  [0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0];
+
+var extra_dbits =   /* extra bits for each distance code */
+  [0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13];
+
+var extra_blbits =  /* extra bits for each bit length code */
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,3,7];
+
+var bl_order =
+  [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];
+/* The lengths of the bit length codes are sent in order of decreasing
+ * probability, to avoid transmitting the lengths for unused bit length codes.
+ */
+
+/* ===========================================================================
+ * Local data. These are initialized only once.
+ */
+
+// We pre-fill arrays with 0 to avoid uninitialized gaps
+
+var DIST_CODE_LEN = 512; /* see definition of array dist_code below */
+
+// !!!! Use flat array insdead of structure, Freq = i*2, Len = i*2+1
+var static_ltree  = new Array((L_CODES+2) * 2);
+zero(static_ltree);
+/* The static literal tree. Since the bit lengths are imposed, there is no
+ * need for the L_CODES extra codes used during heap construction. However
+ * The codes 286 and 287 are needed to build a canonical tree (see _tr_init
+ * below).
+ */
+
+var static_dtree  = new Array(D_CODES * 2);
+zero(static_dtree);
+/* The static distance tree. (Actually a trivial tree since all codes use
+ * 5 bits.)
+ */
+
+var _dist_code    = new Array(DIST_CODE_LEN);
+zero(_dist_code);
+/* Distance codes. The first 256 values correspond to the distances
+ * 3 .. 258, the last 256 values correspond to the top 8 bits of
+ * the 15 bit distances.
+ */
+
+var _length_code  = new Array(MAX_MATCH-MIN_MATCH+1);
+zero(_length_code);
+/* length code for each normalized match length (0 == MIN_MATCH) */
+
+var base_length   = new Array(LENGTH_CODES);
+zero(base_length);
+/* First normalized length for each code (0 = MIN_MATCH) */
+
+var base_dist     = new Array(D_CODES);
+zero(base_dist);
+/* First normalized distance for each code (0 = distance of 1) */
+
+
+var StaticTreeDesc = function (static_tree, extra_bits, extra_base, elems, max_length) {
+
+  this.static_tree  = static_tree;  /* static tree or NULL */
+  this.extra_bits   = extra_bits;   /* extra bits for each code or NULL */
+  this.extra_base   = extra_base;   /* base index for extra_bits */
+  this.elems        = elems;        /* max number of elements in the tree */
+  this.max_length   = max_length;   /* max bit length for the codes */
+
+  // show if `static_tree` has data or dummy - needed for monomorphic objects
+  this.has_stree    = static_tree && static_tree.length;
+};
+
+
+var static_l_desc;
+var static_d_desc;
+var static_bl_desc;
+
+
+var TreeDesc = function(dyn_tree, stat_desc) {
+  this.dyn_tree = dyn_tree;     /* the dynamic tree */
+  this.max_code = 0;            /* largest code with non zero frequency */
+  this.stat_desc = stat_desc;   /* the corresponding static tree */
+};
+
+
+
+function d_code(dist) {
+  return dist < 256 ? _dist_code[dist] : _dist_code[256 + (dist >>> 7)];
+}
+
+
+/* ===========================================================================
+ * Output a short LSB first on the stream.
+ * IN assertion: there is enough room in pendingBuf.
+ */
+function put_short (s, w) {
+//    put_byte(s, (uch)((w) & 0xff));
+//    put_byte(s, (uch)((ush)(w) >> 8));
+  s.pending_buf[s.pending++] = (w) & 0xff;
+  s.pending_buf[s.pending++] = (w >>> 8) & 0xff;
+}
+
+
+/* ===========================================================================
+ * Send a value on a given number of bits.
+ * IN assertion: length <= 16 and value fits in length bits.
+ */
+function send_bits(s, value, length) {
+  if (s.bi_valid > (Buf_size - length)) {
+    s.bi_buf |= (value << s.bi_valid) & 0xffff;
+    put_short(s, s.bi_buf);
+    s.bi_buf = value >> (Buf_size - s.bi_valid);
+    s.bi_valid += length - Buf_size;
+  } else {
+    s.bi_buf |= (value << s.bi_valid) & 0xffff;
+    s.bi_valid += length;
+  }
+}
+
+
+function send_code(s, c, tree) {
+  send_bits(s, tree[c*2]/*.Code*/, tree[c*2 + 1]/*.Len*/);
+}
+
+
+/* ===========================================================================
+ * Reverse the first len bits of a code, using straightforward code (a faster
+ * method would use a table)
+ * IN assertion: 1 <= len <= 15
+ */
+function bi_reverse(code, len) {
+  var res = 0;
+  do {
+    res |= code & 1;
+    code >>>= 1;
+    res <<= 1;
+  } while (--len > 0);
+  return res >>> 1;
+}
+
+
+/* ===========================================================================
+ * Flush the bit buffer, keeping at most 7 bits in it.
+ */
+function bi_flush(s) {
+  if (s.bi_valid === 16) {
+    put_short(s, s.bi_buf);
+    s.bi_buf = 0;
+    s.bi_valid = 0;
+
+  } else if (s.bi_valid >= 8) {
+    s.pending_buf[s.pending++] = s.bi_buf & 0xff;
+    s.bi_buf >>= 8;
+    s.bi_valid -= 8;
+  }
+}
+
+
+/* ===========================================================================
+ * Compute the optimal bit lengths for a tree and update the total bit length
+ * for the current block.
+ * IN assertion: the fields freq and dad are set, heap[heap_max] and
+ *    above are the tree nodes sorted by increasing frequency.
+ * OUT assertions: the field len is set to the optimal bit length, the
+ *     array bl_count contains the frequencies for each bit length.
+ *     The length opt_len is updated; static_len is also updated if stree is
+ *     not null.
+ */
+function gen_bitlen(s, desc)
+//    deflate_state *s;
+//    tree_desc *desc;    /* the tree descriptor */
+{
+  var tree            = desc.dyn_tree;
+  var max_code        = desc.max_code;
+  var stree           = desc.stat_desc.static_tree;
+  var has_stree       = desc.stat_desc.has_stree;
+  var extra           = desc.stat_desc.extra_bits;
+  var base            = desc.stat_desc.extra_base;
+  var max_length      = desc.stat_desc.max_length;
+  var h;              /* heap index */
+  var n, m;           /* iterate over the tree elements */
+  var bits;           /* bit length */
+  var xbits;          /* extra bits */
+  var f;              /* frequency */
+  var overflow = 0;   /* number of elements with bit length too large */
+
+  for (bits = 0; bits <= MAX_BITS; bits++) {
+    s.bl_count[bits] = 0;
+  }
+
+  /* In a first pass, compute the optimal bit lengths (which may
+   * overflow in the case of the bit length tree).
+   */
+  tree[s.heap[s.heap_max]*2 + 1]/*.Len*/ = 0; /* root of the heap */
+
+  for (h = s.heap_max+1; h < HEAP_SIZE; h++) {
+    n = s.heap[h];
+    bits = tree[tree[n*2 +1]/*.Dad*/ * 2 + 1]/*.Len*/ + 1;
+    if (bits > max_length) {
+      bits = max_length;
+      overflow++;
+    }
+    tree[n*2 + 1]/*.Len*/ = bits;
+    /* We overwrite tree[n].Dad which is no longer needed */
+
+    if (n > max_code) { continue; } /* not a leaf node */
+
+    s.bl_count[bits]++;
+    xbits = 0;
+    if (n >= base) {
+      xbits = extra[n-base];
+    }
+    f = tree[n * 2]/*.Freq*/;
+    s.opt_len += f * (bits + xbits);
+    if (has_stree) {
+      s.static_len += f * (stree[n*2 + 1]/*.Len*/ + xbits);
+    }
+  }
+  if (overflow === 0) { return; }
+
+  // Trace((stderr,"\nbit length overflow\n"));
+  /* This happens for example on obj2 and pic of the Calgary corpus */
+
+  /* Find the first bit length which could increase: */
+  do {
+    bits = max_length-1;
+    while (s.bl_count[bits] === 0) { bits--; }
+    s.bl_count[bits]--;      /* move one leaf down the tree */
+    s.bl_count[bits+1] += 2; /* move one overflow item as its brother */
+    s.bl_count[max_length]--;
+    /* The brother of the overflow item also moves one step up,
+     * but this does not affect bl_count[max_length]
+     */
+    overflow -= 2;
+  } while (overflow > 0);
+
+  /* Now recompute all bit lengths, scanning in increasing frequency.
+   * h is still equal to HEAP_SIZE. (It is simpler to reconstruct all
+   * lengths instead of fixing only the wrong ones. This idea is taken
+   * from 'ar' written by Haruhiko Okumura.)
+   */
+  for (bits = max_length; bits !== 0; bits--) {
+    n = s.bl_count[bits];
+    while (n !== 0) {
+      m = s.heap[--h];
+      if (m > max_code) { continue; }
+      if (tree[m*2 + 1]/*.Len*/ !== bits) {
+        // Trace((stderr,"code %d bits %d->%d\n", m, tree[m].Len, bits));
+        s.opt_len += (bits - tree[m*2 + 1]/*.Len*/)*tree[m*2]/*.Freq*/;
+        tree[m*2 + 1]/*.Len*/ = bits;
+      }
+      n--;
+    }
+  }
+}
+
+
+/* ===========================================================================
+ * Generate the codes for a given tree and bit counts (which need not be
+ * optimal).
+ * IN assertion: the array bl_count contains the bit length statistics for
+ * the given tree and the field len is set for all tree elements.
+ * OUT assertion: the field code is set for all tree elements of non
+ *     zero code length.
+ */
+function gen_codes(tree, max_code, bl_count)
+//    ct_data *tree;             /* the tree to decorate */
+//    int max_code;              /* largest code with non zero frequency */
+//    ushf *bl_count;            /* number of codes at each bit length */
+{
+  var next_code = new Array(MAX_BITS+1); /* next code value for each bit length */
+  var code = 0;              /* running code value */
+  var bits;                  /* bit index */
+  var n;                     /* code index */
+
+  /* The distribution counts are first used to generate the code values
+   * without bit reversal.
+   */
+  for (bits = 1; bits <= MAX_BITS; bits++) {
+    next_code[bits] = code = (code + bl_count[bits-1]) << 1;
+  }
+  /* Check that the bit counts in bl_count are consistent. The last code
+   * must be all ones.
+   */
+  //Assert (code + bl_count[MAX_BITS]-1 == (1<<MAX_BITS)-1,
+  //        "inconsistent bit counts");
+  //Tracev((stderr,"\ngen_codes: max_code %d ", max_code));
+
+  for (n = 0;  n <= max_code; n++) {
+    var len = tree[n*2 + 1]/*.Len*/;
+    if (len === 0) { continue; }
+    /* Now reverse the bits */
+    tree[n*2]/*.Code*/ = bi_reverse(next_code[len]++, len);
+
+    //Tracecv(tree != static_ltree, (stderr,"\nn %3d %c l %2d c %4x (%x) ",
+    //     n, (isgraph(n) ? n : ' '), len, tree[n].Code, next_code[len]-1));
+  }
+}
+
+
+/* ===========================================================================
+ * Initialize the various 'constant' tables.
+ */
+function tr_static_init() {
+  var n;        /* iterates over tree elements */
+  var bits;     /* bit counter */
+  var length;   /* length value */
+  var code;     /* code value */
+  var dist;     /* distance index */
+  var bl_count = new Array(MAX_BITS+1);
+  /* number of codes at each bit length for an optimal tree */
+
+  // do check in _tr_init()
+  //if (static_init_done) return;
+
+  /* For some embedded targets, global variables are not initialized: */
+/*#ifdef NO_INIT_GLOBAL_POINTERS
+  static_l_desc.static_tree = static_ltree;
+  static_l_desc.extra_bits = extra_lbits;
+  static_d_desc.static_tree = static_dtree;
+  static_d_desc.extra_bits = extra_dbits;
+  static_bl_desc.extra_bits = extra_blbits;
+#endif*/
+
+  /* Initialize the mapping length (0..255) -> length code (0..28) */
+  length = 0;
+  for (code = 0; code < LENGTH_CODES-1; code++) {
+    base_length[code] = length;
+    for (n = 0; n < (1<<extra_lbits[code]); n++) {
+      _length_code[length++] = code;
+    }
+  }
+  //Assert (length == 256, "tr_static_init: length != 256");
+  /* Note that the length 255 (match length 258) can be represented
+   * in two different ways: code 284 + 5 bits or code 285, so we
+   * overwrite length_code[255] to use the best encoding:
+   */
+  _length_code[length-1] = code;
+
+  /* Initialize the mapping dist (0..32K) -> dist code (0..29) */
+  dist = 0;
+  for (code = 0 ; code < 16; code++) {
+    base_dist[code] = dist;
+    for (n = 0; n < (1<<extra_dbits[code]); n++) {
+      _dist_code[dist++] = code;
+    }
+  }
+  //Assert (dist == 256, "tr_static_init: dist != 256");
+  dist >>= 7; /* from now on, all distances are divided by 128 */
+  for (; code < D_CODES; code++) {
+    base_dist[code] = dist << 7;
+    for (n = 0; n < (1<<(extra_dbits[code]-7)); n++) {
+      _dist_code[256 + dist++] = code;
+    }
+  }
+  //Assert (dist == 256, "tr_static_init: 256+dist != 512");
+
+  /* Construct the codes of the static literal tree */
+  for (bits = 0; bits <= MAX_BITS; bits++) {
+    bl_count[bits] = 0;
+  }
+
+  n = 0;
+  while (n <= 143) {
+    static_ltree[n*2 + 1]/*.Len*/ = 8;
+    n++;
+    bl_count[8]++;
+  }
+  while (n <= 255) {
+    static_ltree[n*2 + 1]/*.Len*/ = 9;
+    n++;
+    bl_count[9]++;
+  }
+  while (n <= 279) {
+    static_ltree[n*2 + 1]/*.Len*/ = 7;
+    n++;
+    bl_count[7]++;
+  }
+  while (n <= 287) {
+    static_ltree[n*2 + 1]/*.Len*/ = 8;
+    n++;
+    bl_count[8]++;
+  }
+  /* Codes 286 and 287 do not exist, but we must include them in the
+   * tree construction to get a canonical Huffman tree (longest code
+   * all ones)
+   */
+  gen_codes(static_ltree, L_CODES+1, bl_count);
+
+  /* The static distance tree is trivial: */
+  for (n = 0; n < D_CODES; n++) {
+    static_dtree[n*2 + 1]/*.Len*/ = 5;
+    static_dtree[n*2]/*.Code*/ = bi_reverse(n, 5);
+  }
+
+  // Now data ready and we can init static trees
+  static_l_desc = new StaticTreeDesc(static_ltree, extra_lbits, LITERALS+1, L_CODES, MAX_BITS);
+  static_d_desc = new StaticTreeDesc(static_dtree, extra_dbits, 0,          D_CODES, MAX_BITS);
+  static_bl_desc =new StaticTreeDesc(new Array(0), extra_blbits, 0,         BL_CODES, MAX_BL_BITS);
+
+  //static_init_done = true;
+}
+
+
+/* ===========================================================================
+ * Initialize a new block.
+ */
+function init_block(s) {
+  var n; /* iterates over tree elements */
+
+  /* Initialize the trees. */
+  for (n = 0; n < L_CODES;  n++) { s.dyn_ltree[n*2]/*.Freq*/ = 0; }
+  for (n = 0; n < D_CODES;  n++) { s.dyn_dtree[n*2]/*.Freq*/ = 0; }
+  for (n = 0; n < BL_CODES; n++) { s.bl_tree[n*2]/*.Freq*/ = 0; }
+
+  s.dyn_ltree[END_BLOCK*2]/*.Freq*/ = 1;
+  s.opt_len = s.static_len = 0;
+  s.last_lit = s.matches = 0;
+}
+
+
+/* ===========================================================================
+ * Flush the bit buffer and align the output on a byte boundary
+ */
+function bi_windup(s)
+{
+  if (s.bi_valid > 8) {
+    put_short(s, s.bi_buf);
+  } else if (s.bi_valid > 0) {
+    //put_byte(s, (Byte)s->bi_buf);
+    s.pending_buf[s.pending++] = s.bi_buf;
+  }
+  s.bi_buf = 0;
+  s.bi_valid = 0;
+}
+
+/* ===========================================================================
+ * Copy a stored block, storing first the length and its
+ * one's complement if requested.
+ */
+function copy_block(s, buf, len, header)
+//DeflateState *s;
+//charf    *buf;    /* the input data */
+//unsigned len;     /* its length */
+//int      header;  /* true if block header must be written */
+{
+  bi_windup(s);        /* align on byte boundary */
+
+  if (header) {
+    put_short(s, len);
+    put_short(s, ~len);
+  }
+//  while (len--) {
+//    put_byte(s, *buf++);
+//  }
+  utils.arraySet(s.pending_buf, s.window, buf, len, s.pending);
+  s.pending += len;
+}
+
+/* ===========================================================================
+ * Compares to subtrees, using the tree depth as tie breaker when
+ * the subtrees have equal frequency. This minimizes the worst case length.
+ */
+function smaller(tree, n, m, depth) {
+  var _n2 = n*2;
+  var _m2 = m*2;
+  return (tree[_n2]/*.Freq*/ < tree[_m2]/*.Freq*/ ||
+         (tree[_n2]/*.Freq*/ === tree[_m2]/*.Freq*/ && depth[n] <= depth[m]));
+}
+
+/* ===========================================================================
+ * Restore the heap property by moving down the tree starting at node k,
+ * exchanging a node with the smallest of its two sons if necessary, stopping
+ * when the heap property is re-established (each father smaller than its
+ * two sons).
+ */
+function pqdownheap(s, tree, k)
+//    deflate_state *s;
+//    ct_data *tree;  /* the tree to restore */
+//    int k;               /* node to move down */
+{
+  var v = s.heap[k];
+  var j = k << 1;  /* left son of k */
+  while (j <= s.heap_len) {
+    /* Set j to the smallest of the two sons: */
+    if (j < s.heap_len &&
+      smaller(tree, s.heap[j+1], s.heap[j], s.depth)) {
+      j++;
+    }
+    /* Exit if v is smaller than both sons */
+    if (smaller(tree, v, s.heap[j], s.depth)) { break; }
+
+    /* Exchange v with the smallest son */
+    s.heap[k] = s.heap[j];
+    k = j;
+
+    /* And continue down the tree, setting j to the left son of k */
+    j <<= 1;
+  }
+  s.heap[k] = v;
+}
+
+
+// inlined manually
+// var SMALLEST = 1;
+
+/* ===========================================================================
+ * Send the block data compressed using the given Huffman trees
+ */
+function compress_block(s, ltree, dtree)
+//    deflate_state *s;
+//    const ct_data *ltree; /* literal tree */
+//    const ct_data *dtree; /* distance tree */
+{
+  var dist;           /* distance of matched string */
+  var lc;             /* match length or unmatched char (if dist == 0) */
+  var lx = 0;         /* running index in l_buf */
+  var code;           /* the code to send */
+  var extra;          /* number of extra bits to send */
+
+  if (s.last_lit !== 0) {
+    do {
+      dist = (s.pending_buf[s.d_buf + lx*2] << 8) | (s.pending_buf[s.d_buf + lx*2 + 1]);
+      lc = s.pending_buf[s.l_buf + lx];
+      lx++;
+
+      if (dist === 0) {
+        send_code(s, lc, ltree); /* send a literal byte */
+        //Tracecv(isgraph(lc), (stderr," '%c' ", lc));
+      } else {
+        /* Here, lc is the match length - MIN_MATCH */
+        code = _length_code[lc];
+        send_code(s, code+LITERALS+1, ltree); /* send the length code */
+        extra = extra_lbits[code];
+        if (extra !== 0) {
+          lc -= base_length[code];
+          send_bits(s, lc, extra);       /* send the extra length bits */
+        }
+        dist--; /* dist is now the match distance - 1 */
+        code = d_code(dist);
+        //Assert (code < D_CODES, "bad d_code");
+
+        send_code(s, code, dtree);       /* send the distance code */
+        extra = extra_dbits[code];
+        if (extra !== 0) {
+          dist -= base_dist[code];
+          send_bits(s, dist, extra);   /* send the extra distance bits */
+        }
+      } /* literal or match pair ? */
+
+      /* Check that the overlay between pending_buf and d_buf+l_buf is ok: */
+      //Assert((uInt)(s->pending) < s->lit_bufsize + 2*lx,
+      //       "pendingBuf overflow");
+
+    } while (lx < s.last_lit);
+  }
+
+  send_code(s, END_BLOCK, ltree);
+}
+
+
+/* ===========================================================================
+ * Construct one Huffman tree and assigns the code bit strings and lengths.
+ * Update the total bit length for the current block.
+ * IN assertion: the field freq is set for all tree elements.
+ * OUT assertions: the fields len and code are set to the optimal bit length
+ *     and corresponding code. The length opt_len is updated; static_len is
+ *     also updated if stree is not null. The field max_code is set.
+ */
+function build_tree(s, desc)
+//    deflate_state *s;
+//    tree_desc *desc; /* the tree descriptor */
+{
+  var tree     = desc.dyn_tree;
+  var stree    = desc.stat_desc.static_tree;
+  var has_stree = desc.stat_desc.has_stree;
+  var elems    = desc.stat_desc.elems;
+  var n, m;          /* iterate over heap elements */
+  var max_code = -1; /* largest code with non zero frequency */
+  var node;          /* new node being created */
+
+  /* Construct the initial heap, with least frequent element in
+   * heap[SMALLEST]. The sons of heap[n] are heap[2*n] and heap[2*n+1].
+   * heap[0] is not used.
+   */
+  s.heap_len = 0;
+  s.heap_max = HEAP_SIZE;
+
+  for (n = 0; n < elems; n++) {
+    if (tree[n * 2]/*.Freq*/ !== 0) {
+      s.heap[++s.heap_len] = max_code = n;
+      s.depth[n] = 0;
+
+    } else {
+      tree[n*2 + 1]/*.Len*/ = 0;
+    }
+  }
+
+  /* The pkzip format requires that at least one distance code exists,
+   * and that at least one bit should be sent even if there is only one
+   * possible code. So to avoid special checks later on we force at least
+   * two codes of non zero frequency.
+   */
+  while (s.heap_len < 2) {
+    node = s.heap[++s.heap_len] = (max_code < 2 ? ++max_code : 0);
+    tree[node * 2]/*.Freq*/ = 1;
+    s.depth[node] = 0;
+    s.opt_len--;
+
+    if (has_stree) {
+      s.static_len -= stree[node*2 + 1]/*.Len*/;
+    }
+    /* node is 0 or 1 so it does not have extra bits */
+  }
+  desc.max_code = max_code;
+
+  /* The elements heap[heap_len/2+1 .. heap_len] are leaves of the tree,
+   * establish sub-heaps of increasing lengths:
+   */
+  for (n = (s.heap_len >> 1/*int /2*/); n >= 1; n--) { pqdownheap(s, tree, n); }
+
+  /* Construct the Huffman tree by repeatedly combining the least two
+   * frequent nodes.
+   */
+  node = elems;              /* next internal node of the tree */
+  do {
+    //pqremove(s, tree, n);  /* n = node of least frequency */
+    /*** pqremove ***/
+    n = s.heap[1/*SMALLEST*/];
+    s.heap[1/*SMALLEST*/] = s.heap[s.heap_len--];
+    pqdownheap(s, tree, 1/*SMALLEST*/);
+    /***/
+
+    m = s.heap[1/*SMALLEST*/]; /* m = node of next least frequency */
+
+    s.heap[--s.heap_max] = n; /* keep the nodes sorted by frequency */
+    s.heap[--s.heap_max] = m;
+
+    /* Create a new node father of n and m */
+    tree[node * 2]/*.Freq*/ = tree[n * 2]/*.Freq*/ + tree[m * 2]/*.Freq*/;
+    s.depth[node] = (s.depth[n] >= s.depth[m] ? s.depth[n] : s.depth[m]) + 1;
+    tree[n*2 + 1]/*.Dad*/ = tree[m*2 + 1]/*.Dad*/ = node;
+
+    /* and insert the new node in the heap */
+    s.heap[1/*SMALLEST*/] = node++;
+    pqdownheap(s, tree, 1/*SMALLEST*/);
+
+  } while (s.heap_len >= 2);
+
+  s.heap[--s.heap_max] = s.heap[1/*SMALLEST*/];
+
+  /* At this point, the fields freq and dad are set. We can now
+   * generate the bit lengths.
+   */
+  gen_bitlen(s, desc);
+
+  /* The field len is now set, we can generate the bit codes */
+  gen_codes(tree, max_code, s.bl_count);
+}
+
+
+/* ===========================================================================
+ * Scan a literal or distance tree to determine the frequencies of the codes
+ * in the bit length tree.
+ */
+function scan_tree(s, tree, max_code)
+//    deflate_state *s;
+//    ct_data *tree;   /* the tree to be scanned */
+//    int max_code;    /* and its largest code of non zero frequency */
+{
+  var n;                     /* iterates over all tree elements */
+  var prevlen = -1;          /* last emitted length */
+  var curlen;                /* length of current code */
+
+  var nextlen = tree[0*2 + 1]/*.Len*/; /* length of next code */
+
+  var count = 0;             /* repeat count of the current code */
+  var max_count = 7;         /* max repeat count */
+  var min_count = 4;         /* min repeat count */
+
+  if (nextlen === 0) {
+    max_count = 138;
+    min_count = 3;
+  }
+  tree[(max_code+1)*2 + 1]/*.Len*/ = 0xffff; /* guard */
+
+  for (n = 0; n <= max_code; n++) {
+    curlen = nextlen;
+    nextlen = tree[(n+1)*2 + 1]/*.Len*/;
+
+    if (++count < max_count && curlen === nextlen) {
+      continue;
+
+    } else if (count < min_count) {
+      s.bl_tree[curlen * 2]/*.Freq*/ += count;
+
+    } else if (curlen !== 0) {
+
+      if (curlen !== prevlen) { s.bl_tree[curlen * 2]/*.Freq*/++; }
+      s.bl_tree[REP_3_6*2]/*.Freq*/++;
+
+    } else if (count <= 10) {
+      s.bl_tree[REPZ_3_10*2]/*.Freq*/++;
+
+    } else {
+      s.bl_tree[REPZ_11_138*2]/*.Freq*/++;
+    }
+
+    count = 0;
+    prevlen = curlen;
+
+    if (nextlen === 0) {
+      max_count = 138;
+      min_count = 3;
+
+    } else if (curlen === nextlen) {
+      max_count = 6;
+      min_count = 3;
+
+    } else {
+      max_count = 7;
+      min_count = 4;
+    }
+  }
+}
+
+
+/* ===========================================================================
+ * Send a literal or distance tree in compressed form, using the codes in
+ * bl_tree.
+ */
+function send_tree(s, tree, max_code)
+//    deflate_state *s;
+//    ct_data *tree; /* the tree to be scanned */
+//    int max_code;       /* and its largest code of non zero frequency */
+{
+  var n;                     /* iterates over all tree elements */
+  var prevlen = -1;          /* last emitted length */
+  var curlen;                /* length of current code */
+
+  var nextlen = tree[0*2 + 1]/*.Len*/; /* length of next code */
+
+  var count = 0;             /* repeat count of the current code */
+  var max_count = 7;         /* max repeat count */
+  var min_count = 4;         /* min repeat count */
+
+  /* tree[max_code+1].Len = -1; */  /* guard already set */
+  if (nextlen === 0) {
+    max_count = 138;
+    min_count = 3;
+  }
+
+  for (n = 0; n <= max_code; n++) {
+    curlen = nextlen;
+    nextlen = tree[(n+1)*2 + 1]/*.Len*/;
+
+    if (++count < max_count && curlen === nextlen) {
+      continue;
+
+    } else if (count < min_count) {
+      do { send_code(s, curlen, s.bl_tree); } while (--count !== 0);
+
+    } else if (curlen !== 0) {
+      if (curlen !== prevlen) {
+        send_code(s, curlen, s.bl_tree);
+        count--;
+      }
+      //Assert(count >= 3 && count <= 6, " 3_6?");
+      send_code(s, REP_3_6, s.bl_tree);
+      send_bits(s, count-3, 2);
+
+    } else if (count <= 10) {
+      send_code(s, REPZ_3_10, s.bl_tree);
+      send_bits(s, count-3, 3);
+
+    } else {
+      send_code(s, REPZ_11_138, s.bl_tree);
+      send_bits(s, count-11, 7);
+    }
+
+    count = 0;
+    prevlen = curlen;
+    if (nextlen === 0) {
+      max_count = 138;
+      min_count = 3;
+
+    } else if (curlen === nextlen) {
+      max_count = 6;
+      min_count = 3;
+
+    } else {
+      max_count = 7;
+      min_count = 4;
+    }
+  }
+}
+
+
+/* ===========================================================================
+ * Construct the Huffman tree for the bit lengths and return the index in
+ * bl_order of the last bit length code to send.
+ */
+function build_bl_tree(s) {
+  var max_blindex;  /* index of last bit length code of non zero freq */
+
+  /* Determine the bit length frequencies for literal and distance trees */
+  scan_tree(s, s.dyn_ltree, s.l_desc.max_code);
+  scan_tree(s, s.dyn_dtree, s.d_desc.max_code);
+
+  /* Build the bit length tree: */
+  build_tree(s, s.bl_desc);
+  /* opt_len now includes the length of the tree representations, except
+   * the lengths of the bit lengths codes and the 5+5+4 bits for the counts.
+   */
+
+  /* Determine the number of bit length codes to send. The pkzip format
+   * requires that at least 4 bit length codes be sent. (appnote.txt says
+   * 3 but the actual value used is 4.)
+   */
+  for (max_blindex = BL_CODES-1; max_blindex >= 3; max_blindex--) {
+    if (s.bl_tree[bl_order[max_blindex]*2 + 1]/*.Len*/ !== 0) {
+      break;
+    }
+  }
+  /* Update opt_len to include the bit length tree and counts */
+  s.opt_len += 3*(max_blindex+1) + 5+5+4;
+  //Tracev((stderr, "\ndyn trees: dyn %ld, stat %ld",
+  //        s->opt_len, s->static_len));
+
+  return max_blindex;
+}
+
+
+/* ===========================================================================
+ * Send the header for a block using dynamic Huffman trees: the counts, the
+ * lengths of the bit length codes, the literal tree and the distance tree.
+ * IN assertion: lcodes >= 257, dcodes >= 1, blcodes >= 4.
+ */
+function send_all_trees(s, lcodes, dcodes, blcodes)
+//    deflate_state *s;
+//    int lcodes, dcodes, blcodes; /* number of codes for each tree */
+{
+  var rank;                    /* index in bl_order */
+
+  //Assert (lcodes >= 257 && dcodes >= 1 && blcodes >= 4, "not enough codes");
+  //Assert (lcodes <= L_CODES && dcodes <= D_CODES && blcodes <= BL_CODES,
+  //        "too many codes");
+  //Tracev((stderr, "\nbl counts: "));
+  send_bits(s, lcodes-257, 5); /* not +255 as stated in appnote.txt */
+  send_bits(s, dcodes-1,   5);
+  send_bits(s, blcodes-4,  4); /* not -3 as stated in appnote.txt */
+  for (rank = 0; rank < blcodes; rank++) {
+    //Tracev((stderr, "\nbl code %2d ", bl_order[rank]));
+    send_bits(s, s.bl_tree[bl_order[rank]*2 + 1]/*.Len*/, 3);
+  }
+  //Tracev((stderr, "\nbl tree: sent %ld", s->bits_sent));
+
+  send_tree(s, s.dyn_ltree, lcodes-1); /* literal tree */
+  //Tracev((stderr, "\nlit tree: sent %ld", s->bits_sent));
+
+  send_tree(s, s.dyn_dtree, dcodes-1); /* distance tree */
+  //Tracev((stderr, "\ndist tree: sent %ld", s->bits_sent));
+}
+
+
+/* ===========================================================================
+ * Check if the data type is TEXT or BINARY, using the following algorithm:
+ * - TEXT if the two conditions below are satisfied:
+ *    a) There are no non-portable control characters belonging to the
+ *       "black list" (0..6, 14..25, 28..31).
+ *    b) There is at least one printable character belonging to the
+ *       "white list" (9 {TAB}, 10 {LF}, 13 {CR}, 32..255).
+ * - BINARY otherwise.
+ * - The following partially-portable control characters form a
+ *   "gray list" that is ignored in this detection algorithm:
+ *   (7 {BEL}, 8 {BS}, 11 {VT}, 12 {FF}, 26 {SUB}, 27 {ESC}).
+ * IN assertion: the fields Freq of dyn_ltree are set.
+ */
+function detect_data_type(s) {
+  /* black_mask is the bit mask of black-listed bytes
+   * set bits 0..6, 14..25, and 28..31
+   * 0xf3ffc07f = binary 11110011111111111100000001111111
+   */
+  var black_mask = 0xf3ffc07f;
+  var n;
+
+  /* Check for non-textual ("black-listed") bytes. */
+  for (n = 0; n <= 31; n++, black_mask >>>= 1) {
+    if ((black_mask & 1) && (s.dyn_ltree[n*2]/*.Freq*/ !== 0)) {
+      return Z_BINARY;
+    }
+  }
+
+  /* Check for textual ("white-listed") bytes. */
+  if (s.dyn_ltree[9 * 2]/*.Freq*/ !== 0 || s.dyn_ltree[10 * 2]/*.Freq*/ !== 0 ||
+      s.dyn_ltree[13 * 2]/*.Freq*/ !== 0) {
+    return Z_TEXT;
+  }
+  for (n = 32; n < LITERALS; n++) {
+    if (s.dyn_ltree[n * 2]/*.Freq*/ !== 0) {
+      return Z_TEXT;
+    }
+  }
+
+  /* There are no "black-listed" or "white-listed" bytes:
+   * this stream either is empty or has tolerated ("gray-listed") bytes only.
+   */
+  return Z_BINARY;
+}
+
+
+var static_init_done = false;
+
+/* ===========================================================================
+ * Initialize the tree data structures for a new zlib stream.
+ */
+function _tr_init(s)
+{
+
+  if (!static_init_done) {
+    tr_static_init();
+    static_init_done = true;
+  }
+
+  s.l_desc  = new TreeDesc(s.dyn_ltree, static_l_desc);
+  s.d_desc  = new TreeDesc(s.dyn_dtree, static_d_desc);
+  s.bl_desc = new TreeDesc(s.bl_tree, static_bl_desc);
+
+  s.bi_buf = 0;
+  s.bi_valid = 0;
+
+  /* Initialize the first block of the first file: */
+  init_block(s);
+}
+
+
+/* ===========================================================================
+ * Send a stored block
+ */
+function _tr_stored_block(s, buf, stored_len, last)
+//DeflateState *s;
+//charf *buf;       /* input block */
+//ulg stored_len;   /* length of input block */
+//int last;         /* one if this is the last block for a file */
+{
+  send_bits(s, (STORED_BLOCK<<1)+(last ? 1 : 0), 3);    /* send block type */
+  copy_block(s, buf, stored_len, true); /* with header */
+}
+
+
+/* ===========================================================================
+ * Send one empty static block to give enough lookahead for inflate.
+ * This takes 10 bits, of which 7 may remain in the bit buffer.
+ */
+function _tr_align(s) {
+  send_bits(s, STATIC_TREES<<1, 3);
+  send_code(s, END_BLOCK, static_ltree);
+  bi_flush(s);
+}
+
+
+/* ===========================================================================
+ * Determine the best encoding for the current block: dynamic trees, static
+ * trees or store, and output the encoded block to the zip file.
+ */
+function _tr_flush_block(s, buf, stored_len, last)
+//DeflateState *s;
+//charf *buf;       /* input block, or NULL if too old */
+//ulg stored_len;   /* length of input block */
+//int last;         /* one if this is the last block for a file */
+{
+  var opt_lenb, static_lenb;  /* opt_len and static_len in bytes */
+  var max_blindex = 0;        /* index of last bit length code of non zero freq */
+
+  /* Build the Huffman trees unless a stored block is forced */
+  if (s.level > 0) {
+
+    /* Check if the file is binary or text */
+    if (s.strm.data_type === Z_UNKNOWN) {
+      s.strm.data_type = detect_data_type(s);
+    }
+
+    /* Construct the literal and distance trees */
+    build_tree(s, s.l_desc);
+    // Tracev((stderr, "\nlit data: dyn %ld, stat %ld", s->opt_len,
+    //        s->static_len));
+
+    build_tree(s, s.d_desc);
+    // Tracev((stderr, "\ndist data: dyn %ld, stat %ld", s->opt_len,
+    //        s->static_len));
+    /* At this point, opt_len and static_len are the total bit lengths of
+     * the compressed block data, excluding the tree representations.
+     */
+
+    /* Build the bit length tree for the above two trees, and get the index
+     * in bl_order of the last bit length code to send.
+     */
+    max_blindex = build_bl_tree(s);
+
+    /* Determine the best encoding. Compute the block lengths in bytes. */
+    opt_lenb = (s.opt_len+3+7) >>> 3;
+    static_lenb = (s.static_len+3+7) >>> 3;
+
+    // Tracev((stderr, "\nopt %lu(%lu) stat %lu(%lu) stored %lu lit %u ",
+    //        opt_lenb, s->opt_len, static_lenb, s->static_len, stored_len,
+    //        s->last_lit));
+
+    if (static_lenb <= opt_lenb) { opt_lenb = static_lenb; }
+
+  } else {
+    // Assert(buf != (char*)0, "lost buf");
+    opt_lenb = static_lenb = stored_len + 5; /* force a stored block */
+  }
+
+  if ((stored_len+4 <= opt_lenb) && (buf !== -1)) {
+    /* 4: two words for the lengths */
+
+    /* The test buf != NULL is only necessary if LIT_BUFSIZE > WSIZE.
+     * Otherwise we can't have processed more than WSIZE input bytes since
+     * the last block flush, because compression would have been
+     * successful. If LIT_BUFSIZE <= WSIZE, it is never too late to
+     * transform a block into a stored block.
+     */
+    _tr_stored_block(s, buf, stored_len, last);
+
+  } else if (s.strategy === Z_FIXED || static_lenb === opt_lenb) {
+
+    send_bits(s, (STATIC_TREES<<1) + (last ? 1 : 0), 3);
+    compress_block(s, static_ltree, static_dtree);
+
+  } else {
+    send_bits(s, (DYN_TREES<<1) + (last ? 1 : 0), 3);
+    send_all_trees(s, s.l_desc.max_code+1, s.d_desc.max_code+1, max_blindex+1);
+    compress_block(s, s.dyn_ltree, s.dyn_dtree);
+  }
+  // Assert (s->compressed_len == s->bits_sent, "bad compressed size");
+  /* The above check is made mod 2^32, for files larger than 512 MB
+   * and uLong implemented on 32 bits.
+   */
+  init_block(s);
+
+  if (last) {
+    bi_windup(s);
+  }
+  // Tracev((stderr,"\ncomprlen %lu(%lu) ", s->compressed_len>>3,
+  //       s->compressed_len-7*last));
+}
+
+/* ===========================================================================
+ * Save the match info and tally the frequency counts. Return true if
+ * the current block must be flushed.
+ */
+function _tr_tally(s, dist, lc)
+//    deflate_state *s;
+//    unsigned dist;  /* distance of matched string */
+//    unsigned lc;    /* match length-MIN_MATCH or unmatched char (if dist==0) */
+{
+  //var out_length, in_length, dcode;
+
+  s.pending_buf[s.d_buf + s.last_lit * 2]     = (dist >>> 8) & 0xff;
+  s.pending_buf[s.d_buf + s.last_lit * 2 + 1] = dist & 0xff;
+
+  s.pending_buf[s.l_buf + s.last_lit] = lc & 0xff;
+  s.last_lit++;
+
+  if (dist === 0) {
+    /* lc is the unmatched char */
+    s.dyn_ltree[lc*2]/*.Freq*/++;
+  } else {
+    s.matches++;
+    /* Here, lc is the match length - MIN_MATCH */
+    dist--;             /* dist = match distance - 1 */
+    //Assert((ush)dist < (ush)MAX_DIST(s) &&
+    //       (ush)lc <= (ush)(MAX_MATCH-MIN_MATCH) &&
+    //       (ush)d_code(dist) < (ush)D_CODES,  "_tr_tally: bad match");
+
+    s.dyn_ltree[(_length_code[lc]+LITERALS+1) * 2]/*.Freq*/++;
+    s.dyn_dtree[d_code(dist) * 2]/*.Freq*/++;
+  }
+
+// (!) This block is disabled in zlib defailts,
+// don't enable it for binary compatibility
+
+//#ifdef TRUNCATE_BLOCK
+//  /* Try to guess if it is profitable to stop the current block here */
+//  if ((s.last_lit & 0x1fff) === 0 && s.level > 2) {
+//    /* Compute an upper bound for the compressed length */
+//    out_length = s.last_lit*8;
+//    in_length = s.strstart - s.block_start;
+//
+//    for (dcode = 0; dcode < D_CODES; dcode++) {
+//      out_length += s.dyn_dtree[dcode*2]/*.Freq*/ * (5 + extra_dbits[dcode]);
+//    }
+//    out_length >>>= 3;
+//    //Tracev((stderr,"\nlast_lit %u, in %ld, out ~%ld(%ld%%) ",
+//    //       s->last_lit, in_length, out_length,
+//    //       100L - out_length*100L/in_length));
+//    if (s.matches < (s.last_lit>>1)/*int /2*/ && out_length < (in_length>>1)/*int /2*/) {
+//      return true;
+//    }
+//  }
+//#endif
+
+  return (s.last_lit === s.lit_bufsize-1);
+  /* We avoid equality with lit_bufsize because of wraparound at 64K
+   * on 16 bit machines and because stored blocks are restricted to
+   * 64K-1 bytes.
+   */
+}
+
+exports._tr_init  = _tr_init;
+exports._tr_stored_block = _tr_stored_block;
+exports._tr_flush_block  = _tr_flush_block;
+exports._tr_tally = _tr_tally;
+exports._tr_align = _tr_align;
+
+},{"../utils/common":11}],21:[function(require,module,exports){
+'use strict';
+
+
+function ZStream() {
+  /* next input byte */
+  this.input = null; // JS specific, because we have no pointers
+  this.next_in = 0;
+  /* number of bytes available at input */
+  this.avail_in = 0;
+  /* total number of input bytes read so far */
+  this.total_in = 0;
+  /* next output byte should be put there */
+  this.output = null; // JS specific, because we have no pointers
+  this.next_out = 0;
+  /* remaining free space at output */
+  this.avail_out = 0;
+  /* total number of bytes output so far */
+  this.total_out = 0;
+  /* last error message, NULL if no error */
+  this.msg = ''/*Z_NULL*/;
+  /* not visible by applications */
+  this.state = null;
+  /* best guess about the data type: binary or text */
+  this.data_type = 2/*Z_UNKNOWN*/;
+  /* adler32 value of the uncompressed data */
+  this.adler = 0;
+}
+
+module.exports = ZStream;
+
+},{}],22:[function(require,module,exports){
+(function (process,Buffer){
+var msg = require('pako/lib/zlib/messages');
+var zstream = require('pako/lib/zlib/zstream');
+var zlib_deflate = require('pako/lib/zlib/deflate.js');
+var zlib_inflate = require('pako/lib/zlib/inflate.js');
+var constants = require('pako/lib/zlib/constants');
+
+for (var key in constants) {
+  exports[key] = constants[key];
+}
+
+// zlib modes
+exports.NONE = 0;
+exports.DEFLATE = 1;
+exports.INFLATE = 2;
+exports.GZIP = 3;
+exports.GUNZIP = 4;
+exports.DEFLATERAW = 5;
+exports.INFLATERAW = 6;
+exports.UNZIP = 7;
+
+/**
+ * Emulate Node's zlib C++ layer for use by the JS layer in index.js
+ */
+function Zlib(mode) {
+  if (mode < exports.DEFLATE || mode > exports.UNZIP)
+    throw new TypeError("Bad argument");
+    
+  this.mode = mode;
+  this.init_done = false;
+  this.write_in_progress = false;
+  this.pending_close = false;
+  this.windowBits = 0;
+  this.level = 0;
+  this.memLevel = 0;
+  this.strategy = 0;
+  this.dictionary = null;
+}
+
+Zlib.prototype.init = function(windowBits, level, memLevel, strategy, dictionary) {
+  this.windowBits = windowBits;
+  this.level = level;
+  this.memLevel = memLevel;
+  this.strategy = strategy;
+  // dictionary not supported.
+  
+  if (this.mode === exports.GZIP || this.mode === exports.GUNZIP)
+    this.windowBits += 16;
+    
+  if (this.mode === exports.UNZIP)
+    this.windowBits += 32;
+    
+  if (this.mode === exports.DEFLATERAW || this.mode === exports.INFLATERAW)
+    this.windowBits = -this.windowBits;
+    
+  this.strm = new zstream();
+  
+  switch (this.mode) {
+    case exports.DEFLATE:
+    case exports.GZIP:
+    case exports.DEFLATERAW:
+      var status = zlib_deflate.deflateInit2(
+        this.strm,
+        this.level,
+        exports.Z_DEFLATED,
+        this.windowBits,
+        this.memLevel,
+        this.strategy
+      );
+      break;
+    case exports.INFLATE:
+    case exports.GUNZIP:
+    case exports.INFLATERAW:
+    case exports.UNZIP:
+      var status  = zlib_inflate.inflateInit2(
+        this.strm,
+        this.windowBits
+      );
+      break;
+    default:
+      throw new Error("Unknown mode " + this.mode);
+  }
+  
+  if (status !== exports.Z_OK) {
+    this._error(status);
+    return;
+  }
+  
+  this.write_in_progress = false;
+  this.init_done = true;
+};
+
+Zlib.prototype.params = function() {
+  throw new Error("deflateParams Not supported");
+};
+
+Zlib.prototype._writeCheck = function() {
+  if (!this.init_done)
+    throw new Error("write before init");
+    
+  if (this.mode === exports.NONE)
+    throw new Error("already finalized");
+    
+  if (this.write_in_progress)
+    throw new Error("write already in progress");
+    
+  if (this.pending_close)
+    throw new Error("close is pending");
+};
+
+Zlib.prototype.write = function(flush, input, in_off, in_len, out, out_off, out_len) {    
+  this._writeCheck();
+  this.write_in_progress = true;
+  
+  var self = this;
+  process.nextTick(function() {
+    self.write_in_progress = false;
+    var res = self._write(flush, input, in_off, in_len, out, out_off, out_len);
+    self.callback(res[0], res[1]);
+    
+    if (self.pending_close)
+      self.close();
+  });
+  
+  return this;
+};
+
+// set method for Node buffers, used by pako
+function bufferSet(data, offset) {
+  for (var i = 0; i < data.length; i++) {
+    this[offset + i] = data[i];
+  }
+}
+
+Zlib.prototype.writeSync = function(flush, input, in_off, in_len, out, out_off, out_len) {
+  this._writeCheck();
+  return this._write(flush, input, in_off, in_len, out, out_off, out_len);
+};
+
+Zlib.prototype._write = function(flush, input, in_off, in_len, out, out_off, out_len) {
+  this.write_in_progress = true;
+  
+  if (flush !== exports.Z_NO_FLUSH &&
+      flush !== exports.Z_PARTIAL_FLUSH &&
+      flush !== exports.Z_SYNC_FLUSH &&
+      flush !== exports.Z_FULL_FLUSH &&
+      flush !== exports.Z_FINISH &&
+      flush !== exports.Z_BLOCK) {
+    throw new Error("Invalid flush value");
+  }
+  
+  if (input == null) {
+    input = new Buffer(0);
+    in_len = 0;
+    in_off = 0;
+  }
+  
+  if (out._set)
+    out.set = out._set;
+  else
+    out.set = bufferSet;
+  
+  var strm = this.strm;
+  strm.avail_in = in_len;
+  strm.input = input;
+  strm.next_in = in_off;
+  strm.avail_out = out_len;
+  strm.output = out;
+  strm.next_out = out_off;
+  
+  switch (this.mode) {
+    case exports.DEFLATE:
+    case exports.GZIP:
+    case exports.DEFLATERAW:
+      var status = zlib_deflate.deflate(strm, flush);
+      break;
+    case exports.UNZIP:
+    case exports.INFLATE:
+    case exports.GUNZIP:
+    case exports.INFLATERAW:
+      var status = zlib_inflate.inflate(strm, flush);
+      break;
+    default:
+      throw new Error("Unknown mode " + this.mode);
+  }
+  
+  if (status !== exports.Z_STREAM_END && status !== exports.Z_OK) {
+    this._error(status);
+  }
+  
+  this.write_in_progress = false;
+  return [strm.avail_in, strm.avail_out];
+};
+
+Zlib.prototype.close = function() {
+  if (this.write_in_progress) {
+    this.pending_close = true;
+    return;
+  }
+  
+  this.pending_close = false;
+  
+  if (this.mode === exports.DEFLATE || this.mode === exports.GZIP || this.mode === exports.DEFLATERAW) {
+    zlib_deflate.deflateEnd(this.strm);
+  } else {
+    zlib_inflate.inflateEnd(this.strm);
+  }
+  
+  this.mode = exports.NONE;
+};
+
+Zlib.prototype.reset = function() {
+  switch (this.mode) {
+    case exports.DEFLATE:
+    case exports.DEFLATERAW:
+      var status = zlib_deflate.deflateReset(this.strm);
+      break;
+    case exports.INFLATE:
+    case exports.INFLATERAW:
+      var status = zlib_inflate.inflateReset(this.strm);
+      break;
+  }
+  
+  if (status !== exports.Z_OK) {
+    this._error(status);
+  }
+};
+
+Zlib.prototype._error = function(status) {
+  this.onerror(msg[status] + ': ' + this.strm.msg, status);
+  
+  this.write_in_progress = false;
+  if (this.pending_close)
+    this.close();
+};
+
+exports.Zlib = Zlib;
+
+}).call(this,require('_process'),require("buffer").Buffer)
+},{"_process":33,"buffer":24,"pako/lib/zlib/constants":13,"pako/lib/zlib/deflate.js":15,"pako/lib/zlib/inflate.js":17,"pako/lib/zlib/messages":19,"pako/lib/zlib/zstream":21}],23:[function(require,module,exports){
+(function (process,Buffer){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var Transform = require('_stream_transform');
+
+var binding = require('./binding');
+var util = require('util');
+var assert = require('assert').ok;
+
+// zlib doesn't provide these, so kludge them in following the same
+// const naming scheme zlib uses.
+binding.Z_MIN_WINDOWBITS = 8;
+binding.Z_MAX_WINDOWBITS = 15;
+binding.Z_DEFAULT_WINDOWBITS = 15;
+
+// fewer than 64 bytes per chunk is stupid.
+// technically it could work with as few as 8, but even 64 bytes
+// is absurdly low.  Usually a MB or more is best.
+binding.Z_MIN_CHUNK = 64;
+binding.Z_MAX_CHUNK = Infinity;
+binding.Z_DEFAULT_CHUNK = (16 * 1024);
+
+binding.Z_MIN_MEMLEVEL = 1;
+binding.Z_MAX_MEMLEVEL = 9;
+binding.Z_DEFAULT_MEMLEVEL = 8;
+
+binding.Z_MIN_LEVEL = -1;
+binding.Z_MAX_LEVEL = 9;
+binding.Z_DEFAULT_LEVEL = binding.Z_DEFAULT_COMPRESSION;
+
+// expose all the zlib constants
+Object.keys(binding).forEach(function(k) {
+  if (k.match(/^Z/)) exports[k] = binding[k];
+});
+
+// translation table for return codes.
+exports.codes = {
+  Z_OK: binding.Z_OK,
+  Z_STREAM_END: binding.Z_STREAM_END,
+  Z_NEED_DICT: binding.Z_NEED_DICT,
+  Z_ERRNO: binding.Z_ERRNO,
+  Z_STREAM_ERROR: binding.Z_STREAM_ERROR,
+  Z_DATA_ERROR: binding.Z_DATA_ERROR,
+  Z_MEM_ERROR: binding.Z_MEM_ERROR,
+  Z_BUF_ERROR: binding.Z_BUF_ERROR,
+  Z_VERSION_ERROR: binding.Z_VERSION_ERROR
+};
+
+Object.keys(exports.codes).forEach(function(k) {
+  exports.codes[exports.codes[k]] = k;
+});
+
+exports.Deflate = Deflate;
+exports.Inflate = Inflate;
+exports.Gzip = Gzip;
+exports.Gunzip = Gunzip;
+exports.DeflateRaw = DeflateRaw;
+exports.InflateRaw = InflateRaw;
+exports.Unzip = Unzip;
+
+exports.createDeflate = function(o) {
+  return new Deflate(o);
+};
+
+exports.createInflate = function(o) {
+  return new Inflate(o);
+};
+
+exports.createDeflateRaw = function(o) {
+  return new DeflateRaw(o);
+};
+
+exports.createInflateRaw = function(o) {
+  return new InflateRaw(o);
+};
+
+exports.createGzip = function(o) {
+  return new Gzip(o);
+};
+
+exports.createGunzip = function(o) {
+  return new Gunzip(o);
+};
+
+exports.createUnzip = function(o) {
+  return new Unzip(o);
+};
+
+
+// Convenience methods.
+// compress/decompress a string or buffer in one step.
+exports.deflate = function(buffer, opts, callback) {
+  if (typeof opts === 'function') {
+    callback = opts;
+    opts = {};
+  }
+  return zlibBuffer(new Deflate(opts), buffer, callback);
+};
+
+exports.deflateSync = function(buffer, opts) {
+  return zlibBufferSync(new Deflate(opts), buffer);
+};
+
+exports.gzip = function(buffer, opts, callback) {
+  if (typeof opts === 'function') {
+    callback = opts;
+    opts = {};
+  }
+  return zlibBuffer(new Gzip(opts), buffer, callback);
+};
+
+exports.gzipSync = function(buffer, opts) {
+  return zlibBufferSync(new Gzip(opts), buffer);
+};
+
+exports.deflateRaw = function(buffer, opts, callback) {
+  if (typeof opts === 'function') {
+    callback = opts;
+    opts = {};
+  }
+  return zlibBuffer(new DeflateRaw(opts), buffer, callback);
+};
+
+exports.deflateRawSync = function(buffer, opts) {
+  return zlibBufferSync(new DeflateRaw(opts), buffer);
+};
+
+exports.unzip = function(buffer, opts, callback) {
+  if (typeof opts === 'function') {
+    callback = opts;
+    opts = {};
+  }
+  return zlibBuffer(new Unzip(opts), buffer, callback);
+};
+
+exports.unzipSync = function(buffer, opts) {
+  return zlibBufferSync(new Unzip(opts), buffer);
+};
+
+exports.inflate = function(buffer, opts, callback) {
+  if (typeof opts === 'function') {
+    callback = opts;
+    opts = {};
+  }
+  return zlibBuffer(new Inflate(opts), buffer, callback);
+};
+
+exports.inflateSync = function(buffer, opts) {
+  return zlibBufferSync(new Inflate(opts), buffer);
+};
+
+exports.gunzip = function(buffer, opts, callback) {
+  if (typeof opts === 'function') {
+    callback = opts;
+    opts = {};
+  }
+  return zlibBuffer(new Gunzip(opts), buffer, callback);
+};
+
+exports.gunzipSync = function(buffer, opts) {
+  return zlibBufferSync(new Gunzip(opts), buffer);
+};
+
+exports.inflateRaw = function(buffer, opts, callback) {
+  if (typeof opts === 'function') {
+    callback = opts;
+    opts = {};
+  }
+  return zlibBuffer(new InflateRaw(opts), buffer, callback);
+};
+
+exports.inflateRawSync = function(buffer, opts) {
+  return zlibBufferSync(new InflateRaw(opts), buffer);
+};
+
+function zlibBuffer(engine, buffer, callback) {
+  var buffers = [];
+  var nread = 0;
+
+  engine.on('error', onError);
+  engine.on('end', onEnd);
+
+  engine.end(buffer);
+  flow();
+
+  function flow() {
+    var chunk;
+    while (null !== (chunk = engine.read())) {
+      buffers.push(chunk);
+      nread += chunk.length;
+    }
+    engine.once('readable', flow);
+  }
+
+  function onError(err) {
+    engine.removeListener('end', onEnd);
+    engine.removeListener('readable', flow);
+    callback(err);
+  }
+
+  function onEnd() {
+    var buf = Buffer.concat(buffers, nread);
+    buffers = [];
+    callback(null, buf);
+    engine.close();
+  }
+}
+
+function zlibBufferSync(engine, buffer) {
+  if (typeof buffer === 'string')
+    buffer = new Buffer(buffer);
+  if (!Buffer.isBuffer(buffer))
+    throw new TypeError('Not a string or buffer');
+
+  var flushFlag = binding.Z_FINISH;
+
+  return engine._processChunk(buffer, flushFlag);
+}
+
+// generic zlib
+// minimal 2-byte header
+function Deflate(opts) {
+  if (!(this instanceof Deflate)) return new Deflate(opts);
+  Zlib.call(this, opts, binding.DEFLATE);
+}
+
+function Inflate(opts) {
+  if (!(this instanceof Inflate)) return new Inflate(opts);
+  Zlib.call(this, opts, binding.INFLATE);
+}
+
+
+
+// gzip - bigger header, same deflate compression
+function Gzip(opts) {
+  if (!(this instanceof Gzip)) return new Gzip(opts);
+  Zlib.call(this, opts, binding.GZIP);
+}
+
+function Gunzip(opts) {
+  if (!(this instanceof Gunzip)) return new Gunzip(opts);
+  Zlib.call(this, opts, binding.GUNZIP);
+}
+
+
+
+// raw - no header
+function DeflateRaw(opts) {
+  if (!(this instanceof DeflateRaw)) return new DeflateRaw(opts);
+  Zlib.call(this, opts, binding.DEFLATERAW);
+}
+
+function InflateRaw(opts) {
+  if (!(this instanceof InflateRaw)) return new InflateRaw(opts);
+  Zlib.call(this, opts, binding.INFLATERAW);
+}
+
+
+// auto-detect header.
+function Unzip(opts) {
+  if (!(this instanceof Unzip)) return new Unzip(opts);
+  Zlib.call(this, opts, binding.UNZIP);
+}
+
+
+// the Zlib class they all inherit from
+// This thing manages the queue of requests, and returns
+// true or false if there is anything in the queue when
+// you call the .write() method.
+
+function Zlib(opts, mode) {
+  this._opts = opts = opts || {};
+  this._chunkSize = opts.chunkSize || exports.Z_DEFAULT_CHUNK;
+
+  Transform.call(this, opts);
+
+  if (opts.flush) {
+    if (opts.flush !== binding.Z_NO_FLUSH &&
+        opts.flush !== binding.Z_PARTIAL_FLUSH &&
+        opts.flush !== binding.Z_SYNC_FLUSH &&
+        opts.flush !== binding.Z_FULL_FLUSH &&
+        opts.flush !== binding.Z_FINISH &&
+        opts.flush !== binding.Z_BLOCK) {
+      throw new Error('Invalid flush flag: ' + opts.flush);
+    }
+  }
+  this._flushFlag = opts.flush || binding.Z_NO_FLUSH;
+
+  if (opts.chunkSize) {
+    if (opts.chunkSize < exports.Z_MIN_CHUNK ||
+        opts.chunkSize > exports.Z_MAX_CHUNK) {
+      throw new Error('Invalid chunk size: ' + opts.chunkSize);
+    }
+  }
+
+  if (opts.windowBits) {
+    if (opts.windowBits < exports.Z_MIN_WINDOWBITS ||
+        opts.windowBits > exports.Z_MAX_WINDOWBITS) {
+      throw new Error('Invalid windowBits: ' + opts.windowBits);
+    }
+  }
+
+  if (opts.level) {
+    if (opts.level < exports.Z_MIN_LEVEL ||
+        opts.level > exports.Z_MAX_LEVEL) {
+      throw new Error('Invalid compression level: ' + opts.level);
+    }
+  }
+
+  if (opts.memLevel) {
+    if (opts.memLevel < exports.Z_MIN_MEMLEVEL ||
+        opts.memLevel > exports.Z_MAX_MEMLEVEL) {
+      throw new Error('Invalid memLevel: ' + opts.memLevel);
+    }
+  }
+
+  if (opts.strategy) {
+    if (opts.strategy != exports.Z_FILTERED &&
+        opts.strategy != exports.Z_HUFFMAN_ONLY &&
+        opts.strategy != exports.Z_RLE &&
+        opts.strategy != exports.Z_FIXED &&
+        opts.strategy != exports.Z_DEFAULT_STRATEGY) {
+      throw new Error('Invalid strategy: ' + opts.strategy);
+    }
+  }
+
+  if (opts.dictionary) {
+    if (!Buffer.isBuffer(opts.dictionary)) {
+      throw new Error('Invalid dictionary: it should be a Buffer instance');
+    }
+  }
+
+  this._binding = new binding.Zlib(mode);
+
+  var self = this;
+  this._hadError = false;
+  this._binding.onerror = function(message, errno) {
+    // there is no way to cleanly recover.
+    // continuing only obscures problems.
+    self._binding = null;
+    self._hadError = true;
+
+    var error = new Error(message);
+    error.errno = errno;
+    error.code = exports.codes[errno];
+    self.emit('error', error);
+  };
+
+  var level = exports.Z_DEFAULT_COMPRESSION;
+  if (typeof opts.level === 'number') level = opts.level;
+
+  var strategy = exports.Z_DEFAULT_STRATEGY;
+  if (typeof opts.strategy === 'number') strategy = opts.strategy;
+
+  this._binding.init(opts.windowBits || exports.Z_DEFAULT_WINDOWBITS,
+                     level,
+                     opts.memLevel || exports.Z_DEFAULT_MEMLEVEL,
+                     strategy,
+                     opts.dictionary);
+
+  this._buffer = new Buffer(this._chunkSize);
+  this._offset = 0;
+  this._closed = false;
+  this._level = level;
+  this._strategy = strategy;
+
+  this.once('end', this.close);
+}
+
+util.inherits(Zlib, Transform);
+
+Zlib.prototype.params = function(level, strategy, callback) {
+  if (level < exports.Z_MIN_LEVEL ||
+      level > exports.Z_MAX_LEVEL) {
+    throw new RangeError('Invalid compression level: ' + level);
+  }
+  if (strategy != exports.Z_FILTERED &&
+      strategy != exports.Z_HUFFMAN_ONLY &&
+      strategy != exports.Z_RLE &&
+      strategy != exports.Z_FIXED &&
+      strategy != exports.Z_DEFAULT_STRATEGY) {
+    throw new TypeError('Invalid strategy: ' + strategy);
+  }
+
+  if (this._level !== level || this._strategy !== strategy) {
+    var self = this;
+    this.flush(binding.Z_SYNC_FLUSH, function() {
+      self._binding.params(level, strategy);
+      if (!self._hadError) {
+        self._level = level;
+        self._strategy = strategy;
+        if (callback) callback();
+      }
+    });
+  } else {
+    process.nextTick(callback);
+  }
+};
+
+Zlib.prototype.reset = function() {
+  return this._binding.reset();
+};
+
+// This is the _flush function called by the transform class,
+// internally, when the last chunk has been written.
+Zlib.prototype._flush = function(callback) {
+  this._transform(new Buffer(0), '', callback);
+};
+
+Zlib.prototype.flush = function(kind, callback) {
+  var ws = this._writableState;
+
+  if (typeof kind === 'function' || (kind === void 0 && !callback)) {
+    callback = kind;
+    kind = binding.Z_FULL_FLUSH;
+  }
+
+  if (ws.ended) {
+    if (callback)
+      process.nextTick(callback);
+  } else if (ws.ending) {
+    if (callback)
+      this.once('end', callback);
+  } else if (ws.needDrain) {
+    var self = this;
+    this.once('drain', function() {
+      self.flush(callback);
+    });
+  } else {
+    this._flushFlag = kind;
+    this.write(new Buffer(0), '', callback);
+  }
+};
+
+Zlib.prototype.close = function(callback) {
+  if (callback)
+    process.nextTick(callback);
+
+  if (this._closed)
+    return;
+
+  this._closed = true;
+
+  this._binding.close();
+
+  var self = this;
+  process.nextTick(function() {
+    self.emit('close');
+  });
+};
+
+Zlib.prototype._transform = function(chunk, encoding, cb) {
+  var flushFlag;
+  var ws = this._writableState;
+  var ending = ws.ending || ws.ended;
+  var last = ending && (!chunk || ws.length === chunk.length);
+
+  if (!chunk === null && !Buffer.isBuffer(chunk))
+    return cb(new Error('invalid input'));
+
+  // If it's the last chunk, or a final flush, we use the Z_FINISH flush flag.
+  // If it's explicitly flushing at some other time, then we use
+  // Z_FULL_FLUSH. Otherwise, use Z_NO_FLUSH for maximum compression
+  // goodness.
+  if (last)
+    flushFlag = binding.Z_FINISH;
+  else {
+    flushFlag = this._flushFlag;
+    // once we've flushed the last of the queue, stop flushing and
+    // go back to the normal behavior.
+    if (chunk.length >= ws.length) {
+      this._flushFlag = this._opts.flush || binding.Z_NO_FLUSH;
+    }
+  }
+
+  var self = this;
+  this._processChunk(chunk, flushFlag, cb);
+};
+
+Zlib.prototype._processChunk = function(chunk, flushFlag, cb) {
+  var availInBefore = chunk && chunk.length;
+  var availOutBefore = this._chunkSize - this._offset;
+  var inOff = 0;
+
+  var self = this;
+
+  var async = typeof cb === 'function';
+
+  if (!async) {
+    var buffers = [];
+    var nread = 0;
+
+    var error;
+    this.on('error', function(er) {
+      error = er;
+    });
+
+    do {
+      var res = this._binding.writeSync(flushFlag,
+                                        chunk, // in
+                                        inOff, // in_off
+                                        availInBefore, // in_len
+                                        this._buffer, // out
+                                        this._offset, //out_off
+                                        availOutBefore); // out_len
+    } while (!this._hadError && callback(res[0], res[1]));
+
+    if (this._hadError) {
+      throw error;
+    }
+
+    var buf = Buffer.concat(buffers, nread);
+    this.close();
+
+    return buf;
+  }
+
+  var req = this._binding.write(flushFlag,
+                                chunk, // in
+                                inOff, // in_off
+                                availInBefore, // in_len
+                                this._buffer, // out
+                                this._offset, //out_off
+                                availOutBefore); // out_len
+
+  req.buffer = chunk;
+  req.callback = callback;
+
+  function callback(availInAfter, availOutAfter) {
+    if (self._hadError)
+      return;
+
+    var have = availOutBefore - availOutAfter;
+    assert(have >= 0, 'have should not go down');
+
+    if (have > 0) {
+      var out = self._buffer.slice(self._offset, self._offset + have);
+      self._offset += have;
+      // serve some output to the consumer.
+      if (async) {
+        self.push(out);
+      } else {
+        buffers.push(out);
+        nread += out.length;
+      }
+    }
+
+    // exhausted the output buffer, or used all the input create a new one.
+    if (availOutAfter === 0 || self._offset >= self._chunkSize) {
+      availOutBefore = self._chunkSize;
+      self._offset = 0;
+      self._buffer = new Buffer(self._chunkSize);
+    }
+
+    if (availOutAfter === 0) {
+      // Not actually done.  Need to reprocess.
+      // Also, update the availInBefore to the availInAfter value,
+      // so that if we have to hit it a third (fourth, etc.) time,
+      // it'll have the correct byte counts.
+      inOff += (availInBefore - availInAfter);
+      availInBefore = availInAfter;
+
+      if (!async)
+        return true;
+
+      var newReq = self._binding.write(flushFlag,
+                                       chunk,
+                                       inOff,
+                                       availInBefore,
+                                       self._buffer,
+                                       self._offset,
+                                       self._chunkSize);
+      newReq.callback = callback; // this same function
+      newReq.buffer = chunk;
+      return;
+    }
+
+    if (!async)
+      return false;
+
+    // finished with the chunk.
+    cb();
+  }
+};
+
+util.inherits(Deflate, Zlib);
+util.inherits(Inflate, Zlib);
+util.inherits(Gzip, Zlib);
+util.inherits(Gunzip, Zlib);
+util.inherits(DeflateRaw, Zlib);
+util.inherits(InflateRaw, Zlib);
+util.inherits(Unzip, Zlib);
+
+}).call(this,require('_process'),require("buffer").Buffer)
+},{"./binding":22,"_process":33,"_stream_transform":43,"assert":9,"buffer":24,"util":48}],24:[function(require,module,exports){
+(function (global){
 /*!
  * The buffer module from node.js, for the browser.
  *
  * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
  * @license  MIT
  */
+/* eslint-disable no-proto */
 
 var base64 = require('base64-js')
 var ieee754 = require('ieee754')
@@ -6370,7 +7492,6 @@ exports.SlowBuffer = SlowBuffer
 exports.INSPECT_MAX_BYTES = 50
 Buffer.poolSize = 8192 // not used by this implementation
 
-var kMaxLength = 0x3fffffff
 var rootParent = {}
 
 /**
@@ -6381,32 +7502,49 @@ var rootParent = {}
  * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
  * Opera 11.6+, iOS 4.2+.
  *
+ * Due to various browser bugs, sometimes the Object implementation will be used even
+ * when the browser supports typed arrays.
+ *
  * Note:
  *
- * - Implementation must support adding new properties to `Uint8Array` instances.
- *   Firefox 4-29 lacked support, fixed in Firefox 30+.
- *   See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
+ *   - Firefox 4-29 lacks support for adding new properties to `Uint8Array` instances,
+ *     See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
  *
- *  - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
+ *   - Safari 5-7 lacks support for changing the `Object.prototype.constructor` property
+ *     on objects.
  *
- *  - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
- *    incorrect length in some situations.
+ *   - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
  *
- * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they will
- * get the Object implementation, which is slower but will work correctly.
+ *   - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
+ *     incorrect length in some situations.
+
+ * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they
+ * get the Object implementation, which is slower but behaves correctly.
  */
-Buffer.TYPED_ARRAY_SUPPORT = (function () {
+Buffer.TYPED_ARRAY_SUPPORT = global.TYPED_ARRAY_SUPPORT !== undefined
+  ? global.TYPED_ARRAY_SUPPORT
+  : typedArraySupport()
+
+function typedArraySupport () {
+  function Bar () {}
   try {
-    var buf = new ArrayBuffer(0)
-    var arr = new Uint8Array(buf)
+    var arr = new Uint8Array(1)
     arr.foo = function () { return 42 }
+    arr.constructor = Bar
     return arr.foo() === 42 && // typed array instances can be augmented
+        arr.constructor === Bar && // constructor can be set
         typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
-        new Uint8Array(1).subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
+        arr.subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
   } catch (e) {
     return false
   }
-})()
+}
+
+function kMaxLength () {
+  return Buffer.TYPED_ARRAY_SUPPORT
+    ? 0x7fffffff
+    : 0x3fffffff
+}
 
 /**
  * Class: Buffer
@@ -6420,68 +7558,172 @@ Buffer.TYPED_ARRAY_SUPPORT = (function () {
  * By augmenting the instances, we can avoid modifying the `Uint8Array`
  * prototype.
  */
-function Buffer (subject, encoding) {
-  var self = this
-  if (!(self instanceof Buffer)) return new Buffer(subject, encoding)
+function Buffer (arg) {
+  if (!(this instanceof Buffer)) {
+    // Avoid going through an ArgumentsAdaptorTrampoline in the common case.
+    if (arguments.length > 1) return new Buffer(arg, arguments[1])
+    return new Buffer(arg)
+  }
 
-  var type = typeof subject
-  var length
+  this.length = 0
+  this.parent = undefined
 
-  if (type === 'number') {
-    length = +subject
-  } else if (type === 'string') {
-    length = Buffer.byteLength(subject, encoding)
-  } else if (type === 'object' && subject !== null) {
-    // assume object is array-like
-    if (subject.type === 'Buffer' && isArray(subject.data)) subject = subject.data
-    length = +subject.length
-  } else {
+  // Common case.
+  if (typeof arg === 'number') {
+    return fromNumber(this, arg)
+  }
+
+  // Slightly less common case.
+  if (typeof arg === 'string') {
+    return fromString(this, arg, arguments.length > 1 ? arguments[1] : 'utf8')
+  }
+
+  // Unusual.
+  return fromObject(this, arg)
+}
+
+function fromNumber (that, length) {
+  that = allocate(that, length < 0 ? 0 : checked(length) | 0)
+  if (!Buffer.TYPED_ARRAY_SUPPORT) {
+    for (var i = 0; i < length; i++) {
+      that[i] = 0
+    }
+  }
+  return that
+}
+
+function fromString (that, string, encoding) {
+  if (typeof encoding !== 'string' || encoding === '') encoding = 'utf8'
+
+  // Assumption: byteLength() return value is always < kMaxLength.
+  var length = byteLength(string, encoding) | 0
+  that = allocate(that, length)
+
+  that.write(string, encoding)
+  return that
+}
+
+function fromObject (that, object) {
+  if (Buffer.isBuffer(object)) return fromBuffer(that, object)
+
+  if (isArray(object)) return fromArray(that, object)
+
+  if (object == null) {
     throw new TypeError('must start with number, buffer, array or string')
   }
 
-  if (length > kMaxLength) {
-    throw new RangeError('Attempt to allocate Buffer larger than maximum size: 0x' +
-      kMaxLength.toString(16) + ' bytes')
+  if (typeof ArrayBuffer !== 'undefined') {
+    if (object.buffer instanceof ArrayBuffer) {
+      return fromTypedArray(that, object)
+    }
+    if (object instanceof ArrayBuffer) {
+      return fromArrayBuffer(that, object)
+    }
   }
 
-  if (length < 0) length = 0
-  else length >>>= 0 // coerce to uint32
+  if (object.length) return fromArrayLike(that, object)
 
+  return fromJsonObject(that, object)
+}
+
+function fromBuffer (that, buffer) {
+  var length = checked(buffer.length) | 0
+  that = allocate(that, length)
+  buffer.copy(that, 0, 0, length)
+  return that
+}
+
+function fromArray (that, array) {
+  var length = checked(array.length) | 0
+  that = allocate(that, length)
+  for (var i = 0; i < length; i += 1) {
+    that[i] = array[i] & 255
+  }
+  return that
+}
+
+// Duplicate of fromArray() to keep fromArray() monomorphic.
+function fromTypedArray (that, array) {
+  var length = checked(array.length) | 0
+  that = allocate(that, length)
+  // Truncating the elements is probably not what people expect from typed
+  // arrays with BYTES_PER_ELEMENT > 1 but it's compatible with the behavior
+  // of the old Buffer constructor.
+  for (var i = 0; i < length; i += 1) {
+    that[i] = array[i] & 255
+  }
+  return that
+}
+
+function fromArrayBuffer (that, array) {
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    // Preferred: Return an augmented `Uint8Array` instance for best performance
-    self = Buffer._augment(new Uint8Array(length)) // eslint-disable-line consistent-this
+    // Return an augmented `Uint8Array` instance, for best performance
+    array.byteLength
+    that = Buffer._augment(new Uint8Array(array))
   } else {
-    // Fallback: Return THIS instance of Buffer (created by `new`)
-    self.length = length
-    self._isBuffer = true
+    // Fallback: Return an object instance of the Buffer class
+    that = fromTypedArray(that, new Uint8Array(array))
+  }
+  return that
+}
+
+function fromArrayLike (that, array) {
+  var length = checked(array.length) | 0
+  that = allocate(that, length)
+  for (var i = 0; i < length; i += 1) {
+    that[i] = array[i] & 255
+  }
+  return that
+}
+
+// Deserialize { type: 'Buffer', data: [1,2,3,...] } into a Buffer object.
+// Returns a zero-length buffer for inputs that don't conform to the spec.
+function fromJsonObject (that, object) {
+  var array
+  var length = 0
+
+  if (object.type === 'Buffer' && isArray(object.data)) {
+    array = object.data
+    length = checked(array.length) | 0
+  }
+  that = allocate(that, length)
+
+  for (var i = 0; i < length; i += 1) {
+    that[i] = array[i] & 255
+  }
+  return that
+}
+
+if (Buffer.TYPED_ARRAY_SUPPORT) {
+  Buffer.prototype.__proto__ = Uint8Array.prototype
+  Buffer.__proto__ = Uint8Array
+}
+
+function allocate (that, length) {
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    // Return an augmented `Uint8Array` instance, for best performance
+    that = Buffer._augment(new Uint8Array(length))
+    that.__proto__ = Buffer.prototype
+  } else {
+    // Fallback: Return an object instance of the Buffer class
+    that.length = length
+    that._isBuffer = true
   }
 
-  var i
-  if (Buffer.TYPED_ARRAY_SUPPORT && typeof subject.byteLength === 'number') {
-    // Speed optimization -- use set if we're copying from a typed array
-    self._set(subject)
-  } else if (isArrayish(subject)) {
-    // Treat array-ish objects as a byte array
-    if (Buffer.isBuffer(subject)) {
-      for (i = 0; i < length; i++) {
-        self[i] = subject.readUInt8(i)
-      }
-    } else {
-      for (i = 0; i < length; i++) {
-        self[i] = ((subject[i] % 256) + 256) % 256
-      }
-    }
-  } else if (type === 'string') {
-    self.write(subject, 0, encoding)
-  } else if (type === 'number' && !Buffer.TYPED_ARRAY_SUPPORT) {
-    for (i = 0; i < length; i++) {
-      self[i] = 0
-    }
+  var fromPool = length !== 0 && length <= Buffer.poolSize >>> 1
+  if (fromPool) that.parent = rootParent
+
+  return that
+}
+
+function checked (length) {
+  // Note: cannot use `length < kMaxLength` here because that fails when
+  // length is NaN (which is otherwise coerced to zero.)
+  if (length >= kMaxLength()) {
+    throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
+                         'size: 0x' + kMaxLength().toString(16) + ' bytes')
   }
-
-  if (length > 0 && length <= Buffer.poolSize) self.parent = rootParent
-
-  return self
+  return length | 0
 }
 
 function SlowBuffer (subject, encoding) {
@@ -6505,11 +7747,20 @@ Buffer.compare = function compare (a, b) {
 
   var x = a.length
   var y = b.length
-  for (var i = 0, len = Math.min(x, y); i < len && a[i] === b[i]; i++) {}
+
+  var i = 0
+  var len = Math.min(x, y)
+  while (i < len) {
+    if (a[i] !== b[i]) break
+
+    ++i
+  }
+
   if (i !== len) {
     x = a[i]
     y = b[i]
   }
+
   if (x < y) return -1
   if (y < x) return 1
   return 0
@@ -6534,24 +7785,22 @@ Buffer.isEncoding = function isEncoding (encoding) {
   }
 }
 
-Buffer.concat = function concat (list, totalLength) {
+Buffer.concat = function concat (list, length) {
   if (!isArray(list)) throw new TypeError('list argument must be an Array of Buffers.')
 
   if (list.length === 0) {
     return new Buffer(0)
-  } else if (list.length === 1) {
-    return list[0]
   }
 
   var i
-  if (totalLength === undefined) {
-    totalLength = 0
+  if (length === undefined) {
+    length = 0
     for (i = 0; i < list.length; i++) {
-      totalLength += list[i].length
+      length += list[i].length
     }
   }
 
-  var buf = new Buffer(totalLength)
+  var buf = new Buffer(length)
   var pos = 0
   for (i = 0; i < list.length; i++) {
     var item = list[i]
@@ -6561,47 +7810,52 @@ Buffer.concat = function concat (list, totalLength) {
   return buf
 }
 
-Buffer.byteLength = function byteLength (str, encoding) {
-  var ret
-  str = str + ''
-  switch (encoding || 'utf8') {
-    case 'ascii':
-    case 'binary':
-    case 'raw':
-      ret = str.length
-      break
-    case 'ucs2':
-    case 'ucs-2':
-    case 'utf16le':
-    case 'utf-16le':
-      ret = str.length * 2
-      break
-    case 'hex':
-      ret = str.length >>> 1
-      break
-    case 'utf8':
-    case 'utf-8':
-      ret = utf8ToBytes(str).length
-      break
-    case 'base64':
-      ret = base64ToBytes(str).length
-      break
-    default:
-      ret = str.length
+function byteLength (string, encoding) {
+  if (typeof string !== 'string') string = '' + string
+
+  var len = string.length
+  if (len === 0) return 0
+
+  // Use a for loop to avoid recursion
+  var loweredCase = false
+  for (;;) {
+    switch (encoding) {
+      case 'ascii':
+      case 'binary':
+      // Deprecated
+      case 'raw':
+      case 'raws':
+        return len
+      case 'utf8':
+      case 'utf-8':
+        return utf8ToBytes(string).length
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return len * 2
+      case 'hex':
+        return len >>> 1
+      case 'base64':
+        return base64ToBytes(string).length
+      default:
+        if (loweredCase) return utf8ToBytes(string).length // assume utf8
+        encoding = ('' + encoding).toLowerCase()
+        loweredCase = true
+    }
   }
-  return ret
 }
+Buffer.byteLength = byteLength
 
 // pre-set for values that may exist in the future
 Buffer.prototype.length = undefined
 Buffer.prototype.parent = undefined
 
-// toString(encoding, start=0, end=buffer.length)
-Buffer.prototype.toString = function toString (encoding, start, end) {
+function slowToString (encoding, start, end) {
   var loweredCase = false
 
-  start = start >>> 0
-  end = end === undefined || end === Infinity ? this.length : end >>> 0
+  start = start | 0
+  end = end === undefined || end === Infinity ? this.length : end | 0
 
   if (!encoding) encoding = 'utf8'
   if (start < 0) start = 0
@@ -6638,6 +7892,13 @@ Buffer.prototype.toString = function toString (encoding, start, end) {
         loweredCase = true
     }
   }
+}
+
+Buffer.prototype.toString = function toString () {
+  var length = this.length | 0
+  if (length === 0) return ''
+  if (arguments.length === 0) return utf8Slice(this, 0, length)
+  return slowToString.apply(this, arguments)
 }
 
 Buffer.prototype.equals = function equals (b) {
@@ -6703,13 +7964,13 @@ Buffer.prototype.indexOf = function indexOf (val, byteOffset) {
   throw new TypeError('val must be string, number or Buffer')
 }
 
-// `get` will be removed in Node 0.13+
+// `get` is deprecated
 Buffer.prototype.get = function get (offset) {
   console.log('.get() is deprecated. Access using array indexes instead.')
   return this.readUInt8(offset)
 }
 
-// `set` will be removed in Node 0.13+
+// `set` is deprecated
 Buffer.prototype.set = function set (v, offset) {
   console.log('.set() is deprecated. Access using array indexes instead.')
   return this.writeUInt8(v, offset)
@@ -6743,13 +8004,11 @@ function hexWrite (buf, string, offset, length) {
 }
 
 function utf8Write (buf, string, offset, length) {
-  var charsWritten = blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
-  return charsWritten
+  return blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
 }
 
 function asciiWrite (buf, string, offset, length) {
-  var charsWritten = blitBuffer(asciiToBytes(string), buf, offset, length)
-  return charsWritten
+  return blitBuffer(asciiToBytes(string), buf, offset, length)
 }
 
 function binaryWrite (buf, string, offset, length) {
@@ -6757,75 +8016,83 @@ function binaryWrite (buf, string, offset, length) {
 }
 
 function base64Write (buf, string, offset, length) {
-  var charsWritten = blitBuffer(base64ToBytes(string), buf, offset, length)
-  return charsWritten
+  return blitBuffer(base64ToBytes(string), buf, offset, length)
 }
 
-function utf16leWrite (buf, string, offset, length) {
-  var charsWritten = blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length)
-  return charsWritten
+function ucs2Write (buf, string, offset, length) {
+  return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length)
 }
 
 Buffer.prototype.write = function write (string, offset, length, encoding) {
-  // Support both (string, offset, length, encoding)
-  // and the legacy (string, encoding, offset, length)
-  if (isFinite(offset)) {
-    if (!isFinite(length)) {
+  // Buffer#write(string)
+  if (offset === undefined) {
+    encoding = 'utf8'
+    length = this.length
+    offset = 0
+  // Buffer#write(string, encoding)
+  } else if (length === undefined && typeof offset === 'string') {
+    encoding = offset
+    length = this.length
+    offset = 0
+  // Buffer#write(string, offset[, length][, encoding])
+  } else if (isFinite(offset)) {
+    offset = offset | 0
+    if (isFinite(length)) {
+      length = length | 0
+      if (encoding === undefined) encoding = 'utf8'
+    } else {
       encoding = length
       length = undefined
     }
-  } else {  // legacy
+  // legacy write(string, encoding, offset, length) - remove in v0.13
+  } else {
     var swap = encoding
     encoding = offset
-    offset = length
+    offset = length | 0
     length = swap
   }
 
-  offset = Number(offset) || 0
+  var remaining = this.length - offset
+  if (length === undefined || length > remaining) length = remaining
 
-  if (length < 0 || offset < 0 || offset > this.length) {
+  if ((string.length > 0 && (length < 0 || offset < 0)) || offset > this.length) {
     throw new RangeError('attempt to write outside buffer bounds')
   }
 
-  var remaining = this.length - offset
-  if (!length) {
-    length = remaining
-  } else {
-    length = Number(length)
-    if (length > remaining) {
-      length = remaining
+  if (!encoding) encoding = 'utf8'
+
+  var loweredCase = false
+  for (;;) {
+    switch (encoding) {
+      case 'hex':
+        return hexWrite(this, string, offset, length)
+
+      case 'utf8':
+      case 'utf-8':
+        return utf8Write(this, string, offset, length)
+
+      case 'ascii':
+        return asciiWrite(this, string, offset, length)
+
+      case 'binary':
+        return binaryWrite(this, string, offset, length)
+
+      case 'base64':
+        // Warning: maxLength not taken into account in base64Write
+        return base64Write(this, string, offset, length)
+
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return ucs2Write(this, string, offset, length)
+
+      default:
+        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
+        encoding = ('' + encoding).toLowerCase()
+        loweredCase = true
     }
   }
-  encoding = String(encoding || 'utf8').toLowerCase()
-
-  var ret
-  switch (encoding) {
-    case 'hex':
-      ret = hexWrite(this, string, offset, length)
-      break
-    case 'utf8':
-    case 'utf-8':
-      ret = utf8Write(this, string, offset, length)
-      break
-    case 'ascii':
-      ret = asciiWrite(this, string, offset, length)
-      break
-    case 'binary':
-      ret = binaryWrite(this, string, offset, length)
-      break
-    case 'base64':
-      ret = base64Write(this, string, offset, length)
-      break
-    case 'ucs2':
-    case 'ucs-2':
-    case 'utf16le':
-    case 'utf-16le':
-      ret = utf16leWrite(this, string, offset, length)
-      break
-    default:
-      throw new TypeError('Unknown encoding: ' + encoding)
-  }
-  return ret
 }
 
 Buffer.prototype.toJSON = function toJSON () {
@@ -6844,20 +8111,99 @@ function base64Slice (buf, start, end) {
 }
 
 function utf8Slice (buf, start, end) {
-  var res = ''
-  var tmp = ''
   end = Math.min(buf.length, end)
+  var res = []
 
-  for (var i = start; i < end; i++) {
-    if (buf[i] <= 0x7F) {
-      res += decodeUtf8Char(tmp) + String.fromCharCode(buf[i])
-      tmp = ''
-    } else {
-      tmp += '%' + buf[i].toString(16)
+  var i = start
+  while (i < end) {
+    var firstByte = buf[i]
+    var codePoint = null
+    var bytesPerSequence = (firstByte > 0xEF) ? 4
+      : (firstByte > 0xDF) ? 3
+      : (firstByte > 0xBF) ? 2
+      : 1
+
+    if (i + bytesPerSequence <= end) {
+      var secondByte, thirdByte, fourthByte, tempCodePoint
+
+      switch (bytesPerSequence) {
+        case 1:
+          if (firstByte < 0x80) {
+            codePoint = firstByte
+          }
+          break
+        case 2:
+          secondByte = buf[i + 1]
+          if ((secondByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
+            if (tempCodePoint > 0x7F) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 3:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
+            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 4:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          fourthByte = buf[i + 3]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
+            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
+              codePoint = tempCodePoint
+            }
+          }
+      }
     }
+
+    if (codePoint === null) {
+      // we did not generate a valid codePoint so insert a
+      // replacement char (U+FFFD) and advance only 1 byte
+      codePoint = 0xFFFD
+      bytesPerSequence = 1
+    } else if (codePoint > 0xFFFF) {
+      // encode to utf16 (surrogate pair dance)
+      codePoint -= 0x10000
+      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
+      codePoint = 0xDC00 | codePoint & 0x3FF
+    }
+
+    res.push(codePoint)
+    i += bytesPerSequence
   }
 
-  return res + decodeUtf8Char(tmp)
+  return decodeCodePointsArray(res)
+}
+
+// Based on http://stackoverflow.com/a/22747272/680742, the browser with
+// the lowest limit is Chrome, with 0x10000 args.
+// We go 1 magnitude less, for safety
+var MAX_ARGUMENTS_LENGTH = 0x1000
+
+function decodeCodePointsArray (codePoints) {
+  var len = codePoints.length
+  if (len <= MAX_ARGUMENTS_LENGTH) {
+    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
+  }
+
+  // Decode in chunks to avoid "call stack size exceeded".
+  var res = ''
+  var i = 0
+  while (i < len) {
+    res += String.fromCharCode.apply(
+      String,
+      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
+    )
+  }
+  return res
 }
 
 function asciiSlice (buf, start, end) {
@@ -6948,8 +8294,8 @@ function checkOffset (offset, ext, length) {
 }
 
 Buffer.prototype.readUIntLE = function readUIntLE (offset, byteLength, noAssert) {
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
+  offset = offset | 0
+  byteLength = byteLength | 0
   if (!noAssert) checkOffset(offset, byteLength, this.length)
 
   var val = this[offset]
@@ -6963,8 +8309,8 @@ Buffer.prototype.readUIntLE = function readUIntLE (offset, byteLength, noAssert)
 }
 
 Buffer.prototype.readUIntBE = function readUIntBE (offset, byteLength, noAssert) {
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
+  offset = offset | 0
+  byteLength = byteLength | 0
   if (!noAssert) {
     checkOffset(offset, byteLength, this.length)
   }
@@ -7012,8 +8358,8 @@ Buffer.prototype.readUInt32BE = function readUInt32BE (offset, noAssert) {
 }
 
 Buffer.prototype.readIntLE = function readIntLE (offset, byteLength, noAssert) {
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
+  offset = offset | 0
+  byteLength = byteLength | 0
   if (!noAssert) checkOffset(offset, byteLength, this.length)
 
   var val = this[offset]
@@ -7030,8 +8376,8 @@ Buffer.prototype.readIntLE = function readIntLE (offset, byteLength, noAssert) {
 }
 
 Buffer.prototype.readIntBE = function readIntBE (offset, byteLength, noAssert) {
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
+  offset = offset | 0
+  byteLength = byteLength | 0
   if (!noAssert) checkOffset(offset, byteLength, this.length)
 
   var i = byteLength
@@ -7111,15 +8457,15 @@ function checkInt (buf, value, offset, ext, max, min) {
 
 Buffer.prototype.writeUIntLE = function writeUIntLE (value, offset, byteLength, noAssert) {
   value = +value
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
+  offset = offset | 0
+  byteLength = byteLength | 0
   if (!noAssert) checkInt(this, value, offset, byteLength, Math.pow(2, 8 * byteLength), 0)
 
   var mul = 1
   var i = 0
   this[offset] = value & 0xFF
   while (++i < byteLength && (mul *= 0x100)) {
-    this[offset + i] = (value / mul) >>> 0 & 0xFF
+    this[offset + i] = (value / mul) & 0xFF
   }
 
   return offset + byteLength
@@ -7127,15 +8473,15 @@ Buffer.prototype.writeUIntLE = function writeUIntLE (value, offset, byteLength, 
 
 Buffer.prototype.writeUIntBE = function writeUIntBE (value, offset, byteLength, noAssert) {
   value = +value
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
+  offset = offset | 0
+  byteLength = byteLength | 0
   if (!noAssert) checkInt(this, value, offset, byteLength, Math.pow(2, 8 * byteLength), 0)
 
   var i = byteLength - 1
   var mul = 1
   this[offset + i] = value & 0xFF
   while (--i >= 0 && (mul *= 0x100)) {
-    this[offset + i] = (value / mul) >>> 0 & 0xFF
+    this[offset + i] = (value / mul) & 0xFF
   }
 
   return offset + byteLength
@@ -7143,10 +8489,10 @@ Buffer.prototype.writeUIntBE = function writeUIntBE (value, offset, byteLength, 
 
 Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
   value = +value
-  offset = offset >>> 0
+  offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
   if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
-  this[offset] = value
+  this[offset] = (value & 0xff)
   return offset + 1
 }
 
@@ -7160,10 +8506,10 @@ function objectWriteUInt16 (buf, value, offset, littleEndian) {
 
 Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert) {
   value = +value
-  offset = offset >>> 0
+  offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = value
+    this[offset] = (value & 0xff)
     this[offset + 1] = (value >>> 8)
   } else {
     objectWriteUInt16(this, value, offset, true)
@@ -7173,11 +8519,11 @@ Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert
 
 Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert) {
   value = +value
-  offset = offset >>> 0
+  offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     this[offset] = (value >>> 8)
-    this[offset + 1] = value
+    this[offset + 1] = (value & 0xff)
   } else {
     objectWriteUInt16(this, value, offset, false)
   }
@@ -7193,13 +8539,13 @@ function objectWriteUInt32 (buf, value, offset, littleEndian) {
 
 Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert) {
   value = +value
-  offset = offset >>> 0
+  offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     this[offset + 3] = (value >>> 24)
     this[offset + 2] = (value >>> 16)
     this[offset + 1] = (value >>> 8)
-    this[offset] = value
+    this[offset] = (value & 0xff)
   } else {
     objectWriteUInt32(this, value, offset, true)
   }
@@ -7208,13 +8554,13 @@ Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert
 
 Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert) {
   value = +value
-  offset = offset >>> 0
+  offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     this[offset] = (value >>> 24)
     this[offset + 1] = (value >>> 16)
     this[offset + 2] = (value >>> 8)
-    this[offset + 3] = value
+    this[offset + 3] = (value & 0xff)
   } else {
     objectWriteUInt32(this, value, offset, false)
   }
@@ -7223,13 +8569,11 @@ Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert
 
 Buffer.prototype.writeIntLE = function writeIntLE (value, offset, byteLength, noAssert) {
   value = +value
-  offset = offset >>> 0
+  offset = offset | 0
   if (!noAssert) {
-    checkInt(
-      this, value, offset, byteLength,
-      Math.pow(2, 8 * byteLength - 1) - 1,
-      -Math.pow(2, 8 * byteLength - 1)
-    )
+    var limit = Math.pow(2, 8 * byteLength - 1)
+
+    checkInt(this, value, offset, byteLength, limit - 1, -limit)
   }
 
   var i = 0
@@ -7245,13 +8589,11 @@ Buffer.prototype.writeIntLE = function writeIntLE (value, offset, byteLength, no
 
 Buffer.prototype.writeIntBE = function writeIntBE (value, offset, byteLength, noAssert) {
   value = +value
-  offset = offset >>> 0
+  offset = offset | 0
   if (!noAssert) {
-    checkInt(
-      this, value, offset, byteLength,
-      Math.pow(2, 8 * byteLength - 1) - 1,
-      -Math.pow(2, 8 * byteLength - 1)
-    )
+    var limit = Math.pow(2, 8 * byteLength - 1)
+
+    checkInt(this, value, offset, byteLength, limit - 1, -limit)
   }
 
   var i = byteLength - 1
@@ -7267,20 +8609,20 @@ Buffer.prototype.writeIntBE = function writeIntBE (value, offset, byteLength, no
 
 Buffer.prototype.writeInt8 = function writeInt8 (value, offset, noAssert) {
   value = +value
-  offset = offset >>> 0
+  offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
   if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
   if (value < 0) value = 0xff + value + 1
-  this[offset] = value
+  this[offset] = (value & 0xff)
   return offset + 1
 }
 
 Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) {
   value = +value
-  offset = offset >>> 0
+  offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = value
+    this[offset] = (value & 0xff)
     this[offset + 1] = (value >>> 8)
   } else {
     objectWriteUInt16(this, value, offset, true)
@@ -7290,11 +8632,11 @@ Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) 
 
 Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) {
   value = +value
-  offset = offset >>> 0
+  offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     this[offset] = (value >>> 8)
-    this[offset + 1] = value
+    this[offset + 1] = (value & 0xff)
   } else {
     objectWriteUInt16(this, value, offset, false)
   }
@@ -7303,10 +8645,10 @@ Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) 
 
 Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) {
   value = +value
-  offset = offset >>> 0
+  offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
   if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = value
+    this[offset] = (value & 0xff)
     this[offset + 1] = (value >>> 8)
     this[offset + 2] = (value >>> 16)
     this[offset + 3] = (value >>> 24)
@@ -7318,14 +8660,14 @@ Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) 
 
 Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) {
   value = +value
-  offset = offset >>> 0
+  offset = offset | 0
   if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
   if (value < 0) value = 0xffffffff + value + 1
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     this[offset] = (value >>> 24)
     this[offset + 1] = (value >>> 16)
     this[offset + 2] = (value >>> 8)
-    this[offset + 3] = value
+    this[offset + 3] = (value & 0xff)
   } else {
     objectWriteUInt32(this, value, offset, false)
   }
@@ -7371,40 +8713,45 @@ Buffer.prototype.writeDoubleBE = function writeDoubleBE (value, offset, noAssert
 }
 
 // copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
-Buffer.prototype.copy = function copy (target, target_start, start, end) {
-  var self = this // source
-
+Buffer.prototype.copy = function copy (target, targetStart, start, end) {
   if (!start) start = 0
   if (!end && end !== 0) end = this.length
-  if (target_start >= target.length) target_start = target.length
-  if (!target_start) target_start = 0
+  if (targetStart >= target.length) targetStart = target.length
+  if (!targetStart) targetStart = 0
   if (end > 0 && end < start) end = start
 
   // Copy 0 bytes; we're done
   if (end === start) return 0
-  if (target.length === 0 || self.length === 0) return 0
+  if (target.length === 0 || this.length === 0) return 0
 
   // Fatal error conditions
-  if (target_start < 0) {
+  if (targetStart < 0) {
     throw new RangeError('targetStart out of bounds')
   }
-  if (start < 0 || start >= self.length) throw new RangeError('sourceStart out of bounds')
+  if (start < 0 || start >= this.length) throw new RangeError('sourceStart out of bounds')
   if (end < 0) throw new RangeError('sourceEnd out of bounds')
 
   // Are we oob?
   if (end > this.length) end = this.length
-  if (target.length - target_start < end - start) {
-    end = target.length - target_start + start
+  if (target.length - targetStart < end - start) {
+    end = target.length - targetStart + start
   }
 
   var len = end - start
+  var i
 
-  if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
-    for (var i = 0; i < len; i++) {
-      target[i + target_start] = this[i + start]
+  if (this === target && start < targetStart && targetStart < end) {
+    // descending copy from end
+    for (i = len - 1; i >= 0; i--) {
+      target[i + targetStart] = this[i + start]
+    }
+  } else if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
+    // ascending copy from start
+    for (i = 0; i < len; i++) {
+      target[i + targetStart] = this[i + start]
     }
   } else {
-    target._set(this.subarray(start, start + len), target_start)
+    target._set(this.subarray(start, start + len), targetStart)
   }
 
   return len
@@ -7473,11 +8820,10 @@ Buffer._augment = function _augment (arr) {
   arr.constructor = Buffer
   arr._isBuffer = true
 
-  // save reference to original Uint8Array get/set methods before overwriting
-  arr._get = arr.get
+  // save reference to original Uint8Array set method before overwriting
   arr._set = arr.set
 
-  // deprecated, will be removed in node 0.13+
+  // deprecated
   arr.get = BP.get
   arr.set = BP.set
 
@@ -7533,7 +8879,7 @@ Buffer._augment = function _augment (arr) {
   return arr
 }
 
-var INVALID_BASE64_RE = /[^+\/0-9A-z\-]/g
+var INVALID_BASE64_RE = /[^+\/0-9A-Za-z-_]/g
 
 function base64clean (str) {
   // Node strips out invalid characters like \n and \t from the string, base64-js does not
@@ -7552,12 +8898,6 @@ function stringtrim (str) {
   return str.replace(/^\s+|\s+$/g, '')
 }
 
-function isArrayish (subject) {
-  return isArray(subject) || Buffer.isBuffer(subject) ||
-      subject && typeof subject === 'object' &&
-      typeof subject.length === 'number'
-}
-
 function toHex (n) {
   if (n < 16) return '0' + n.toString(16)
   return n.toString(16)
@@ -7569,28 +8909,15 @@ function utf8ToBytes (string, units) {
   var length = string.length
   var leadSurrogate = null
   var bytes = []
-  var i = 0
 
-  for (; i < length; i++) {
+  for (var i = 0; i < length; i++) {
     codePoint = string.charCodeAt(i)
 
     // is surrogate component
     if (codePoint > 0xD7FF && codePoint < 0xE000) {
       // last char was a lead
-      if (leadSurrogate) {
-        // 2 leads in a row
-        if (codePoint < 0xDC00) {
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          leadSurrogate = codePoint
-          continue
-        } else {
-          // valid surrogate pair
-          codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
-          leadSurrogate = null
-        }
-      } else {
+      if (!leadSurrogate) {
         // no lead yet
-
         if (codePoint > 0xDBFF) {
           // unexpected trail
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
@@ -7599,17 +8926,29 @@ function utf8ToBytes (string, units) {
           // unpaired lead
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
           continue
-        } else {
-          // valid lead
-          leadSurrogate = codePoint
-          continue
         }
+
+        // valid lead
+        leadSurrogate = codePoint
+
+        continue
       }
+
+      // 2 leads in a row
+      if (codePoint < 0xDC00) {
+        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+        leadSurrogate = codePoint
+        continue
+      }
+
+      // valid surrogate pair
+      codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
     } else if (leadSurrogate) {
       // valid bmp char, but last char was a lead
       if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-      leadSurrogate = null
     }
+
+    leadSurrogate = null
 
     // encode utf8
     if (codePoint < 0x80) {
@@ -7628,7 +8967,7 @@ function utf8ToBytes (string, units) {
         codePoint >> 0x6 & 0x3F | 0x80,
         codePoint & 0x3F | 0x80
       )
-    } else if (codePoint < 0x200000) {
+    } else if (codePoint < 0x110000) {
       if ((units -= 4) < 0) break
       bytes.push(
         codePoint >> 0x12 | 0xF0,
@@ -7681,15 +9020,8 @@ function blitBuffer (src, dst, offset, length) {
   return i
 }
 
-function decodeUtf8Char (str) {
-  try {
-    return decodeURIComponent(str)
-  } catch (err) {
-    return String.fromCharCode(0xFFFD) // UTF 8 invalid char
-  }
-}
-
-},{"base64-js":42,"ieee754":43,"is-array":44}],42:[function(require,module,exports){
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"base64-js":25,"ieee754":26,"is-array":27}],25:[function(require,module,exports){
 var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 ;(function (exports) {
@@ -7815,93 +9147,93 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	exports.fromByteArray = uint8ToBase64
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
-},{}],43:[function(require,module,exports){
-exports.read = function(buffer, offset, isLE, mLen, nBytes) {
-  var e, m,
-      eLen = nBytes * 8 - mLen - 1,
-      eMax = (1 << eLen) - 1,
-      eBias = eMax >> 1,
-      nBits = -7,
-      i = isLE ? (nBytes - 1) : 0,
-      d = isLE ? -1 : 1,
-      s = buffer[offset + i];
+},{}],26:[function(require,module,exports){
+exports.read = function (buffer, offset, isLE, mLen, nBytes) {
+  var e, m
+  var eLen = nBytes * 8 - mLen - 1
+  var eMax = (1 << eLen) - 1
+  var eBias = eMax >> 1
+  var nBits = -7
+  var i = isLE ? (nBytes - 1) : 0
+  var d = isLE ? -1 : 1
+  var s = buffer[offset + i]
 
-  i += d;
+  i += d
 
-  e = s & ((1 << (-nBits)) - 1);
-  s >>= (-nBits);
-  nBits += eLen;
-  for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8);
+  e = s & ((1 << (-nBits)) - 1)
+  s >>= (-nBits)
+  nBits += eLen
+  for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8) {}
 
-  m = e & ((1 << (-nBits)) - 1);
-  e >>= (-nBits);
-  nBits += mLen;
-  for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8);
+  m = e & ((1 << (-nBits)) - 1)
+  e >>= (-nBits)
+  nBits += mLen
+  for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8) {}
 
   if (e === 0) {
-    e = 1 - eBias;
+    e = 1 - eBias
   } else if (e === eMax) {
-    return m ? NaN : ((s ? -1 : 1) * Infinity);
+    return m ? NaN : ((s ? -1 : 1) * Infinity)
   } else {
-    m = m + Math.pow(2, mLen);
-    e = e - eBias;
+    m = m + Math.pow(2, mLen)
+    e = e - eBias
   }
-  return (s ? -1 : 1) * m * Math.pow(2, e - mLen);
-};
+  return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
+}
 
-exports.write = function(buffer, value, offset, isLE, mLen, nBytes) {
-  var e, m, c,
-      eLen = nBytes * 8 - mLen - 1,
-      eMax = (1 << eLen) - 1,
-      eBias = eMax >> 1,
-      rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0),
-      i = isLE ? 0 : (nBytes - 1),
-      d = isLE ? 1 : -1,
-      s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0;
+exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
+  var e, m, c
+  var eLen = nBytes * 8 - mLen - 1
+  var eMax = (1 << eLen) - 1
+  var eBias = eMax >> 1
+  var rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0)
+  var i = isLE ? 0 : (nBytes - 1)
+  var d = isLE ? 1 : -1
+  var s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0
 
-  value = Math.abs(value);
+  value = Math.abs(value)
 
   if (isNaN(value) || value === Infinity) {
-    m = isNaN(value) ? 1 : 0;
-    e = eMax;
+    m = isNaN(value) ? 1 : 0
+    e = eMax
   } else {
-    e = Math.floor(Math.log(value) / Math.LN2);
+    e = Math.floor(Math.log(value) / Math.LN2)
     if (value * (c = Math.pow(2, -e)) < 1) {
-      e--;
-      c *= 2;
+      e--
+      c *= 2
     }
     if (e + eBias >= 1) {
-      value += rt / c;
+      value += rt / c
     } else {
-      value += rt * Math.pow(2, 1 - eBias);
+      value += rt * Math.pow(2, 1 - eBias)
     }
     if (value * c >= 2) {
-      e++;
-      c /= 2;
+      e++
+      c /= 2
     }
 
     if (e + eBias >= eMax) {
-      m = 0;
-      e = eMax;
+      m = 0
+      e = eMax
     } else if (e + eBias >= 1) {
-      m = (value * c - 1) * Math.pow(2, mLen);
-      e = e + eBias;
+      m = (value * c - 1) * Math.pow(2, mLen)
+      e = e + eBias
     } else {
-      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen);
-      e = 0;
+      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen)
+      e = 0
     }
   }
 
-  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8);
+  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8) {}
 
-  e = (e << mLen) | m;
-  eLen += mLen;
-  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8);
+  e = (e << mLen) | m
+  eLen += mLen
+  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
 
-  buffer[offset + i - d] |= s * 128;
-};
+  buffer[offset + i - d] |= s * 128
+}
 
-},{}],44:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 
 /**
  * isArray
@@ -7936,12 +9268,359 @@ module.exports = isArray || function (val) {
   return !! val && '[object Array]' == str.call(val);
 };
 
-},{}],45:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+function EventEmitter() {
+  this._events = this._events || {};
+  this._maxListeners = this._maxListeners || undefined;
+}
+module.exports = EventEmitter;
+
+// Backwards-compat with node 0.10.x
+EventEmitter.EventEmitter = EventEmitter;
+
+EventEmitter.prototype._events = undefined;
+EventEmitter.prototype._maxListeners = undefined;
+
+// By default EventEmitters will print a warning if more than 10 listeners are
+// added to it. This is a useful default which helps finding memory leaks.
+EventEmitter.defaultMaxListeners = 10;
+
+// Obviously not all Emitters should be limited to 10. This function allows
+// that to be increased. Set to zero for unlimited.
+EventEmitter.prototype.setMaxListeners = function(n) {
+  if (!isNumber(n) || n < 0 || isNaN(n))
+    throw TypeError('n must be a positive number');
+  this._maxListeners = n;
+  return this;
+};
+
+EventEmitter.prototype.emit = function(type) {
+  var er, handler, len, args, i, listeners;
+
+  if (!this._events)
+    this._events = {};
+
+  // If there is no 'error' event listener then throw.
+  if (type === 'error') {
+    if (!this._events.error ||
+        (isObject(this._events.error) && !this._events.error.length)) {
+      er = arguments[1];
+      if (er instanceof Error) {
+        throw er; // Unhandled 'error' event
+      }
+      throw TypeError('Uncaught, unspecified "error" event.');
+    }
+  }
+
+  handler = this._events[type];
+
+  if (isUndefined(handler))
+    return false;
+
+  if (isFunction(handler)) {
+    switch (arguments.length) {
+      // fast cases
+      case 1:
+        handler.call(this);
+        break;
+      case 2:
+        handler.call(this, arguments[1]);
+        break;
+      case 3:
+        handler.call(this, arguments[1], arguments[2]);
+        break;
+      // slower
+      default:
+        len = arguments.length;
+        args = new Array(len - 1);
+        for (i = 1; i < len; i++)
+          args[i - 1] = arguments[i];
+        handler.apply(this, args);
+    }
+  } else if (isObject(handler)) {
+    len = arguments.length;
+    args = new Array(len - 1);
+    for (i = 1; i < len; i++)
+      args[i - 1] = arguments[i];
+
+    listeners = handler.slice();
+    len = listeners.length;
+    for (i = 0; i < len; i++)
+      listeners[i].apply(this, args);
+  }
+
+  return true;
+};
+
+EventEmitter.prototype.addListener = function(type, listener) {
+  var m;
+
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  if (!this._events)
+    this._events = {};
+
+  // To avoid recursion in the case that type === "newListener"! Before
+  // adding it to the listeners, first emit "newListener".
+  if (this._events.newListener)
+    this.emit('newListener', type,
+              isFunction(listener.listener) ?
+              listener.listener : listener);
+
+  if (!this._events[type])
+    // Optimize the case of one listener. Don't need the extra array object.
+    this._events[type] = listener;
+  else if (isObject(this._events[type]))
+    // If we've already got an array, just append.
+    this._events[type].push(listener);
+  else
+    // Adding the second element, need to change to array.
+    this._events[type] = [this._events[type], listener];
+
+  // Check for listener leak
+  if (isObject(this._events[type]) && !this._events[type].warned) {
+    var m;
+    if (!isUndefined(this._maxListeners)) {
+      m = this._maxListeners;
+    } else {
+      m = EventEmitter.defaultMaxListeners;
+    }
+
+    if (m && m > 0 && this._events[type].length > m) {
+      this._events[type].warned = true;
+      console.error('(node) warning: possible EventEmitter memory ' +
+                    'leak detected. %d listeners added. ' +
+                    'Use emitter.setMaxListeners() to increase limit.',
+                    this._events[type].length);
+      if (typeof console.trace === 'function') {
+        // not supported in IE 10
+        console.trace();
+      }
+    }
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+EventEmitter.prototype.once = function(type, listener) {
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  var fired = false;
+
+  function g() {
+    this.removeListener(type, g);
+
+    if (!fired) {
+      fired = true;
+      listener.apply(this, arguments);
+    }
+  }
+
+  g.listener = listener;
+  this.on(type, g);
+
+  return this;
+};
+
+// emits a 'removeListener' event iff the listener was removed
+EventEmitter.prototype.removeListener = function(type, listener) {
+  var list, position, length, i;
+
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  if (!this._events || !this._events[type])
+    return this;
+
+  list = this._events[type];
+  length = list.length;
+  position = -1;
+
+  if (list === listener ||
+      (isFunction(list.listener) && list.listener === listener)) {
+    delete this._events[type];
+    if (this._events.removeListener)
+      this.emit('removeListener', type, listener);
+
+  } else if (isObject(list)) {
+    for (i = length; i-- > 0;) {
+      if (list[i] === listener ||
+          (list[i].listener && list[i].listener === listener)) {
+        position = i;
+        break;
+      }
+    }
+
+    if (position < 0)
+      return this;
+
+    if (list.length === 1) {
+      list.length = 0;
+      delete this._events[type];
+    } else {
+      list.splice(position, 1);
+    }
+
+    if (this._events.removeListener)
+      this.emit('removeListener', type, listener);
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.removeAllListeners = function(type) {
+  var key, listeners;
+
+  if (!this._events)
+    return this;
+
+  // not listening for removeListener, no need to emit
+  if (!this._events.removeListener) {
+    if (arguments.length === 0)
+      this._events = {};
+    else if (this._events[type])
+      delete this._events[type];
+    return this;
+  }
+
+  // emit removeListener for all listeners on all events
+  if (arguments.length === 0) {
+    for (key in this._events) {
+      if (key === 'removeListener') continue;
+      this.removeAllListeners(key);
+    }
+    this.removeAllListeners('removeListener');
+    this._events = {};
+    return this;
+  }
+
+  listeners = this._events[type];
+
+  if (isFunction(listeners)) {
+    this.removeListener(type, listeners);
+  } else {
+    // LIFO order
+    while (listeners.length)
+      this.removeListener(type, listeners[listeners.length - 1]);
+  }
+  delete this._events[type];
+
+  return this;
+};
+
+EventEmitter.prototype.listeners = function(type) {
+  var ret;
+  if (!this._events || !this._events[type])
+    ret = [];
+  else if (isFunction(this._events[type]))
+    ret = [this._events[type]];
+  else
+    ret = this._events[type].slice();
+  return ret;
+};
+
+EventEmitter.listenerCount = function(emitter, type) {
+  var ret;
+  if (!emitter._events || !emitter._events[type])
+    ret = 0;
+  else if (isFunction(emitter._events[type]))
+    ret = 1;
+  else
+    ret = emitter._events[type].length;
+  return ret;
+};
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+
+},{}],29:[function(require,module,exports){
+if (typeof Object.create === 'function') {
+  // implementation from standard node.js 'util' module
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    ctor.prototype = Object.create(superCtor.prototype, {
+      constructor: {
+        value: ctor,
+        enumerable: false,
+        writable: true,
+        configurable: true
+      }
+    });
+  };
+} else {
+  // old school shim for old browsers
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    var TempCtor = function () {}
+    TempCtor.prototype = superCtor.prototype
+    ctor.prototype = new TempCtor()
+    ctor.prototype.constructor = ctor
+  }
+}
+
+},{}],30:[function(require,module,exports){
+/**
+ * Determine if an object is Buffer
+ *
+ * Author:   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * License:  MIT
+ *
+ * `npm install is-buffer`
+ */
+
+module.exports = function (obj) {
+  return !!(obj != null &&
+    (obj._isBuffer || // For Safari 5-7 (missing Object.prototype.constructor)
+      (obj.constructor &&
+      typeof obj.constructor.isBuffer === 'function' &&
+      obj.constructor.isBuffer(obj))
+    ))
+}
+
+},{}],31:[function(require,module,exports){
 module.exports = Array.isArray || function (arr) {
   return Object.prototype.toString.call(arr) == '[object Array]';
 };
 
-},{}],46:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -8169,7 +9848,7 @@ var substr = 'ab'.substr(-1) === 'b'
 ;
 
 }).call(this,require('_process'))
-},{"_process":47}],47:[function(require,module,exports){
+},{"_process":33}],33:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -8229,700 +9908,10 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],48:[function(require,module,exports){
-(function (global){
-/*! http://mths.be/punycode v1.2.4 by @mathias */
-;(function(root) {
-
-	/** Detect free variables */
-	var freeExports = typeof exports == 'object' && exports;
-	var freeModule = typeof module == 'object' && module &&
-		module.exports == freeExports && module;
-	var freeGlobal = typeof global == 'object' && global;
-	if (freeGlobal.global === freeGlobal || freeGlobal.window === freeGlobal) {
-		root = freeGlobal;
-	}
-
-	/**
-	 * The `punycode` object.
-	 * @name punycode
-	 * @type Object
-	 */
-	var punycode,
-
-	/** Highest positive signed 32-bit float value */
-	maxInt = 2147483647, // aka. 0x7FFFFFFF or 2^31-1
-
-	/** Bootstring parameters */
-	base = 36,
-	tMin = 1,
-	tMax = 26,
-	skew = 38,
-	damp = 700,
-	initialBias = 72,
-	initialN = 128, // 0x80
-	delimiter = '-', // '\x2D'
-
-	/** Regular expressions */
-	regexPunycode = /^xn--/,
-	regexNonASCII = /[^ -~]/, // unprintable ASCII chars + non-ASCII chars
-	regexSeparators = /\x2E|\u3002|\uFF0E|\uFF61/g, // RFC 3490 separators
-
-	/** Error messages */
-	errors = {
-		'overflow': 'Overflow: input needs wider integers to process',
-		'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
-		'invalid-input': 'Invalid input'
-	},
-
-	/** Convenience shortcuts */
-	baseMinusTMin = base - tMin,
-	floor = Math.floor,
-	stringFromCharCode = String.fromCharCode,
-
-	/** Temporary variable */
-	key;
-
-	/*--------------------------------------------------------------------------*/
-
-	/**
-	 * A generic error utility function.
-	 * @private
-	 * @param {String} type The error type.
-	 * @returns {Error} Throws a `RangeError` with the applicable error message.
-	 */
-	function error(type) {
-		throw RangeError(errors[type]);
-	}
-
-	/**
-	 * A generic `Array#map` utility function.
-	 * @private
-	 * @param {Array} array The array to iterate over.
-	 * @param {Function} callback The function that gets called for every array
-	 * item.
-	 * @returns {Array} A new array of values returned by the callback function.
-	 */
-	function map(array, fn) {
-		var length = array.length;
-		while (length--) {
-			array[length] = fn(array[length]);
-		}
-		return array;
-	}
-
-	/**
-	 * A simple `Array#map`-like wrapper to work with domain name strings.
-	 * @private
-	 * @param {String} domain The domain name.
-	 * @param {Function} callback The function that gets called for every
-	 * character.
-	 * @returns {Array} A new string of characters returned by the callback
-	 * function.
-	 */
-	function mapDomain(string, fn) {
-		return map(string.split(regexSeparators), fn).join('.');
-	}
-
-	/**
-	 * Creates an array containing the numeric code points of each Unicode
-	 * character in the string. While JavaScript uses UCS-2 internally,
-	 * this function will convert a pair of surrogate halves (each of which
-	 * UCS-2 exposes as separate characters) into a single code point,
-	 * matching UTF-16.
-	 * @see `punycode.ucs2.encode`
-	 * @see <http://mathiasbynens.be/notes/javascript-encoding>
-	 * @memberOf punycode.ucs2
-	 * @name decode
-	 * @param {String} string The Unicode input string (UCS-2).
-	 * @returns {Array} The new array of code points.
-	 */
-	function ucs2decode(string) {
-		var output = [],
-		    counter = 0,
-		    length = string.length,
-		    value,
-		    extra;
-		while (counter < length) {
-			value = string.charCodeAt(counter++);
-			if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
-				// high surrogate, and there is a next character
-				extra = string.charCodeAt(counter++);
-				if ((extra & 0xFC00) == 0xDC00) { // low surrogate
-					output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
-				} else {
-					// unmatched surrogate; only append this code unit, in case the next
-					// code unit is the high surrogate of a surrogate pair
-					output.push(value);
-					counter--;
-				}
-			} else {
-				output.push(value);
-			}
-		}
-		return output;
-	}
-
-	/**
-	 * Creates a string based on an array of numeric code points.
-	 * @see `punycode.ucs2.decode`
-	 * @memberOf punycode.ucs2
-	 * @name encode
-	 * @param {Array} codePoints The array of numeric code points.
-	 * @returns {String} The new Unicode string (UCS-2).
-	 */
-	function ucs2encode(array) {
-		return map(array, function(value) {
-			var output = '';
-			if (value > 0xFFFF) {
-				value -= 0x10000;
-				output += stringFromCharCode(value >>> 10 & 0x3FF | 0xD800);
-				value = 0xDC00 | value & 0x3FF;
-			}
-			output += stringFromCharCode(value);
-			return output;
-		}).join('');
-	}
-
-	/**
-	 * Converts a basic code point into a digit/integer.
-	 * @see `digitToBasic()`
-	 * @private
-	 * @param {Number} codePoint The basic numeric code point value.
-	 * @returns {Number} The numeric value of a basic code point (for use in
-	 * representing integers) in the range `0` to `base - 1`, or `base` if
-	 * the code point does not represent a value.
-	 */
-	function basicToDigit(codePoint) {
-		if (codePoint - 48 < 10) {
-			return codePoint - 22;
-		}
-		if (codePoint - 65 < 26) {
-			return codePoint - 65;
-		}
-		if (codePoint - 97 < 26) {
-			return codePoint - 97;
-		}
-		return base;
-	}
-
-	/**
-	 * Converts a digit/integer into a basic code point.
-	 * @see `basicToDigit()`
-	 * @private
-	 * @param {Number} digit The numeric value of a basic code point.
-	 * @returns {Number} The basic code point whose value (when used for
-	 * representing integers) is `digit`, which needs to be in the range
-	 * `0` to `base - 1`. If `flag` is non-zero, the uppercase form is
-	 * used; else, the lowercase form is used. The behavior is undefined
-	 * if `flag` is non-zero and `digit` has no uppercase form.
-	 */
-	function digitToBasic(digit, flag) {
-		//  0..25 map to ASCII a..z or A..Z
-		// 26..35 map to ASCII 0..9
-		return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
-	}
-
-	/**
-	 * Bias adaptation function as per section 3.4 of RFC 3492.
-	 * http://tools.ietf.org/html/rfc3492#section-3.4
-	 * @private
-	 */
-	function adapt(delta, numPoints, firstTime) {
-		var k = 0;
-		delta = firstTime ? floor(delta / damp) : delta >> 1;
-		delta += floor(delta / numPoints);
-		for (/* no initialization */; delta > baseMinusTMin * tMax >> 1; k += base) {
-			delta = floor(delta / baseMinusTMin);
-		}
-		return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
-	}
-
-	/**
-	 * Converts a Punycode string of ASCII-only symbols to a string of Unicode
-	 * symbols.
-	 * @memberOf punycode
-	 * @param {String} input The Punycode string of ASCII-only symbols.
-	 * @returns {String} The resulting string of Unicode symbols.
-	 */
-	function decode(input) {
-		// Don't use UCS-2
-		var output = [],
-		    inputLength = input.length,
-		    out,
-		    i = 0,
-		    n = initialN,
-		    bias = initialBias,
-		    basic,
-		    j,
-		    index,
-		    oldi,
-		    w,
-		    k,
-		    digit,
-		    t,
-		    /** Cached calculation results */
-		    baseMinusT;
-
-		// Handle the basic code points: let `basic` be the number of input code
-		// points before the last delimiter, or `0` if there is none, then copy
-		// the first basic code points to the output.
-
-		basic = input.lastIndexOf(delimiter);
-		if (basic < 0) {
-			basic = 0;
-		}
-
-		for (j = 0; j < basic; ++j) {
-			// if it's not a basic code point
-			if (input.charCodeAt(j) >= 0x80) {
-				error('not-basic');
-			}
-			output.push(input.charCodeAt(j));
-		}
-
-		// Main decoding loop: start just after the last delimiter if any basic code
-		// points were copied; start at the beginning otherwise.
-
-		for (index = basic > 0 ? basic + 1 : 0; index < inputLength; /* no final expression */) {
-
-			// `index` is the index of the next character to be consumed.
-			// Decode a generalized variable-length integer into `delta`,
-			// which gets added to `i`. The overflow checking is easier
-			// if we increase `i` as we go, then subtract off its starting
-			// value at the end to obtain `delta`.
-			for (oldi = i, w = 1, k = base; /* no condition */; k += base) {
-
-				if (index >= inputLength) {
-					error('invalid-input');
-				}
-
-				digit = basicToDigit(input.charCodeAt(index++));
-
-				if (digit >= base || digit > floor((maxInt - i) / w)) {
-					error('overflow');
-				}
-
-				i += digit * w;
-				t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
-
-				if (digit < t) {
-					break;
-				}
-
-				baseMinusT = base - t;
-				if (w > floor(maxInt / baseMinusT)) {
-					error('overflow');
-				}
-
-				w *= baseMinusT;
-
-			}
-
-			out = output.length + 1;
-			bias = adapt(i - oldi, out, oldi == 0);
-
-			// `i` was supposed to wrap around from `out` to `0`,
-			// incrementing `n` each time, so we'll fix that now:
-			if (floor(i / out) > maxInt - n) {
-				error('overflow');
-			}
-
-			n += floor(i / out);
-			i %= out;
-
-			// Insert `n` at position `i` of the output
-			output.splice(i++, 0, n);
-
-		}
-
-		return ucs2encode(output);
-	}
-
-	/**
-	 * Converts a string of Unicode symbols to a Punycode string of ASCII-only
-	 * symbols.
-	 * @memberOf punycode
-	 * @param {String} input The string of Unicode symbols.
-	 * @returns {String} The resulting Punycode string of ASCII-only symbols.
-	 */
-	function encode(input) {
-		var n,
-		    delta,
-		    handledCPCount,
-		    basicLength,
-		    bias,
-		    j,
-		    m,
-		    q,
-		    k,
-		    t,
-		    currentValue,
-		    output = [],
-		    /** `inputLength` will hold the number of code points in `input`. */
-		    inputLength,
-		    /** Cached calculation results */
-		    handledCPCountPlusOne,
-		    baseMinusT,
-		    qMinusT;
-
-		// Convert the input in UCS-2 to Unicode
-		input = ucs2decode(input);
-
-		// Cache the length
-		inputLength = input.length;
-
-		// Initialize the state
-		n = initialN;
-		delta = 0;
-		bias = initialBias;
-
-		// Handle the basic code points
-		for (j = 0; j < inputLength; ++j) {
-			currentValue = input[j];
-			if (currentValue < 0x80) {
-				output.push(stringFromCharCode(currentValue));
-			}
-		}
-
-		handledCPCount = basicLength = output.length;
-
-		// `handledCPCount` is the number of code points that have been handled;
-		// `basicLength` is the number of basic code points.
-
-		// Finish the basic string - if it is not empty - with a delimiter
-		if (basicLength) {
-			output.push(delimiter);
-		}
-
-		// Main encoding loop:
-		while (handledCPCount < inputLength) {
-
-			// All non-basic code points < n have been handled already. Find the next
-			// larger one:
-			for (m = maxInt, j = 0; j < inputLength; ++j) {
-				currentValue = input[j];
-				if (currentValue >= n && currentValue < m) {
-					m = currentValue;
-				}
-			}
-
-			// Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
-			// but guard against overflow
-			handledCPCountPlusOne = handledCPCount + 1;
-			if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
-				error('overflow');
-			}
-
-			delta += (m - n) * handledCPCountPlusOne;
-			n = m;
-
-			for (j = 0; j < inputLength; ++j) {
-				currentValue = input[j];
-
-				if (currentValue < n && ++delta > maxInt) {
-					error('overflow');
-				}
-
-				if (currentValue == n) {
-					// Represent delta as a generalized variable-length integer
-					for (q = delta, k = base; /* no condition */; k += base) {
-						t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
-						if (q < t) {
-							break;
-						}
-						qMinusT = q - t;
-						baseMinusT = base - t;
-						output.push(
-							stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
-						);
-						q = floor(qMinusT / baseMinusT);
-					}
-
-					output.push(stringFromCharCode(digitToBasic(q, 0)));
-					bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
-					delta = 0;
-					++handledCPCount;
-				}
-			}
-
-			++delta;
-			++n;
-
-		}
-		return output.join('');
-	}
-
-	/**
-	 * Converts a Punycode string representing a domain name to Unicode. Only the
-	 * Punycoded parts of the domain name will be converted, i.e. it doesn't
-	 * matter if you call it on a string that has already been converted to
-	 * Unicode.
-	 * @memberOf punycode
-	 * @param {String} domain The Punycode domain name to convert to Unicode.
-	 * @returns {String} The Unicode representation of the given Punycode
-	 * string.
-	 */
-	function toUnicode(domain) {
-		return mapDomain(domain, function(string) {
-			return regexPunycode.test(string)
-				? decode(string.slice(4).toLowerCase())
-				: string;
-		});
-	}
-
-	/**
-	 * Converts a Unicode string representing a domain name to Punycode. Only the
-	 * non-ASCII parts of the domain name will be converted, i.e. it doesn't
-	 * matter if you call it with a domain that's already in ASCII.
-	 * @memberOf punycode
-	 * @param {String} domain The domain name to convert, as a Unicode string.
-	 * @returns {String} The Punycode representation of the given domain name.
-	 */
-	function toASCII(domain) {
-		return mapDomain(domain, function(string) {
-			return regexNonASCII.test(string)
-				? 'xn--' + encode(string)
-				: string;
-		});
-	}
-
-	/*--------------------------------------------------------------------------*/
-
-	/** Define the public API */
-	punycode = {
-		/**
-		 * A string representing the current Punycode.js version number.
-		 * @memberOf punycode
-		 * @type String
-		 */
-		'version': '1.2.4',
-		/**
-		 * An object of methods to convert from JavaScript's internal character
-		 * representation (UCS-2) to Unicode code points, and back.
-		 * @see <http://mathiasbynens.be/notes/javascript-encoding>
-		 * @memberOf punycode
-		 * @type Object
-		 */
-		'ucs2': {
-			'decode': ucs2decode,
-			'encode': ucs2encode
-		},
-		'decode': decode,
-		'encode': encode,
-		'toASCII': toASCII,
-		'toUnicode': toUnicode
-	};
-
-	/** Expose `punycode` */
-	// Some AMD build optimizers, like r.js, check for specific condition patterns
-	// like the following:
-	if (
-		typeof define == 'function' &&
-		typeof define.amd == 'object' &&
-		define.amd
-	) {
-		define('punycode', function() {
-			return punycode;
-		});
-	} else if (freeExports && !freeExports.nodeType) {
-		if (freeModule) { // in Node.js or RingoJS v0.8.0+
-			freeModule.exports = punycode;
-		} else { // in Narwhal or RingoJS v0.7.0-
-			for (key in punycode) {
-				punycode.hasOwnProperty(key) && (freeExports[key] = punycode[key]);
-			}
-		}
-	} else { // in Rhino or a web browser
-		root.punycode = punycode;
-	}
-
-}(this));
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],49:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-'use strict';
-
-// If obj.hasOwnProperty has been overridden, then calling
-// obj.hasOwnProperty(prop) will break.
-// See: https://github.com/joyent/node/issues/1707
-function hasOwnProperty(obj, prop) {
-  return Object.prototype.hasOwnProperty.call(obj, prop);
-}
-
-module.exports = function(qs, sep, eq, options) {
-  sep = sep || '&';
-  eq = eq || '=';
-  var obj = {};
-
-  if (typeof qs !== 'string' || qs.length === 0) {
-    return obj;
-  }
-
-  var regexp = /\+/g;
-  qs = qs.split(sep);
-
-  var maxKeys = 1000;
-  if (options && typeof options.maxKeys === 'number') {
-    maxKeys = options.maxKeys;
-  }
-
-  var len = qs.length;
-  // maxKeys <= 0 means that we should not limit keys count
-  if (maxKeys > 0 && len > maxKeys) {
-    len = maxKeys;
-  }
-
-  for (var i = 0; i < len; ++i) {
-    var x = qs[i].replace(regexp, '%20'),
-        idx = x.indexOf(eq),
-        kstr, vstr, k, v;
-
-    if (idx >= 0) {
-      kstr = x.substr(0, idx);
-      vstr = x.substr(idx + 1);
-    } else {
-      kstr = x;
-      vstr = '';
-    }
-
-    k = decodeURIComponent(kstr);
-    v = decodeURIComponent(vstr);
-
-    if (!hasOwnProperty(obj, k)) {
-      obj[k] = v;
-    } else if (isArray(obj[k])) {
-      obj[k].push(v);
-    } else {
-      obj[k] = [obj[k], v];
-    }
-  }
-
-  return obj;
-};
-
-var isArray = Array.isArray || function (xs) {
-  return Object.prototype.toString.call(xs) === '[object Array]';
-};
-
-},{}],50:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-'use strict';
-
-var stringifyPrimitive = function(v) {
-  switch (typeof v) {
-    case 'string':
-      return v;
-
-    case 'boolean':
-      return v ? 'true' : 'false';
-
-    case 'number':
-      return isFinite(v) ? v : '';
-
-    default:
-      return '';
-  }
-};
-
-module.exports = function(obj, sep, eq, name) {
-  sep = sep || '&';
-  eq = eq || '=';
-  if (obj === null) {
-    obj = undefined;
-  }
-
-  if (typeof obj === 'object') {
-    return map(objectKeys(obj), function(k) {
-      var ks = encodeURIComponent(stringifyPrimitive(k)) + eq;
-      if (isArray(obj[k])) {
-        return map(obj[k], function(v) {
-          return ks + encodeURIComponent(stringifyPrimitive(v));
-        }).join(sep);
-      } else {
-        return ks + encodeURIComponent(stringifyPrimitive(obj[k]));
-      }
-    }).join(sep);
-
-  }
-
-  if (!name) return '';
-  return encodeURIComponent(stringifyPrimitive(name)) + eq +
-         encodeURIComponent(stringifyPrimitive(obj));
-};
-
-var isArray = Array.isArray || function (xs) {
-  return Object.prototype.toString.call(xs) === '[object Array]';
-};
-
-function map (xs, f) {
-  if (xs.map) return xs.map(f);
-  var res = [];
-  for (var i = 0; i < xs.length; i++) {
-    res.push(f(xs[i], i));
-  }
-  return res;
-}
-
-var objectKeys = Object.keys || function (obj) {
-  var res = [];
-  for (var key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) res.push(key);
-  }
-  return res;
-};
-
-},{}],51:[function(require,module,exports){
-'use strict';
-
-exports.decode = exports.parse = require('./decode');
-exports.encode = exports.stringify = require('./encode');
-
-},{"./decode":49,"./encode":50}],52:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 module.exports = require("./lib/_stream_duplex.js")
 
-},{"./lib/_stream_duplex.js":53}],53:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":35}],35:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -9015,7 +10004,7 @@ function forEach (xs, f) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_readable":55,"./_stream_writable":57,"_process":47,"core-util-is":58,"inherits":86}],54:[function(require,module,exports){
+},{"./_stream_readable":37,"./_stream_writable":39,"_process":33,"core-util-is":40,"inherits":29}],36:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -9063,7 +10052,7 @@ PassThrough.prototype._transform = function(chunk, encoding, cb) {
   cb(null, chunk);
 };
 
-},{"./_stream_transform":56,"core-util-is":58,"inherits":86}],55:[function(require,module,exports){
+},{"./_stream_transform":38,"core-util-is":40,"inherits":29}],37:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -10018,7 +11007,7 @@ function indexOf (xs, x) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_duplex":53,"_process":47,"buffer":41,"core-util-is":58,"events":81,"inherits":86,"isarray":45,"stream":63,"string_decoder/":64,"util":40}],56:[function(require,module,exports){
+},{"./_stream_duplex":35,"_process":33,"buffer":24,"core-util-is":40,"events":28,"inherits":29,"isarray":31,"stream":45,"string_decoder/":46,"util":10}],38:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -10229,7 +11218,7 @@ function done(stream, er) {
   return stream.push(null);
 }
 
-},{"./_stream_duplex":53,"core-util-is":58,"inherits":86}],57:[function(require,module,exports){
+},{"./_stream_duplex":35,"core-util-is":40,"inherits":29}],39:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -10710,7 +11699,7 @@ function endWritable(stream, state, cb) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_duplex":53,"_process":47,"buffer":41,"core-util-is":58,"inherits":86,"stream":63}],58:[function(require,module,exports){
+},{"./_stream_duplex":35,"_process":33,"buffer":24,"core-util-is":40,"inherits":29,"stream":45}],40:[function(require,module,exports){
 (function (Buffer){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -10819,11 +11808,11 @@ exports.isBuffer = isBuffer;
 function objectToString(o) {
   return Object.prototype.toString.call(o);
 }
-}).call(this,require("buffer").Buffer)
-},{"buffer":41}],59:[function(require,module,exports){
+}).call(this,{"isBuffer":require("../../../../insert-module-globals/node_modules/is-buffer/index.js")})
+},{"../../../../insert-module-globals/node_modules/is-buffer/index.js":30}],41:[function(require,module,exports){
 module.exports = require("./lib/_stream_passthrough.js")
 
-},{"./lib/_stream_passthrough.js":54}],60:[function(require,module,exports){
+},{"./lib/_stream_passthrough.js":36}],42:[function(require,module,exports){
 exports = module.exports = require('./lib/_stream_readable.js');
 exports.Stream = require('stream');
 exports.Readable = exports;
@@ -10832,13 +11821,13 @@ exports.Duplex = require('./lib/_stream_duplex.js');
 exports.Transform = require('./lib/_stream_transform.js');
 exports.PassThrough = require('./lib/_stream_passthrough.js');
 
-},{"./lib/_stream_duplex.js":53,"./lib/_stream_passthrough.js":54,"./lib/_stream_readable.js":55,"./lib/_stream_transform.js":56,"./lib/_stream_writable.js":57,"stream":63}],61:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":35,"./lib/_stream_passthrough.js":36,"./lib/_stream_readable.js":37,"./lib/_stream_transform.js":38,"./lib/_stream_writable.js":39,"stream":45}],43:[function(require,module,exports){
 module.exports = require("./lib/_stream_transform.js")
 
-},{"./lib/_stream_transform.js":56}],62:[function(require,module,exports){
+},{"./lib/_stream_transform.js":38}],44:[function(require,module,exports){
 module.exports = require("./lib/_stream_writable.js")
 
-},{"./lib/_stream_writable.js":57}],63:[function(require,module,exports){
+},{"./lib/_stream_writable.js":39}],45:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -10967,7 +11956,7 @@ Stream.prototype.pipe = function(dest, options) {
   return dest;
 };
 
-},{"events":81,"inherits":86,"readable-stream/duplex.js":52,"readable-stream/passthrough.js":59,"readable-stream/readable.js":60,"readable-stream/transform.js":61,"readable-stream/writable.js":62}],64:[function(require,module,exports){
+},{"events":28,"inherits":29,"readable-stream/duplex.js":34,"readable-stream/passthrough.js":41,"readable-stream/readable.js":42,"readable-stream/transform.js":43,"readable-stream/writable.js":44}],46:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -11190,723 +12179,14 @@ function base64DetectIncompleteChar(buffer) {
   this.charLength = this.charReceived ? 3 : 0;
 }
 
-},{"buffer":41}],65:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-var punycode = require('punycode');
-
-exports.parse = urlParse;
-exports.resolve = urlResolve;
-exports.resolveObject = urlResolveObject;
-exports.format = urlFormat;
-
-exports.Url = Url;
-
-function Url() {
-  this.protocol = null;
-  this.slashes = null;
-  this.auth = null;
-  this.host = null;
-  this.port = null;
-  this.hostname = null;
-  this.hash = null;
-  this.search = null;
-  this.query = null;
-  this.pathname = null;
-  this.path = null;
-  this.href = null;
-}
-
-// Reference: RFC 3986, RFC 1808, RFC 2396
-
-// define these here so at least they only have to be
-// compiled once on the first module load.
-var protocolPattern = /^([a-z0-9.+-]+:)/i,
-    portPattern = /:[0-9]*$/,
-
-    // RFC 2396: characters reserved for delimiting URLs.
-    // We actually just auto-escape these.
-    delims = ['<', '>', '"', '`', ' ', '\r', '\n', '\t'],
-
-    // RFC 2396: characters not allowed for various reasons.
-    unwise = ['{', '}', '|', '\\', '^', '`'].concat(delims),
-
-    // Allowed by RFCs, but cause of XSS attacks.  Always escape these.
-    autoEscape = ['\''].concat(unwise),
-    // Characters that are never ever allowed in a hostname.
-    // Note that any invalid chars are also handled, but these
-    // are the ones that are *expected* to be seen, so we fast-path
-    // them.
-    nonHostChars = ['%', '/', '?', ';', '#'].concat(autoEscape),
-    hostEndingChars = ['/', '?', '#'],
-    hostnameMaxLen = 255,
-    hostnamePartPattern = /^[a-z0-9A-Z_-]{0,63}$/,
-    hostnamePartStart = /^([a-z0-9A-Z_-]{0,63})(.*)$/,
-    // protocols that can allow "unsafe" and "unwise" chars.
-    unsafeProtocol = {
-      'javascript': true,
-      'javascript:': true
-    },
-    // protocols that never have a hostname.
-    hostlessProtocol = {
-      'javascript': true,
-      'javascript:': true
-    },
-    // protocols that always contain a // bit.
-    slashedProtocol = {
-      'http': true,
-      'https': true,
-      'ftp': true,
-      'gopher': true,
-      'file': true,
-      'http:': true,
-      'https:': true,
-      'ftp:': true,
-      'gopher:': true,
-      'file:': true
-    },
-    querystring = require('querystring');
-
-function urlParse(url, parseQueryString, slashesDenoteHost) {
-  if (url && isObject(url) && url instanceof Url) return url;
-
-  var u = new Url;
-  u.parse(url, parseQueryString, slashesDenoteHost);
-  return u;
-}
-
-Url.prototype.parse = function(url, parseQueryString, slashesDenoteHost) {
-  if (!isString(url)) {
-    throw new TypeError("Parameter 'url' must be a string, not " + typeof url);
-  }
-
-  var rest = url;
-
-  // trim before proceeding.
-  // This is to support parse stuff like "  http://foo.com  \n"
-  rest = rest.trim();
-
-  var proto = protocolPattern.exec(rest);
-  if (proto) {
-    proto = proto[0];
-    var lowerProto = proto.toLowerCase();
-    this.protocol = lowerProto;
-    rest = rest.substr(proto.length);
-  }
-
-  // figure out if it's got a host
-  // user@server is *always* interpreted as a hostname, and url
-  // resolution will treat //foo/bar as host=foo,path=bar because that's
-  // how the browser resolves relative URLs.
-  if (slashesDenoteHost || proto || rest.match(/^\/\/[^@\/]+@[^@\/]+/)) {
-    var slashes = rest.substr(0, 2) === '//';
-    if (slashes && !(proto && hostlessProtocol[proto])) {
-      rest = rest.substr(2);
-      this.slashes = true;
-    }
-  }
-
-  if (!hostlessProtocol[proto] &&
-      (slashes || (proto && !slashedProtocol[proto]))) {
-
-    // there's a hostname.
-    // the first instance of /, ?, ;, or # ends the host.
-    //
-    // If there is an @ in the hostname, then non-host chars *are* allowed
-    // to the left of the last @ sign, unless some host-ending character
-    // comes *before* the @-sign.
-    // URLs are obnoxious.
-    //
-    // ex:
-    // http://a@b@c/ => user:a@b host:c
-    // http://a@b?@c => user:a host:c path:/?@c
-
-    // v0.12 TODO(isaacs): This is not quite how Chrome does things.
-    // Review our test case against browsers more comprehensively.
-
-    // find the first instance of any hostEndingChars
-    var hostEnd = -1;
-    for (var i = 0; i < hostEndingChars.length; i++) {
-      var hec = rest.indexOf(hostEndingChars[i]);
-      if (hec !== -1 && (hostEnd === -1 || hec < hostEnd))
-        hostEnd = hec;
-    }
-
-    // at this point, either we have an explicit point where the
-    // auth portion cannot go past, or the last @ char is the decider.
-    var auth, atSign;
-    if (hostEnd === -1) {
-      // atSign can be anywhere.
-      atSign = rest.lastIndexOf('@');
-    } else {
-      // atSign must be in auth portion.
-      // http://a@b/c@d => host:b auth:a path:/c@d
-      atSign = rest.lastIndexOf('@', hostEnd);
-    }
-
-    // Now we have a portion which is definitely the auth.
-    // Pull that off.
-    if (atSign !== -1) {
-      auth = rest.slice(0, atSign);
-      rest = rest.slice(atSign + 1);
-      this.auth = decodeURIComponent(auth);
-    }
-
-    // the host is the remaining to the left of the first non-host char
-    hostEnd = -1;
-    for (var i = 0; i < nonHostChars.length; i++) {
-      var hec = rest.indexOf(nonHostChars[i]);
-      if (hec !== -1 && (hostEnd === -1 || hec < hostEnd))
-        hostEnd = hec;
-    }
-    // if we still have not hit it, then the entire thing is a host.
-    if (hostEnd === -1)
-      hostEnd = rest.length;
-
-    this.host = rest.slice(0, hostEnd);
-    rest = rest.slice(hostEnd);
-
-    // pull out port.
-    this.parseHost();
-
-    // we've indicated that there is a hostname,
-    // so even if it's empty, it has to be present.
-    this.hostname = this.hostname || '';
-
-    // if hostname begins with [ and ends with ]
-    // assume that it's an IPv6 address.
-    var ipv6Hostname = this.hostname[0] === '[' &&
-        this.hostname[this.hostname.length - 1] === ']';
-
-    // validate a little.
-    if (!ipv6Hostname) {
-      var hostparts = this.hostname.split(/\./);
-      for (var i = 0, l = hostparts.length; i < l; i++) {
-        var part = hostparts[i];
-        if (!part) continue;
-        if (!part.match(hostnamePartPattern)) {
-          var newpart = '';
-          for (var j = 0, k = part.length; j < k; j++) {
-            if (part.charCodeAt(j) > 127) {
-              // we replace non-ASCII char with a temporary placeholder
-              // we need this to make sure size of hostname is not
-              // broken by replacing non-ASCII by nothing
-              newpart += 'x';
-            } else {
-              newpart += part[j];
-            }
-          }
-          // we test again with ASCII char only
-          if (!newpart.match(hostnamePartPattern)) {
-            var validParts = hostparts.slice(0, i);
-            var notHost = hostparts.slice(i + 1);
-            var bit = part.match(hostnamePartStart);
-            if (bit) {
-              validParts.push(bit[1]);
-              notHost.unshift(bit[2]);
-            }
-            if (notHost.length) {
-              rest = '/' + notHost.join('.') + rest;
-            }
-            this.hostname = validParts.join('.');
-            break;
-          }
-        }
-      }
-    }
-
-    if (this.hostname.length > hostnameMaxLen) {
-      this.hostname = '';
-    } else {
-      // hostnames are always lower case.
-      this.hostname = this.hostname.toLowerCase();
-    }
-
-    if (!ipv6Hostname) {
-      // IDNA Support: Returns a puny coded representation of "domain".
-      // It only converts the part of the domain name that
-      // has non ASCII characters. I.e. it dosent matter if
-      // you call it with a domain that already is in ASCII.
-      var domainArray = this.hostname.split('.');
-      var newOut = [];
-      for (var i = 0; i < domainArray.length; ++i) {
-        var s = domainArray[i];
-        newOut.push(s.match(/[^A-Za-z0-9_-]/) ?
-            'xn--' + punycode.encode(s) : s);
-      }
-      this.hostname = newOut.join('.');
-    }
-
-    var p = this.port ? ':' + this.port : '';
-    var h = this.hostname || '';
-    this.host = h + p;
-    this.href += this.host;
-
-    // strip [ and ] from the hostname
-    // the host field still retains them, though
-    if (ipv6Hostname) {
-      this.hostname = this.hostname.substr(1, this.hostname.length - 2);
-      if (rest[0] !== '/') {
-        rest = '/' + rest;
-      }
-    }
-  }
-
-  // now rest is set to the post-host stuff.
-  // chop off any delim chars.
-  if (!unsafeProtocol[lowerProto]) {
-
-    // First, make 100% sure that any "autoEscape" chars get
-    // escaped, even if encodeURIComponent doesn't think they
-    // need to be.
-    for (var i = 0, l = autoEscape.length; i < l; i++) {
-      var ae = autoEscape[i];
-      var esc = encodeURIComponent(ae);
-      if (esc === ae) {
-        esc = escape(ae);
-      }
-      rest = rest.split(ae).join(esc);
-    }
-  }
-
-
-  // chop off from the tail first.
-  var hash = rest.indexOf('#');
-  if (hash !== -1) {
-    // got a fragment string.
-    this.hash = rest.substr(hash);
-    rest = rest.slice(0, hash);
-  }
-  var qm = rest.indexOf('?');
-  if (qm !== -1) {
-    this.search = rest.substr(qm);
-    this.query = rest.substr(qm + 1);
-    if (parseQueryString) {
-      this.query = querystring.parse(this.query);
-    }
-    rest = rest.slice(0, qm);
-  } else if (parseQueryString) {
-    // no query string, but parseQueryString still requested
-    this.search = '';
-    this.query = {};
-  }
-  if (rest) this.pathname = rest;
-  if (slashedProtocol[lowerProto] &&
-      this.hostname && !this.pathname) {
-    this.pathname = '/';
-  }
-
-  //to support http.request
-  if (this.pathname || this.search) {
-    var p = this.pathname || '';
-    var s = this.search || '';
-    this.path = p + s;
-  }
-
-  // finally, reconstruct the href based on what has been validated.
-  this.href = this.format();
-  return this;
-};
-
-// format a parsed object into a url string
-function urlFormat(obj) {
-  // ensure it's an object, and not a string url.
-  // If it's an obj, this is a no-op.
-  // this way, you can call url_format() on strings
-  // to clean up potentially wonky urls.
-  if (isString(obj)) obj = urlParse(obj);
-  if (!(obj instanceof Url)) return Url.prototype.format.call(obj);
-  return obj.format();
-}
-
-Url.prototype.format = function() {
-  var auth = this.auth || '';
-  if (auth) {
-    auth = encodeURIComponent(auth);
-    auth = auth.replace(/%3A/i, ':');
-    auth += '@';
-  }
-
-  var protocol = this.protocol || '',
-      pathname = this.pathname || '',
-      hash = this.hash || '',
-      host = false,
-      query = '';
-
-  if (this.host) {
-    host = auth + this.host;
-  } else if (this.hostname) {
-    host = auth + (this.hostname.indexOf(':') === -1 ?
-        this.hostname :
-        '[' + this.hostname + ']');
-    if (this.port) {
-      host += ':' + this.port;
-    }
-  }
-
-  if (this.query &&
-      isObject(this.query) &&
-      Object.keys(this.query).length) {
-    query = querystring.stringify(this.query);
-  }
-
-  var search = this.search || (query && ('?' + query)) || '';
-
-  if (protocol && protocol.substr(-1) !== ':') protocol += ':';
-
-  // only the slashedProtocols get the //.  Not mailto:, xmpp:, etc.
-  // unless they had them to begin with.
-  if (this.slashes ||
-      (!protocol || slashedProtocol[protocol]) && host !== false) {
-    host = '//' + (host || '');
-    if (pathname && pathname.charAt(0) !== '/') pathname = '/' + pathname;
-  } else if (!host) {
-    host = '';
-  }
-
-  if (hash && hash.charAt(0) !== '#') hash = '#' + hash;
-  if (search && search.charAt(0) !== '?') search = '?' + search;
-
-  pathname = pathname.replace(/[?#]/g, function(match) {
-    return encodeURIComponent(match);
-  });
-  search = search.replace('#', '%23');
-
-  return protocol + host + pathname + search + hash;
-};
-
-function urlResolve(source, relative) {
-  return urlParse(source, false, true).resolve(relative);
-}
-
-Url.prototype.resolve = function(relative) {
-  return this.resolveObject(urlParse(relative, false, true)).format();
-};
-
-function urlResolveObject(source, relative) {
-  if (!source) return relative;
-  return urlParse(source, false, true).resolveObject(relative);
-}
-
-Url.prototype.resolveObject = function(relative) {
-  if (isString(relative)) {
-    var rel = new Url();
-    rel.parse(relative, false, true);
-    relative = rel;
-  }
-
-  var result = new Url();
-  Object.keys(this).forEach(function(k) {
-    result[k] = this[k];
-  }, this);
-
-  // hash is always overridden, no matter what.
-  // even href="" will remove it.
-  result.hash = relative.hash;
-
-  // if the relative url is empty, then there's nothing left to do here.
-  if (relative.href === '') {
-    result.href = result.format();
-    return result;
-  }
-
-  // hrefs like //foo/bar always cut to the protocol.
-  if (relative.slashes && !relative.protocol) {
-    // take everything except the protocol from relative
-    Object.keys(relative).forEach(function(k) {
-      if (k !== 'protocol')
-        result[k] = relative[k];
-    });
-
-    //urlParse appends trailing / to urls like http://www.example.com
-    if (slashedProtocol[result.protocol] &&
-        result.hostname && !result.pathname) {
-      result.path = result.pathname = '/';
-    }
-
-    result.href = result.format();
-    return result;
-  }
-
-  if (relative.protocol && relative.protocol !== result.protocol) {
-    // if it's a known url protocol, then changing
-    // the protocol does weird things
-    // first, if it's not file:, then we MUST have a host,
-    // and if there was a path
-    // to begin with, then we MUST have a path.
-    // if it is file:, then the host is dropped,
-    // because that's known to be hostless.
-    // anything else is assumed to be absolute.
-    if (!slashedProtocol[relative.protocol]) {
-      Object.keys(relative).forEach(function(k) {
-        result[k] = relative[k];
-      });
-      result.href = result.format();
-      return result;
-    }
-
-    result.protocol = relative.protocol;
-    if (!relative.host && !hostlessProtocol[relative.protocol]) {
-      var relPath = (relative.pathname || '').split('/');
-      while (relPath.length && !(relative.host = relPath.shift()));
-      if (!relative.host) relative.host = '';
-      if (!relative.hostname) relative.hostname = '';
-      if (relPath[0] !== '') relPath.unshift('');
-      if (relPath.length < 2) relPath.unshift('');
-      result.pathname = relPath.join('/');
-    } else {
-      result.pathname = relative.pathname;
-    }
-    result.search = relative.search;
-    result.query = relative.query;
-    result.host = relative.host || '';
-    result.auth = relative.auth;
-    result.hostname = relative.hostname || relative.host;
-    result.port = relative.port;
-    // to support http.request
-    if (result.pathname || result.search) {
-      var p = result.pathname || '';
-      var s = result.search || '';
-      result.path = p + s;
-    }
-    result.slashes = result.slashes || relative.slashes;
-    result.href = result.format();
-    return result;
-  }
-
-  var isSourceAbs = (result.pathname && result.pathname.charAt(0) === '/'),
-      isRelAbs = (
-          relative.host ||
-          relative.pathname && relative.pathname.charAt(0) === '/'
-      ),
-      mustEndAbs = (isRelAbs || isSourceAbs ||
-                    (result.host && relative.pathname)),
-      removeAllDots = mustEndAbs,
-      srcPath = result.pathname && result.pathname.split('/') || [],
-      relPath = relative.pathname && relative.pathname.split('/') || [],
-      psychotic = result.protocol && !slashedProtocol[result.protocol];
-
-  // if the url is a non-slashed url, then relative
-  // links like ../.. should be able
-  // to crawl up to the hostname, as well.  This is strange.
-  // result.protocol has already been set by now.
-  // Later on, put the first path part into the host field.
-  if (psychotic) {
-    result.hostname = '';
-    result.port = null;
-    if (result.host) {
-      if (srcPath[0] === '') srcPath[0] = result.host;
-      else srcPath.unshift(result.host);
-    }
-    result.host = '';
-    if (relative.protocol) {
-      relative.hostname = null;
-      relative.port = null;
-      if (relative.host) {
-        if (relPath[0] === '') relPath[0] = relative.host;
-        else relPath.unshift(relative.host);
-      }
-      relative.host = null;
-    }
-    mustEndAbs = mustEndAbs && (relPath[0] === '' || srcPath[0] === '');
-  }
-
-  if (isRelAbs) {
-    // it's absolute.
-    result.host = (relative.host || relative.host === '') ?
-                  relative.host : result.host;
-    result.hostname = (relative.hostname || relative.hostname === '') ?
-                      relative.hostname : result.hostname;
-    result.search = relative.search;
-    result.query = relative.query;
-    srcPath = relPath;
-    // fall through to the dot-handling below.
-  } else if (relPath.length) {
-    // it's relative
-    // throw away the existing file, and take the new path instead.
-    if (!srcPath) srcPath = [];
-    srcPath.pop();
-    srcPath = srcPath.concat(relPath);
-    result.search = relative.search;
-    result.query = relative.query;
-  } else if (!isNullOrUndefined(relative.search)) {
-    // just pull out the search.
-    // like href='?foo'.
-    // Put this after the other two cases because it simplifies the booleans
-    if (psychotic) {
-      result.hostname = result.host = srcPath.shift();
-      //occationaly the auth can get stuck only in host
-      //this especialy happens in cases like
-      //url.resolveObject('mailto:local1@domain1', 'local2@domain2')
-      var authInHost = result.host && result.host.indexOf('@') > 0 ?
-                       result.host.split('@') : false;
-      if (authInHost) {
-        result.auth = authInHost.shift();
-        result.host = result.hostname = authInHost.shift();
-      }
-    }
-    result.search = relative.search;
-    result.query = relative.query;
-    //to support http.request
-    if (!isNull(result.pathname) || !isNull(result.search)) {
-      result.path = (result.pathname ? result.pathname : '') +
-                    (result.search ? result.search : '');
-    }
-    result.href = result.format();
-    return result;
-  }
-
-  if (!srcPath.length) {
-    // no path at all.  easy.
-    // we've already handled the other stuff above.
-    result.pathname = null;
-    //to support http.request
-    if (result.search) {
-      result.path = '/' + result.search;
-    } else {
-      result.path = null;
-    }
-    result.href = result.format();
-    return result;
-  }
-
-  // if a url ENDs in . or .., then it must get a trailing slash.
-  // however, if it ends in anything else non-slashy,
-  // then it must NOT get a trailing slash.
-  var last = srcPath.slice(-1)[0];
-  var hasTrailingSlash = (
-      (result.host || relative.host) && (last === '.' || last === '..') ||
-      last === '');
-
-  // strip single dots, resolve double dots to parent dir
-  // if the path tries to go above the root, `up` ends up > 0
-  var up = 0;
-  for (var i = srcPath.length; i >= 0; i--) {
-    last = srcPath[i];
-    if (last == '.') {
-      srcPath.splice(i, 1);
-    } else if (last === '..') {
-      srcPath.splice(i, 1);
-      up++;
-    } else if (up) {
-      srcPath.splice(i, 1);
-      up--;
-    }
-  }
-
-  // if the path is allowed to go above the root, restore leading ..s
-  if (!mustEndAbs && !removeAllDots) {
-    for (; up--; up) {
-      srcPath.unshift('..');
-    }
-  }
-
-  if (mustEndAbs && srcPath[0] !== '' &&
-      (!srcPath[0] || srcPath[0].charAt(0) !== '/')) {
-    srcPath.unshift('');
-  }
-
-  if (hasTrailingSlash && (srcPath.join('/').substr(-1) !== '/')) {
-    srcPath.push('');
-  }
-
-  var isAbsolute = srcPath[0] === '' ||
-      (srcPath[0] && srcPath[0].charAt(0) === '/');
-
-  // put the host back
-  if (psychotic) {
-    result.hostname = result.host = isAbsolute ? '' :
-                                    srcPath.length ? srcPath.shift() : '';
-    //occationaly the auth can get stuck only in host
-    //this especialy happens in cases like
-    //url.resolveObject('mailto:local1@domain1', 'local2@domain2')
-    var authInHost = result.host && result.host.indexOf('@') > 0 ?
-                     result.host.split('@') : false;
-    if (authInHost) {
-      result.auth = authInHost.shift();
-      result.host = result.hostname = authInHost.shift();
-    }
-  }
-
-  mustEndAbs = mustEndAbs || (result.host && srcPath.length);
-
-  if (mustEndAbs && !isAbsolute) {
-    srcPath.unshift('');
-  }
-
-  if (!srcPath.length) {
-    result.pathname = null;
-    result.path = null;
-  } else {
-    result.pathname = srcPath.join('/');
-  }
-
-  //to support request.http
-  if (!isNull(result.pathname) || !isNull(result.search)) {
-    result.path = (result.pathname ? result.pathname : '') +
-                  (result.search ? result.search : '');
-  }
-  result.auth = relative.auth || result.auth;
-  result.slashes = result.slashes || relative.slashes;
-  result.href = result.format();
-  return result;
-};
-
-Url.prototype.parseHost = function() {
-  var host = this.host;
-  var port = portPattern.exec(host);
-  if (port) {
-    port = port[0];
-    if (port !== ':') {
-      this.port = port.substr(1);
-    }
-    host = host.substr(0, host.length - port.length);
-  }
-  if (host) this.hostname = host;
-};
-
-function isString(arg) {
-  return typeof arg === "string";
-}
-
-function isObject(arg) {
-  return typeof arg === 'object' && arg !== null;
-}
-
-function isNull(arg) {
-  return arg === null;
-}
-function isNullOrUndefined(arg) {
-  return  arg == null;
-}
-
-},{"punycode":48,"querystring":51}],66:[function(require,module,exports){
+},{"buffer":24}],47:[function(require,module,exports){
 module.exports = function isBuffer(arg) {
   return arg && typeof arg === 'object'
     && typeof arg.copy === 'function'
     && typeof arg.fill === 'function'
     && typeof arg.readUInt8 === 'function';
 }
-},{}],67:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -12496,8893 +12776,2171 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":66,"_process":47,"inherits":86}],68:[function(require,module,exports){
-module.exports = {
-    Dun: require('./lib/dun'),
-    Til: require('./lib/til'),
-    Min: require('./lib/min'),
-    Cel: require('./lib/cel'),
-    Cl2: require('./lib/cl2'),
-    Pal: require('./lib/pal'),
-    Sol: require('./lib/sol')
-};
-
-},{"./lib/cel":69,"./lib/cl2":71,"./lib/dun":76,"./lib/min":77,"./lib/pal":78,"./lib/sol":79,"./lib/til":80}],69:[function(require,module,exports){
-'use strict';
-
-var cel_decode = require('./cel_decode'),
-    celConfig = require('./config/cel_info'),
-    pathLib = require('path');
+},{"./support/isBuffer":47,"_process":33,"inherits":29}],49:[function(require,module,exports){
+module.exports = distance
 
 /**
- * CEL files hold image data. Similar to GIF images, they
- * contain multiple frames and use color palettes (PAL). They are used
- * for things like animations, effects, and tile sets.
+ * Calculates the euclidian distance between two vec2's
  *
- * There are many different optimizations that are applied to the individual
- * CEL types and frames in order to improve data compression, so the
- * decoding of CEL files can be tricky and very specialized.
+ * @param {vec2} a the first operand
+ * @param {vec2} b the second operand
+ * @returns {Number} distance between a and b
  */
-function CelFile(frames, path, name) {
-    this.frames = frames;
-    this.path = path;
-    this.name = name;
+function distance(a, b) {
+    var x = b[0] - a[0],
+        y = b[1] - a[1]
+    return Math.sqrt(x*x + y*y)
 }
-
-function getFrameDimensions(celName) {
-    var entry = celConfig[celName];
-    if (typeof entry == 'undefined') {
-        return [32, 32];
-    }
-
-    return [entry.w, entry.h];
-}
-
-function getFrameHeaderSize(celName) {
-    var entry = celConfig[celName];
-    if (typeof entry == 'undefined') {
-        return 0;
-    }
-
-    return entry.header;
-}
+},{}],50:[function(require,module,exports){
+module.exports = normalize
 
 /**
- * Decode all the frames within the CEL file, using the PAL file
- * to perform color palette lookup. This function constructs the
- * per-frame color data, which is used for rendering.
+ * Normalize a vec2
+ *
+ * @param {vec2} out the receiving vector
+ * @param {vec2} a vector to normalize
+ * @returns {vec2} out
  */
-CelFile.prototype.decodeFrames = function(palFile) {
-    var frameDimensions = getFrameDimensions(this.name);
-    var frameWidth = frameDimensions[0];
-    var frameHeight = frameDimensions[1];
-
-    // Decode each frame with the appropriate decoder.
-    var frames = this.frames;
-    var decodedFrames = new Array(frames.length);
-    for (var i = 0; i < frames.length; i++) {
-        var frameData = frames[i];
-        var frameDecoder = cel_decode.getCelFrameDecoder(this.name, frameData, i);
-        decodedFrames[i] = frameDecoder(frameData, frameWidth, frameHeight, palFile);
+function normalize(out, a) {
+    var x = a[0],
+        y = a[1]
+    var len = x*x + y*y
+    if (len > 0) {
+        //TODO: evaluate use of glm_invsqrt here?
+        len = 1 / Math.sqrt(len)
+        out[0] = a[0] * len
+        out[1] = a[1] * len
     }
-
-    return decodedFrames;
-};
-
-function _load(buffer, celPath) {
-    var offset = 0;
-    var frameCount = buffer.readUInt32LE(offset);
-
-    // Frame offsets.
-    // frameCount # of offsets + 1 for the endOffset
-    var frameOffsets = new Array(frameCount + 1);
-    for (var i = 0; i < frameOffsets.length; i++) {
-        frameOffsets[i] = buffer.readUInt32LE(offset += 4);
-    }
-
-    // levels/towndata/town.cel -> town
-    var celName = pathLib.basename(celPath, '.cel');
-
-    var headerSize = getFrameHeaderSize(celName);
-    
-    var frames = new Array(frameCount);
-    for (i = 0; i < frames.length; i++) {
-        var frameStart = frameOffsets[i] + headerSize;
-        var frameEnd = frameOffsets[i + 1];
-        var frameSize = frameEnd - frameStart;
-
-        var frameData = new Array(frameSize);
-        for (var j = 0; j < frameData.length; j++) {
-            frameData[j] = buffer.readUInt8(frameStart + j);
-        }
-
-        frames[i] = frameData;
-    }
-
-    return new CelFile(frames, celPath, celName);
+    return out
 }
-
-module.exports = {
-    load: _load
-};
-
-},{"./cel_decode":70,"./config/cel_info":72,"path":46}],70:[function(require,module,exports){
-'use strict';
-
-var BYTES_PER_PIXEL = 4;    // RGBA
-var TRANSPARENT_COLOR = { r: 0, g: 0, b: 0, a: 0 };
+},{}],51:[function(require,module,exports){
+module.exports = subtract
 
 /**
- * Utility for setting pixels.
+ * Subtracts vector b from vector a
+ *
+ * @param {vec2} out the receiving vector
+ * @param {vec2} a the first operand
+ * @param {vec2} b the second operand
+ * @returns {vec2} out
  */
-function getPixelSetter() {
-    var offset = 0;
-    return function(colors, c) {
-        colors[offset] = c.r;
-        colors[offset + 1] = c.g;
-        colors[offset + 2] = c.b;
-        colors[offset + 3] = c.a;
-        offset += 4;
-    };
+function subtract(out, a, b) {
+    out[0] = a[0] - b[0]
+    out[1] = a[1] - b[1]
+    return out
 }
+},{}],52:[function(require,module,exports){
+/**
+ * lodash 3.2.1 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+var baseCallback = require('lodash._basecallback'),
+    baseFindIndex = require('lodash._basefindindex');
 
 /**
- * Returns true if the image is a plain 32x32.
+ * Creates a `_.findIndex` or `_.findLastIndex` function.
+ *
+ * @private
+ * @param {boolean} [fromRight] Specify iterating from right to left.
+ * @returns {Function} Returns the new find function.
  */
-function isType0(celName, frameNum) {
-    // These special frames are type 1.
-    switch (celName) {
-    case 'l1':
-        switch (frameNum) {
-        case 148: case 159: case 181: case 186: case 188:
-            return false;
-        }
-        break;
-    case 'l2':
-        switch (frameNum) {
-        case 47: case 1397: case 1399: case 1411:
-            return false;
-        }
-        break;
-    case 'l4':
-        switch (frameNum) {
-        case 336: case 639:
-            return false;
-        }
-        break;
-    case 'town':
-        switch (frameNum) {
-        case 2328: case 2367: case 2593:
-            return false;
-        }
-    }
-
-    return true;
-}
-
-/**
- * Returns true if the image is a less-than (<) shape.
- */
-function isType2or4(frameData) {
-    var zeroPositions = [0, 1, 8, 9, 24, 25, 48, 49, 80, 81, 120, 121, 168, 169, 224, 225];
-    for (var i = 0; i < zeroPositions.length; i++) {
-        if (frameData[zeroPositions[i]] !== 0) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-/**
- * Returns true if the image is a greater-than (>) shape.
- */
-function isType3or5(frameData) {
-    var zeroPositions = [2, 3, 14, 15, 34, 35, 62, 63, 98, 99, 142, 143, 194, 195, 254, 255];
-    for (var i = 0; i < zeroPositions.length; i++) {
-        if (frameData[zeroPositions[i]] !== 0) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-/**
- * Type0 corresponds to plain 32x32 images with no transparency.
- *
- * 	1) Range through the frame, one byte at the time.
- * 		- Each byte corresponds to a color index of the palette.
- * 		- Set one regular pixel per byte, using the color index to locate the
- * 		  color in the palette.
- */
-function DecodeFrameType0(frameData, width, height, palFile) {
-    var colors = new Uint8Array(width * height * BYTES_PER_PIXEL);
-    var setPixel = getPixelSetter();
-    for (var i = 0; i < frameData.length; i++) {
-        setPixel(colors, palFile.colors[frameData[i]]);
-    }
-
-    return {
-        width: width,
-        height: height,
-        colors: colors
-    };
-}
-
-/**
- * Type1 corresponds to 32x32 images with arbitrary color / transparency data.
- *
- *  1). Read one byte (chunkSize).
- *  2). If chunkSize >= 128:
- *  	- Set (256 - chunkSize) # of transparent pixels.
- *  3). Else (chunkSize < 128):
- *  	- Set chunkSize # of regular pixels, using the color index to locate
- *  	  the color in the palette.
- *  	- Increment the frame counter for each byte read.
- *  4). Repeat from 1 till end of frame data.
- */
-function DecodeFrameType1(frameData, width, height, palFile) {
-    var colors = new Uint8Array(width * height * BYTES_PER_PIXEL);
-    var setPixel = getPixelSetter();
-
-    var j;
-    for (var i = 0; i < frameData.length; /*i++*/) {
-        var chunkSize = frameData[i++];
-        if (chunkSize & 0x80) {
-            // Transparent chunk.
-            chunkSize = 256 - chunkSize;
-            for (j = 0; j < chunkSize; j++) {
-                setPixel(colors, TRANSPARENT_COLOR);
-            }
-        } else {
-            // Regular (colored) chunk.
-            for (j = 0; j < chunkSize; j++) {
-                setPixel(colors, palFile.colors[frameData[i++]]);
-            }
-        }
-    }
-
-    return {
-        width: width,
-        height: height,
-        colors: colors
-    };
-}
-
-/**
- * Type2 corresponds to 32x32 images of left facing triangles (<).
- *
- * 	1) Dump one line of 32 pixels at the time.
- * 		- The illustration below tells if a pixel is transparent or regular.
- * 		- Only regular and zero (transparent) pixels are explicitly stored in
- * 		  the frame content. All other pixels of the illustration are
- * 		  implicitly transparent.
- *
- * Below is an illustration of the 32x32 image, where a space represents an
- * implicit transparent pixel, a '0' represents an explicit transparent pixel
- * and an 'x' represents an explicit regular pixel.
- *
- * Note: The output image will be "upside-down" compared to the illustration.
- *
- *    +--------------------------------+
- *    |                                |
- *    |                            00xx|
- *    |                            xxxx|
- *    |                        00xxxxxx|
- *    |                        xxxxxxxx|
- *    |                    00xxxxxxxxxx|
- *    |                    xxxxxxxxxxxx|
- *    |                00xxxxxxxxxxxxxx|
- *    |                xxxxxxxxxxxxxxxx|
- *    |            00xxxxxxxxxxxxxxxxxx|
- *    |            xxxxxxxxxxxxxxxxxxxx|
- *    |        00xxxxxxxxxxxxxxxxxxxxxx|
- *    |        xxxxxxxxxxxxxxxxxxxxxxxx|
- *    |    00xxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |    xxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |00xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |00xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |    xxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |    00xxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |        xxxxxxxxxxxxxxxxxxxxxxxx|
- *    |        00xxxxxxxxxxxxxxxxxxxxxx|
- *    |            xxxxxxxxxxxxxxxxxxxx|
- *    |            00xxxxxxxxxxxxxxxxxx|
- *    |                xxxxxxxxxxxxxxxx|
- *    |                00xxxxxxxxxxxxxx|
- *    |                    xxxxxxxxxxxx|
- *    |                    00xxxxxxxxxx|
- *    |                        xxxxxxxx|
- *    |                        00xxxxxx|
- *    |                            xxxx|
- *    |                            00xx|
- *    +--------------------------------+
- */
-function DecodeFrameType2(frameData, width, height, palFile) {
-    var colors = new Uint8Array(width * height * BYTES_PER_PIXEL);
-    var setPixel = getPixelSetter();
-
-    var decodeCounts = [0, 4, 4, 8, 8, 12, 12, 16, 16, 20, 20, 24, 24, 28, 28, 32, 32, 32, 28, 28, 24, 24, 20, 20, 16, 16, 12, 12, 8, 8, 4, 4];
-    var frameReadOffset = 0;
-    for (var i = 0; i < decodeCounts.length; i++) {
-        var zeroCount = ((i % 2) === 0) ? 0 : 2;
-        var decodeCount = decodeCounts[i];
-        decodeLineTransparencyLeft(colors, frameData, frameReadOffset, decodeCount, zeroCount, palFile, setPixel);
-        frameReadOffset += decodeCount;
-    }
-
-    return {
-        width: width,
-        height: height,
-        colors: colors
-    };
-}
-
-/**
- * Type3 corresponds to 32x32 images of right facing triangles (>).
- *
- * 	1) Dump one line of 32 pixels at the time.
- * 		- The illustration below tells if a pixel is transparent or regular.
- * 	 	- Only regular and zero (transparent) pixels are explicitly stored in
- * 		  the frame content. All other pixels of the illustration are
- * 		  implicitly transparent.
- *
- * Below is an illustration of the 32x32 image, where a space represents an
- * implicit transparent pixel, a '0' represents an explicit transparent pixel
- * and an 'x' represents an explicit regular pixel.
- *
- * Note: The output image will be "upside-down" compared to the illustration.
- *
- *    +--------------------------------+
- *    |                                |
- *    |xx00                            |
- *    |xxxx                            |
- *    |xxxxxx00                        |
- *    |xxxxxxxx                        |
- *    |xxxxxxxxxx00                    |
- *    |xxxxxxxxxxxx                    |
- *    |xxxxxxxxxxxxxx00                |
- *    |xxxxxxxxxxxxxxxx                |
- *    |xxxxxxxxxxxxxxxxxx00            |
- *    |xxxxxxxxxxxxxxxxxxxx            |
- *    |xxxxxxxxxxxxxxxxxxxxxx00        |
- *    |xxxxxxxxxxxxxxxxxxxxxxxx        |
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxx00    |
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxx    |
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx00|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx00|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxx    |
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxx00    |
- *    |xxxxxxxxxxxxxxxxxxxxxxxx        |
- *    |xxxxxxxxxxxxxxxxxxxxxx00        |
- *    |xxxxxxxxxxxxxxxxxxxx            |
- *    |xxxxxxxxxxxxxxxxxx00            |
- *    |xxxxxxxxxxxxxxxx                |
- *    |xxxxxxxxxxxxxx00                |
- *    |xxxxxxxxxxxx                    |
- *    |xxxxxxxxxx00                    |
- *    |xxxxxxxx                        |
- *    |xxxxxx00                        |
- *    |xxxx                            |
- *    |xx00                            |
- *    +--------------------------------+
- */
-function DecodeFrameType3(frameData, width, height, palFile) {
-    var colors = new Uint8Array(width * height * BYTES_PER_PIXEL);
-    var setPixel = getPixelSetter();
-
-    var decodeCounts = [0, 4, 4, 8, 8, 12, 12, 16, 16, 20, 20, 24, 24, 28, 28, 32, 32, 32, 28, 28, 24, 24, 20, 20, 16, 16, 12, 12, 8, 8, 4, 4];
-    var frameReadOffset = 0;
-    for (var i = 0; i < decodeCounts.length; i++) {
-        var zeroCount = ((i % 2) === 0) ? 0 : 2;
-        var decodeCount = decodeCounts[i];
-        decodeLineTransparencyRight(colors, frameData, frameReadOffset, decodeCount, zeroCount, palFile, setPixel);
-        frameReadOffset += decodeCount;
-    }
-
-    return {
-        width: width,
-        height: height,
-        colors: colors
-    };
-}
-
-/**
- * Type4 corresponds to 32x32 images of left facing triangles (<), with
- * an additional section of the image filled in with solid colors.
- *
- *  1) Dump one line of 32 pixels at the time.
- *      - The illustration below tells if a pixel is transparent or regular.
- *      - Only regular and zero (transparent) pixels are explicitly stored in
- *        the frame content. All other pixels of the illustration are
- *        implicitly transparent.
- *
- * Below is an illustration of the 32x32 image, where a space represents an
- * implicit transparent pixel, a '0' represents an explicit transparent pixel
- * and an 'x' represents an explicit regular pixel.
- *
- * Note: The output image will be "upside-down" compared to the illustration.
- *
- *    +--------------------------------+
- *    |                            00xx|
- *    |                            xxxx|
- *    |                        00xxxxxx|
- *    |                        xxxxxxxx|
- *    |                    00xxxxxxxxxx|
- *    |                    xxxxxxxxxxxx|
- *    |                00xxxxxxxxxxxxxx|
- *    |                xxxxxxxxxxxxxxxx|
- *    |            00xxxxxxxxxxxxxxxxxx|
- *    |            xxxxxxxxxxxxxxxxxxxx|
- *    |        00xxxxxxxxxxxxxxxxxxxxxx|
- *    |        xxxxxxxxxxxxxxxxxxxxxxxx|
- *    |    00xxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |    xxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |00xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    +--------------------------------+
- */
-function DecodeFrameType4(frameData, width, height, palFile) {
-    var colors = new Uint8Array(width * height * BYTES_PER_PIXEL);
-    var setPixel = getPixelSetter();
-
-    var decodeCounts = [4, 4, 8, 8, 12, 12, 16, 16, 20, 20, 24, 24, 28, 28, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32];
-    var frameReadOffset = 0;
-    for (var i = 0; i < decodeCounts.length; i++) {
-        var zeroCount = 0;
-        switch (i) {
-        case 0: case 2: case 4: case 6: case 8: case 10: case 12: case 14:
-            zeroCount = 2;
-        }
-        var decodeCount = decodeCounts[i];
-        decodeLineTransparencyLeft(colors, frameData, frameReadOffset, decodeCount, zeroCount, palFile, setPixel);
-        frameReadOffset += decodeCount;
-    }
-
-    return {
-        width: width,
-        height: height,
-        colors: colors
-    };
-}
-
-/**
- * Type5 corresponds to 32x32 images of right facing triangles (>), with
- * an additional section of the image filled in with solid colors.
- *
- *  1) Dump one line of 32 pixels at the time.
- *      - The illustration below tells if a pixel is transparent or regular.
- *      - Only regular and zero (transparent) pixels are explicitly stored in
- *        the frame content. All other pixels of the illustration are
- *        implicitly transparent.
- *
- * Below is an illustration of the 32x32 image, where a space represents an
- * implicit transparent pixel, a '0' represents an explicit transparent pixel
- * and an 'x' represents an explicit regular pixel.
- *
- * Note: The output image will be "upside-down" compared to the illustration.
- *
- *    +--------------------------------+
- *    |xx00                            |
- *    |xxxx                            |
- *    |xxxxxx00                        |
- *    |xxxxxxxx                        |
- *    |xxxxxxxxxx00                    |
- *    |xxxxxxxxxxxx                    |
- *    |xxxxxxxxxxxxxx00                |
- *    |xxxxxxxxxxxxxxxx                |
- *    |xxxxxxxxxxxxxxxxxx00            |
- *    |xxxxxxxxxxxxxxxxxxxx            |
- *    |xxxxxxxxxxxxxxxxxxxxxx00        |
- *    |xxxxxxxxxxxxxxxxxxxxxxxx        |
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxx00    |
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxx    |
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx00|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    |xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
- *    +--------------------------------+
- */
-function DecodeFrameType5(frameData, width, height, palFile) {
-    var colors = new Uint8Array(width * height * BYTES_PER_PIXEL);
-    var setPixel = getPixelSetter();
-
-    var decodeCounts = [4, 4, 8, 8, 12, 12, 16, 16, 20, 20, 24, 24, 28, 28, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32];
-    var frameReadOffset = 0;
-    for (var i = 0; i < decodeCounts.length; i++) {
-        var zeroCount = 0;
-        switch (i) {
-        case 0: case 2: case 4: case 6: case 8: case 10: case 12: case 14:
-            zeroCount = 2;
-        }
-        var decodeCount = decodeCounts[i];
-        decodeLineTransparencyRight(colors, frameData, frameReadOffset, decodeCount, zeroCount, palFile, setPixel);
-        frameReadOffset += decodeCount;
-    }
-
-    return {
-        width: width,
-        height: height,
-        colors: colors
-    };
-}
-
-/**
- * Type6 corresponds to an image with arbitrary color / transparency data.
- * Both transparent and color data use run-length encoding for compression.
- *
- *  1). Read one byte (chunkSize).
- *  2). If chunkSize >= 128:
- *  	- Subtract chunkSize from 256
- *  	2a). If chunkSize <= 65, read that many bytes.
- *  		- Each byte read corresponds to a color index in the palette.
- *  		- Set the pixel color to this color.
- *    	2b). Else (chunkSize > 65), subtract 65 and read one byte.
- *    		- The byte corresponds to a color index in the palette.
- *    		- Set chunkSize # of pixels to this color.
- *  3). Else (chunkSize < 128):
- *  	- Set chunkSize # of transparent pixels.
- *  4). Repeat from 1 till end of frame data.
- */
-function DecodeFrameType6(frameData, width, height, palFile) {
-    var colors = new Uint8Array(width * height * BYTES_PER_PIXEL);
-    var setPixel = getPixelSetter();
-
-    // TODO: ?? investigate where this is coming from
-    var headerSizeSkip = 10;
-
-    var j;
-    for (var i = headerSizeSkip; i < frameData.length; /*i++*/) {
-        var chunkSize = frameData[i++];
-        if (chunkSize & 0x80) {
-            // Regular (colored) chunks.
-            chunkSize = 256 - chunkSize;
-
-            if (chunkSize <= 65) {
-                for (j = 0; j < chunkSize; j++) {
-                    setPixel(colors, palFile.colors[frameData[i++]]);
-                }
-            } else {
-                // Run-length encoding (repeat the same color).
-                chunkSize -= 65;
-                var color = palFile.colors[frameData[i++]];
-                for (j = 0; j < chunkSize; j++) {
-                    setPixel(colors, color);
-                }
-            }
-        } else {
-            // Transparent chunk.
-            for (j = 0; j < chunkSize; j++) {
-                setPixel(colors, TRANSPARENT_COLOR);
-            }
-        }
-    }
-
-    return {
-        width: width,
-        height: height,
-        colors: colors
-    };
-}
-
-/**
- * Decodes a line of the frame, where decodeCount is the total # of
- * explicit pixels, and zeroCount is the total # of explicit transparent
- * pixels, and the rest of the line is implictly transparent.
- *
- * Each line is assumed to have a width of 32 pixels.
- */
-function decodeLineTransparencyLeft(colors, frameData, frameReadOffset, decodeCount, zeroCount, palFile, setPixel) {
-    // Implicit transparent pixels.
-    for (var i = decodeCount; i < 32; i++) {
-        setPixel(colors, TRANSPARENT_COLOR);
-    }
-
-    // Explicit transparent pixels (zeroes).
-    for (i = 0; i < zeroCount; i++) {
-        setPixel(colors, TRANSPARENT_COLOR);
-    }
-
-    // Explicit regular pixels.
-    for (i = zeroCount; i < decodeCount; i++) {
-        setPixel(colors, palFile.colors[frameData[frameReadOffset + i]]);
-    }
-}
-
-/**
- * Decodes a line of the frame, where decodeCount is the total # of
- * explicit pixels, and zeroCount is the total # of explicit transparent
- * pixels, and the rest of the line is implictly transparent.
- *
- * Each line is assumed to have a width of 32 pixels.
- */
-function decodeLineTransparencyRight(colors, frameData, frameReadOffset, decodeCount, zeroCount, palFile, setPixel) {
-    // Total # of explicit pixels.
-    var regularCount = decodeCount - zeroCount;
-
-    // Implicit transparent pixels.
-    for (var i = 0; i < regularCount; i++) {
-        setPixel(colors, palFile.colors[frameData[frameReadOffset + i]]);
-    }
-
-    // Explicit transparent pixels (zeroes).
-    for (i = 0; i < zeroCount; i++) {
-        setPixel(colors, TRANSPARENT_COLOR);
-    }
-
-    // Explicit regular pixels.
-    for (i = decodeCount; i < 32; i++) {
-        setPixel(colors, TRANSPARENT_COLOR);
-    }
-}
-
-/**
- * Gets the appropriate frame decoder for the particular frame.
- */
-function _getCelFrameDecoder(celName, frameData, frameNum) {
-    var frameSize = frameData.length;
-
-    switch (celName) {
-    case 'l1': case 'l2': case 'l3': case 'l4': case 'town':
-        // Some regular (type 1) CEL images just happen to have a frame size of
-		// exactly 0x220, 0x320 or 0x400. Therefore the isType* functions are
-		// required to figure out the appropriate decoding function.
-        switch (frameSize) {
-        case 0x400:
-            if (isType0(celName, frameNum)) {
-                return DecodeFrameType0;
-            }
-            break;
-        case 0x220:
-            if (isType2or4(frameData)) {
-                return DecodeFrameType2;
-            } else if (isType3or5(frameData)) {
-                return DecodeFrameType3;
-            }
-            break;
-        case 0x320:
-            if (isType2or4(frameData)) {
-                return DecodeFrameType4;
-            } else if (isType3or5(frameData)) {
-                return DecodeFrameType5;
-            }
-        }
-    }
-
-    return DecodeFrameType1;
-}
-
-function _getCl2FrameDecoder() {
-    return DecodeFrameType6;
-}
-
-module.exports = {
-    getCelFrameDecoder: _getCelFrameDecoder,
-    getCl2FrameDecoder: _getCl2FrameDecoder
-};
-
-},{}],71:[function(require,module,exports){
-'use strict';
-
-var pathLib = require('path'),
-    Cel = require('./cel'),
-    cel_decode = require('./cel_decode'),
-    cl2Config = require('./config/cl2_info');
-
-function Cl2File(celFiles, path) {
-    this.celFiles = celFiles;
-    this.path = path;
-
-    // plrgfx/warrior/wls/wlsst.cl2 -> wlsst
-    this.name = pathLib.basename(this.path, '.cl2');
-}
-
-var ARCHIVE_IMAGE_COUNT = 8;
-
-function getFrameDimensions(cl2Name) {
-    var entry = cl2Config[cl2Name];
-    if (typeof entry == 'undefined') {
-        return [96, 96];
-    }
-
-    return [entry.w, entry.h];
-}
-
-Cl2File.prototype.decodeFrames = function(palFile) {
-    var frameDimensions = getFrameDimensions(this.name);
-    var frameWidth = frameDimensions[0];
-    var frameHeight = frameDimensions[1];
-
-    // Decode all frames within each image with the appropriate decoder.
-    var decodedImages = new Array(this.celFiles.length);
-    for (var i = 0; i < decodedImages.length; i++) {
-        var frames = this.celFiles[i].frames;
-        var decodedFrames = new Array(frames.length);
-        for (var j = 0; j < decodedFrames.length; j++) {
-            var frameData = frames[j];
-            var frameDecoder = cel_decode.getCl2FrameDecoder();
-            decodedFrames[j] = frameDecoder(frameData, frameWidth, frameHeight, palFile);
-        }
-
-        decodedImages[i] = decodedFrames;
-    }
-
-    return decodedImages;
-};
-
-function _load(buffer, cl2Path) {
-    // TODO: archives only
-    if (buffer.readUInt32LE(0) !== 32) {
-        console.log('not an archive file!!');
-        return null;
-    }
-
-    var i;
-    var offset = 0;
-
-    // Header offsets.
-    var headerOffsets = new Array(ARCHIVE_IMAGE_COUNT);
-    for (i = 0; i < headerOffsets.length; i++) {
-        headerOffsets[i] = buffer.readUInt32LE(offset);
-        offset += 4;
-    }
-
-    // Process the images. Each image content is a CEL file.
-    var celFiles = new Array(headerOffsets.length);
-    for (i = 0; i < celFiles.length; i++) {
-        var imageBuffer = buffer.slice(headerOffsets[i]);
-        celFiles[i] = Cel.load(imageBuffer, cl2Path);
-    }
-
-    return new Cl2File(celFiles, cl2Path);
-}
-
-module.exports = {
-    load: _load
-};
-
-},{"./cel":69,"./cel_decode":70,"./config/cl2_info":73,"path":46}],72:[function(require,module,exports){
-module.exports = {
-    'strytell': {
-        w: 96,
-        h: 96,
-        header: 10
-    },
-    'chest1': {
-        w: 96,
-        h: 96,
-        header: 10
-    },
-    'chest2': {
-        w: 96,
-        h: 96,
-        header: 10
-    },
-    'chest3': {
-        w: 96,
-        h: 96,
-        header: 10
-    }
-};
-
-},{}],73:[function(require,module,exports){
-module.exports = {
-    'wlsat': {
-        w: 128,
-        h: 128
-    },
-    'phalla': {
-        w: 128,
-        h: 128
-    },
-    'phalld': {
-        w: 128,
-        h: 128
-    },
-    'phallh': {
-        w: 128,
-        h: 128
-    },
-    'phalln': {
-        w: 128,
-        h: 128
-    },
-    'phallw': {
-        w: 128,
-        h: 128
-    }
-};
-
-},{}],74:[function(require,module,exports){
-/**
- * Start coordinates (column/row) for the DUN files.
- */
-module.exports = {
-    'sector1s': [46, 46],
-    'sector2s': [46, 0],
-    'sector3s': [0, 46],
-    'sector4s': [0, 0]
-};
-
-},{}],75:[function(require,module,exports){
-/**
- * Pillar counts per-pillar for the different files.
- */
-module.exports = {
-    'l1': 10,
-    'l2': 10,
-    'l3': 10,
-    'l4': 16,
-    'town': 16
-};
-
-},{}],76:[function(require,module,exports){
-'use strict';
-
-var path = require('path'),
-    Til = require('./til'),
-    dunConfig = require('./config/dun_info');
-
-/**
- * DUN files contain information for arranging the squares of a TIL file.
- * Multiple DUN files can be pieced together to form entire levels.
- * For example, the 'town' level is a combination of 4 DUN files.
- *
- * In addition, DUN files also provide information regarding dungeon
- * monsters and object ids.
- */
-function DunFile(startCoord, rawPillarData, dunName) {
-    this.startCol = startCoord[0];
-    this.startRow = startCoord[1];
-    this.fileName = dunName;
-
-    this.rawPillarData = rawPillarData;
-    this.rawColCount = this.rawPillarData.length;
-    this.rawRowCount = (this.rawColCount > 0) ? this.rawPillarData[0].length : 0;
-
-    this.pillarData = null;     // Initialized during unpack operation.
-    this.colCount = this.rawColCount * 2;
-    this.rowCount = this.rawRowCount * 2;
-}
-
-/**
- * Unpacks the pillar data of the DUN file using the TIL file to perform
- * square index lookups. DUN file can be used without unpacking, but
- * this operation will convert it to an easier to use format.
- */
-DunFile.prototype.unpack = function(tilFile) {
-    // Already unpacked?
-    if (this.pillarData !== null) {
-        return;
-    }
-
-    // Pre-allocate.
-    this.pillarData = new Array(this.colCount);
-    for (var i = 0; i < this.pillarData.length; i++) {
-        this.pillarData[i] = new Array(this.rowCount);
-    }
-
-    // Parse pillar data.
-    var row = 0;
-    for (i = 0; i < this.rawRowCount; i++) {
-        var col = 0;
-        for (var j = 0; j < this.rawColCount; j++) {
-            var squareIndexPlus1 = this.rawPillarData[j][i];
-            if (squareIndexPlus1 !== 0) {
-                var square = tilFile.squares[squareIndexPlus1 - 1];
-
-                this.pillarData[col][row] = square[Til.SQUARE_TOP];
-                this.pillarData[col + 1][row] = square[Til.SQUARE_RIGHT];
-                this.pillarData[col][row + 1] = square[Til.SQUARE_LEFT];
-                this.pillarData[col + 1][row + 1] = square[Til.SQUARE_BOTTOM];
-            } else {
-                this.pillarData[col][row] = null;
-                this.pillarData[col + 1][row] = null;
-                this.pillarData[col][row + 1] = null;
-                this.pillarData[col + 1][row + 1] = null;
-            }
-
-            col += 2;
-        }
-        row += 2;
-    }
-};
-
-function getStartCoord(dunName) {
-    var startCoord = dunConfig[dunName];
-    if (typeof startCoord == 'undefined') {
-        console.error('Unhandled DUN file: ' + dunName);
-        return [0, 0];
-    }
-
-    return startCoord;
-}
-
-function _load(buffer, dunPath) {
-    var offset = 0;
-    var colCount = buffer.readUInt16LE(offset);
-    var rowCount = buffer.readUInt16LE(offset += 2);
-
-    // Pre-allocate.
-    var rawPillarData = new Array(colCount);
-    for (var i = 0; i < rawPillarData.length; i++) {
-        rawPillarData[i] = new Array(rowCount);
-    }
-
-    // Parse pillar data.
-    for (i = 0; i < rowCount; i++) {
-        for (var j = 0; j < colCount; j++) {
-            rawPillarData[j][i] = buffer.readUInt16LE(offset += 2);
-        }
-    }
-
-    // levels/towndata/sector1s.dun -> sector1s
-    var dunName = path.basename(dunPath, '.dun');
-    var startCoord = getStartCoord(dunName);
-
-    return new DunFile(startCoord, rawPillarData, dunName);
-}
-
-module.exports = {
-    load: _load
-};
-
-},{"./config/dun_info":74,"./til":80,"path":46}],77:[function(require,module,exports){
-'use strict';
-
-var path = require('path'),
-    minConfig = require('./config/min_info');
-
-/**
- * MIN files contain information on how to arrange the frames
- * in a CEL image, in order to form a vertical pillar. This allows
- * for 'tall' configurations of images, such as for trees and roofs.
- *
- * A single pillar is arranged in the following configuration,
- * vertically from top to bottom. Depending on the specific file,
- * MIN files will have either 16 or 10 blocks.
- *
- *    +----+----+
- *    |  0 |  1 |
- *    +----+----+
- *    |  2 |  3 |
- *    +----+----+
- *    |  4 |  5 |
- *    +----+----+
- *    |  6 |  7 |
- *    +----+----+
- *    |  8 |  9 |
- *    +----+----+
- *    | 10 | 11 |
- *    +----+----+
- *    | 12 | 13 |
- *    +----+----+
- *    | 14 | 15 |
- *    +----+----+
- */
-function MinFile(pillars) {
-    this.pillars = pillars;
-}
-
-function getBlockCountPerPillar(minName) {
-    var pillarCount = minConfig[minName];
-    if (typeof pillarCount == 'undefined') {
-        console.error('Unhandled MIN file: ' + minName);
-        return 0;
-    }
-
-    return pillarCount;
-}
-
-var BYTE_COUNT_PER_BLOCK = 2;
-
-function _load(buffer, minPath) {
-    // levels/towndata/town.min -> town
-    var minName = path.basename(minPath, '.min');
-    var blockCountPerPillar = getBlockCountPerPillar(minName);
-    var totalBlockCount = buffer.length / BYTE_COUNT_PER_BLOCK;
-
-    // There should be exactly the correct # of bytes for creating the pillars.
-    if ((buffer.length % BYTE_COUNT_PER_BLOCK) !== 0 ||
-        (totalBlockCount % blockCountPerPillar) !== 0) {
-        console.error('Invalid MIN file size [' + buffer.length + '] for ' + minPath);
-        return null;
-    }
-
-    var pillars = new Array(totalBlockCount / blockCountPerPillar);
-
-    var offset = 0;
-    for (var p = 0; p < pillars.length; p++) {
-        var pillarBlocks = new Array(blockCountPerPillar);
-        for (var i = 0; i < blockCountPerPillar; i++) {
-            // Read in the raw block value.
-            var rawBlockValue = buffer.readUInt16LE(offset);
-            offset += BYTE_COUNT_PER_BLOCK;
-
-            // Parse the block value for easy usage.
-            var frameNumPlus1 = (rawBlockValue & 0x0FFF);
-            if (frameNumPlus1 !== 0) {
-                pillarBlocks[i] = {
-                    frameNum: frameNumPlus1 - 1,
-                    type: (rawBlockValue & 0x7000) >>> 12
-                };
-            } else {
-                pillarBlocks[i] = null;
-            }
-        }
-
-        pillars[p] = pillarBlocks;
-    }
-
-    return new MinFile(pillars);
-}
-
-module.exports = {
-    load: _load
-};
-
-},{"./config/min_info":75,"path":46}],78:[function(require,module,exports){
-'use strict';
-
-/**
- * PAL files are the color palettes used to render images.
- * Partial transparency is not supported.
- */
-function PalFile(colors) {
-    this.colors = colors;
-}
-
-var COLOR_COUNT = 256;
-
-function _load(buffer, path) {
-    if (buffer.length != (COLOR_COUNT * 3)) {
-        console.error('Invalid PAL file size [' + buffer.length + '] for ' + path);
-        return null;
-    }
-
-    var colors = new Array(COLOR_COUNT);
-    var offset = 0;
-    for (var i = 0; i < COLOR_COUNT; i++) {
-        colors[i] = {
-            r: buffer.readUInt8(offset),
-            g: buffer.readUInt8(offset + 1),
-            b: buffer.readUInt8(offset + 2),
-            a: 0xFF
-        };
-
-        offset += 3;
-    }
-
-    return new PalFile(colors);
-}
-
-module.exports = {
-    load: _load
-};
-
-},{}],79:[function(require,module,exports){
-'use strict';
-
-var pathLib = require('path');
-
-/**
- * SOL files contain meta information about pillars, such as
- * collision and transparency properties.
- *
- * The usage of some of the bits are currently unknown.
- */
-function SolFile(data, path) {
-    this.data = data;
-    this.path = path;
-
-    // levels/towndata/town.sol -> town
-    this.name = pathLib.basename(path, '.sol');
-}
-
-var CHECK_COLLISION = 0x01;
-// var CHECK_0x02 = 0x02;
-var CHECK_COLLISION_RANGE = 0x04;
-var CHECK_TRANSPARENCY = 0x08;
-// var CHECK_0x10 = 0x10;
-// var CHECK_0x20 = 0x20;
-// var CHECK_0x40 = 0x40;
-// var CHECK_0x80 = 0x80;
-
-SolFile.prototype = {
-    /**
-     * Returns true if the block has collision and should
-     * not be passable by player / enemies.
-     */
-    isCollision: function(pillarIndex) {
-        return ((this.data[pillarIndex] & CHECK_COLLISION) !== 0);
-    },
-
-    /**
-     * Returns true if the block has 'range' collision, for things
-     * like missiles and summoning of monsters.
-     */
-    isCollisionRange: function(pillarIndex) {
-        return ((this.data[pillarIndex] & CHECK_COLLISION_RANGE) !== 0);
-    },
-
-    /**
-     * Returns true if the block allows for transparency.
-     */
-    allowTransparency: function(pillarIndex) {
-        return ((this.data[pillarIndex] & CHECK_TRANSPARENCY) !== 0);
-    }
-};
-
-function _load(buffer, path) {
-    var solData = new Array(buffer.length);
-    var offset = 0;
-    for (var i = 0; i < solData.length; i++) {
-        solData[i] = buffer.readUInt8(offset++);
-    }
-
-    return new SolFile(solData, path);
-}
-
-module.exports = {
-    load: _load
-};
-
-},{"path":46}],80:[function(require,module,exports){
-'use strict';
-
-/**
- * TIL files contain indices for rendering the pillars found in the MIN files.
- *
- * Each 8 byte sequence in the TIL file describes the 4 quadrants of a square,
- * at 2 bytes each. Each square quadrant index is an index into the pillar
- * array of the MIN file.
- *
- * The square is arranged as follows:
- *
- *             top [0]
- *               /\
- *    left [2]  /\/\  right [1]
- *              \/\/
- *               \/
- *            bottom [3]
- */
-function TilFile(squares) {
-    this.squares = squares;
-}
-
-function _load(buffer, tilPath) {
-    // 4 indices at 2 bytes a piece.
-    var squareSizeInBytes = 4 * 2;
-
-    if ((buffer.length % squareSizeInBytes) !== 0) {
-        console.error('Invalid TIL file size [' + buffer.length + '] for ' + tilPath);
-        return null;
-    }
-
-    var squares = new Array(buffer.length / squareSizeInBytes);
-
-    var offset = 0;
-    for (var i = 0; i < squares.length; i++) {
-        squares[i] = [
-            buffer.readUInt16LE(offset),        // top
-            buffer.readUInt16LE(offset + 2),    // right
-            buffer.readUInt16LE(offset + 4),    // left
-            buffer.readUInt16LE(offset + 6)     // bottom
-        ];
-
-        offset += 8;
-    }
-
-    return new TilFile(squares);
-}
-
-module.exports = {
-    load: _load,
-
-    SQUARE_TOP: 0,
-    SQUARE_RIGHT: 1,
-    SQUARE_LEFT: 2,
-    SQUARE_BOTTOM: 3
-};
-
-},{}],81:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-function EventEmitter() {
-  this._events = this._events || {};
-  this._maxListeners = this._maxListeners || undefined;
-}
-module.exports = EventEmitter;
-
-// Backwards-compat with node 0.10.x
-EventEmitter.EventEmitter = EventEmitter;
-
-EventEmitter.prototype._events = undefined;
-EventEmitter.prototype._maxListeners = undefined;
-
-// By default EventEmitters will print a warning if more than 10 listeners are
-// added to it. This is a useful default which helps finding memory leaks.
-EventEmitter.defaultMaxListeners = 10;
-
-// Obviously not all Emitters should be limited to 10. This function allows
-// that to be increased. Set to zero for unlimited.
-EventEmitter.prototype.setMaxListeners = function(n) {
-  if (!isNumber(n) || n < 0 || isNaN(n))
-    throw TypeError('n must be a positive number');
-  this._maxListeners = n;
-  return this;
-};
-
-EventEmitter.prototype.emit = function(type) {
-  var er, handler, len, args, i, listeners;
-
-  if (!this._events)
-    this._events = {};
-
-  // If there is no 'error' event listener then throw.
-  if (type === 'error') {
-    if (!this._events.error ||
-        (isObject(this._events.error) && !this._events.error.length)) {
-      er = arguments[1];
-      if (er instanceof Error) {
-        throw er; // Unhandled 'error' event
-      }
-      throw TypeError('Uncaught, unspecified "error" event.');
-    }
-  }
-
-  handler = this._events[type];
-
-  if (isUndefined(handler))
-    return false;
-
-  if (isFunction(handler)) {
-    switch (arguments.length) {
-      // fast cases
-      case 1:
-        handler.call(this);
-        break;
-      case 2:
-        handler.call(this, arguments[1]);
-        break;
-      case 3:
-        handler.call(this, arguments[1], arguments[2]);
-        break;
-      // slower
-      default:
-        len = arguments.length;
-        args = new Array(len - 1);
-        for (i = 1; i < len; i++)
-          args[i - 1] = arguments[i];
-        handler.apply(this, args);
-    }
-  } else if (isObject(handler)) {
-    len = arguments.length;
-    args = new Array(len - 1);
-    for (i = 1; i < len; i++)
-      args[i - 1] = arguments[i];
-
-    listeners = handler.slice();
-    len = listeners.length;
-    for (i = 0; i < len; i++)
-      listeners[i].apply(this, args);
-  }
-
-  return true;
-};
-
-EventEmitter.prototype.addListener = function(type, listener) {
-  var m;
-
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  if (!this._events)
-    this._events = {};
-
-  // To avoid recursion in the case that type === "newListener"! Before
-  // adding it to the listeners, first emit "newListener".
-  if (this._events.newListener)
-    this.emit('newListener', type,
-              isFunction(listener.listener) ?
-              listener.listener : listener);
-
-  if (!this._events[type])
-    // Optimize the case of one listener. Don't need the extra array object.
-    this._events[type] = listener;
-  else if (isObject(this._events[type]))
-    // If we've already got an array, just append.
-    this._events[type].push(listener);
-  else
-    // Adding the second element, need to change to array.
-    this._events[type] = [this._events[type], listener];
-
-  // Check for listener leak
-  if (isObject(this._events[type]) && !this._events[type].warned) {
-    var m;
-    if (!isUndefined(this._maxListeners)) {
-      m = this._maxListeners;
-    } else {
-      m = EventEmitter.defaultMaxListeners;
-    }
-
-    if (m && m > 0 && this._events[type].length > m) {
-      this._events[type].warned = true;
-      console.error('(node) warning: possible EventEmitter memory ' +
-                    'leak detected. %d listeners added. ' +
-                    'Use emitter.setMaxListeners() to increase limit.',
-                    this._events[type].length);
-      if (typeof console.trace === 'function') {
-        // not supported in IE 10
-        console.trace();
-      }
-    }
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.on = EventEmitter.prototype.addListener;
-
-EventEmitter.prototype.once = function(type, listener) {
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  var fired = false;
-
-  function g() {
-    this.removeListener(type, g);
-
-    if (!fired) {
-      fired = true;
-      listener.apply(this, arguments);
-    }
-  }
-
-  g.listener = listener;
-  this.on(type, g);
-
-  return this;
-};
-
-// emits a 'removeListener' event iff the listener was removed
-EventEmitter.prototype.removeListener = function(type, listener) {
-  var list, position, length, i;
-
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  if (!this._events || !this._events[type])
-    return this;
-
-  list = this._events[type];
-  length = list.length;
-  position = -1;
-
-  if (list === listener ||
-      (isFunction(list.listener) && list.listener === listener)) {
-    delete this._events[type];
-    if (this._events.removeListener)
-      this.emit('removeListener', type, listener);
-
-  } else if (isObject(list)) {
-    for (i = length; i-- > 0;) {
-      if (list[i] === listener ||
-          (list[i].listener && list[i].listener === listener)) {
-        position = i;
-        break;
-      }
-    }
-
-    if (position < 0)
-      return this;
-
-    if (list.length === 1) {
-      list.length = 0;
-      delete this._events[type];
-    } else {
-      list.splice(position, 1);
-    }
-
-    if (this._events.removeListener)
-      this.emit('removeListener', type, listener);
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.removeAllListeners = function(type) {
-  var key, listeners;
-
-  if (!this._events)
-    return this;
-
-  // not listening for removeListener, no need to emit
-  if (!this._events.removeListener) {
-    if (arguments.length === 0)
-      this._events = {};
-    else if (this._events[type])
-      delete this._events[type];
-    return this;
-  }
-
-  // emit removeListener for all listeners on all events
-  if (arguments.length === 0) {
-    for (key in this._events) {
-      if (key === 'removeListener') continue;
-      this.removeAllListeners(key);
-    }
-    this.removeAllListeners('removeListener');
-    this._events = {};
-    return this;
-  }
-
-  listeners = this._events[type];
-
-  if (isFunction(listeners)) {
-    this.removeListener(type, listeners);
-  } else {
-    // LIFO order
-    while (listeners.length)
-      this.removeListener(type, listeners[listeners.length - 1]);
-  }
-  delete this._events[type];
-
-  return this;
-};
-
-EventEmitter.prototype.listeners = function(type) {
-  var ret;
-  if (!this._events || !this._events[type])
-    ret = [];
-  else if (isFunction(this._events[type]))
-    ret = [this._events[type]];
-  else
-    ret = this._events[type].slice();
-  return ret;
-};
-
-EventEmitter.listenerCount = function(emitter, type) {
-  var ret;
-  if (!emitter._events || !emitter._events[type])
-    ret = 0;
-  else if (isFunction(emitter._events[type]))
-    ret = 1;
-  else
-    ret = emitter._events[type].length;
-  return ret;
-};
-
-function isFunction(arg) {
-  return typeof arg === 'function';
-}
-
-function isNumber(arg) {
-  return typeof arg === 'number';
-}
-
-function isObject(arg) {
-  return typeof arg === 'object' && arg !== null;
-}
-
-function isUndefined(arg) {
-  return arg === void 0;
-}
-
-},{}],82:[function(require,module,exports){
-var http = module.exports;
-var EventEmitter = require('events').EventEmitter;
-var Request = require('./lib/request');
-var url = require('url')
-
-http.request = function (params, cb) {
-    if (typeof params === 'string') {
-        params = url.parse(params)
-    }
-    if (!params) params = {};
-    if (!params.host && !params.port) {
-        params.port = parseInt(window.location.port, 10);
-    }
-    if (!params.host && params.hostname) {
-        params.host = params.hostname;
-    }
-
-    if (!params.protocol) {
-        if (params.scheme) {
-            params.protocol = params.scheme + ':';
-        } else {
-            params.protocol = window.location.protocol;
-        }
-    }
-
-    if (!params.host) {
-        params.host = window.location.hostname || window.location.host;
-    }
-    if (/:/.test(params.host)) {
-        if (!params.port) {
-            params.port = params.host.split(':')[1];
-        }
-        params.host = params.host.split(':')[0];
-    }
-    if (!params.port) params.port = params.protocol == 'https:' ? 443 : 80;
-    
-    var req = new Request(new xhrHttp, params);
-    if (cb) req.on('response', cb);
-    return req;
-};
-
-http.get = function (params, cb) {
-    params.method = 'GET';
-    var req = http.request(params, cb);
-    req.end();
-    return req;
-};
-
-http.Agent = function () {};
-http.Agent.defaultMaxSockets = 4;
-
-var xhrHttp = (function () {
-    if (typeof window === 'undefined') {
-        throw new Error('no window object present');
-    }
-    else if (window.XMLHttpRequest) {
-        return window.XMLHttpRequest;
-    }
-    else if (window.ActiveXObject) {
-        var axs = [
-            'Msxml2.XMLHTTP.6.0',
-            'Msxml2.XMLHTTP.3.0',
-            'Microsoft.XMLHTTP'
-        ];
-        for (var i = 0; i < axs.length; i++) {
-            try {
-                var ax = new(window.ActiveXObject)(axs[i]);
-                return function () {
-                    if (ax) {
-                        var ax_ = ax;
-                        ax = null;
-                        return ax_;
-                    }
-                    else {
-                        return new(window.ActiveXObject)(axs[i]);
-                    }
-                };
-            }
-            catch (e) {}
-        }
-        throw new Error('ajax not supported in this browser')
-    }
-    else {
-        throw new Error('ajax not supported in this browser');
-    }
-})();
-
-http.STATUS_CODES = {
-    100 : 'Continue',
-    101 : 'Switching Protocols',
-    102 : 'Processing',                 // RFC 2518, obsoleted by RFC 4918
-    200 : 'OK',
-    201 : 'Created',
-    202 : 'Accepted',
-    203 : 'Non-Authoritative Information',
-    204 : 'No Content',
-    205 : 'Reset Content',
-    206 : 'Partial Content',
-    207 : 'Multi-Status',               // RFC 4918
-    300 : 'Multiple Choices',
-    301 : 'Moved Permanently',
-    302 : 'Moved Temporarily',
-    303 : 'See Other',
-    304 : 'Not Modified',
-    305 : 'Use Proxy',
-    307 : 'Temporary Redirect',
-    400 : 'Bad Request',
-    401 : 'Unauthorized',
-    402 : 'Payment Required',
-    403 : 'Forbidden',
-    404 : 'Not Found',
-    405 : 'Method Not Allowed',
-    406 : 'Not Acceptable',
-    407 : 'Proxy Authentication Required',
-    408 : 'Request Time-out',
-    409 : 'Conflict',
-    410 : 'Gone',
-    411 : 'Length Required',
-    412 : 'Precondition Failed',
-    413 : 'Request Entity Too Large',
-    414 : 'Request-URI Too Large',
-    415 : 'Unsupported Media Type',
-    416 : 'Requested Range Not Satisfiable',
-    417 : 'Expectation Failed',
-    418 : 'I\'m a teapot',              // RFC 2324
-    422 : 'Unprocessable Entity',       // RFC 4918
-    423 : 'Locked',                     // RFC 4918
-    424 : 'Failed Dependency',          // RFC 4918
-    425 : 'Unordered Collection',       // RFC 4918
-    426 : 'Upgrade Required',           // RFC 2817
-    428 : 'Precondition Required',      // RFC 6585
-    429 : 'Too Many Requests',          // RFC 6585
-    431 : 'Request Header Fields Too Large',// RFC 6585
-    500 : 'Internal Server Error',
-    501 : 'Not Implemented',
-    502 : 'Bad Gateway',
-    503 : 'Service Unavailable',
-    504 : 'Gateway Time-out',
-    505 : 'HTTP Version Not Supported',
-    506 : 'Variant Also Negotiates',    // RFC 2295
-    507 : 'Insufficient Storage',       // RFC 4918
-    509 : 'Bandwidth Limit Exceeded',
-    510 : 'Not Extended',               // RFC 2774
-    511 : 'Network Authentication Required' // RFC 6585
-};
-},{"./lib/request":83,"events":81,"url":65}],83:[function(require,module,exports){
-var Stream = require('stream');
-var Response = require('./response');
-var Base64 = require('Base64');
-var inherits = require('inherits');
-
-var Request = module.exports = function (xhr, params) {
-    var self = this;
-    self.writable = true;
-    self.xhr = xhr;
-    self.body = [];
-    
-    self.uri = (params.protocol || 'http:') + '//'
-        + params.host
-        + (params.port ? ':' + params.port : '')
-        + (params.path || '/')
-    ;
-    
-    if (typeof params.withCredentials === 'undefined') {
-        params.withCredentials = true;
-    }
-
-    try { xhr.withCredentials = params.withCredentials }
-    catch (e) {}
-    
-    if (params.responseType) try { xhr.responseType = params.responseType }
-    catch (e) {}
-    
-    xhr.open(
-        params.method || 'GET',
-        self.uri,
-        true
-    );
-
-    xhr.onerror = function(event) {
-        self.emit('error', new Error('Network error'));
-    };
-
-    self._headers = {};
-    
-    if (params.headers) {
-        var keys = objectKeys(params.headers);
-        for (var i = 0; i < keys.length; i++) {
-            var key = keys[i];
-            if (!self.isSafeRequestHeader(key)) continue;
-            var value = params.headers[key];
-            self.setHeader(key, value);
-        }
-    }
-    
-    if (params.auth) {
-        //basic auth
-        this.setHeader('Authorization', 'Basic ' + Base64.btoa(params.auth));
-    }
-
-    var res = new Response;
-    res.on('close', function () {
-        self.emit('close');
-    });
-    
-    res.on('ready', function () {
-        self.emit('response', res);
-    });
-
-    res.on('error', function (err) {
-        self.emit('error', err);
-    });
-    
-    xhr.onreadystatechange = function () {
-        // Fix for IE9 bug
-        // SCRIPT575: Could not complete the operation due to error c00c023f
-        // It happens when a request is aborted, calling the success callback anyway with readyState === 4
-        if (xhr.__aborted) return;
-        res.handle(xhr);
-    };
-};
-
-inherits(Request, Stream);
-
-Request.prototype.setHeader = function (key, value) {
-    this._headers[key.toLowerCase()] = value
-};
-
-Request.prototype.getHeader = function (key) {
-    return this._headers[key.toLowerCase()]
-};
-
-Request.prototype.removeHeader = function (key) {
-    delete this._headers[key.toLowerCase()]
-};
-
-Request.prototype.write = function (s) {
-    this.body.push(s);
-};
-
-Request.prototype.destroy = function (s) {
-    this.xhr.__aborted = true;
-    this.xhr.abort();
-    this.emit('close');
-};
-
-Request.prototype.end = function (s) {
-    if (s !== undefined) this.body.push(s);
-
-    var keys = objectKeys(this._headers);
-    for (var i = 0; i < keys.length; i++) {
-        var key = keys[i];
-        var value = this._headers[key];
-        if (isArray(value)) {
-            for (var j = 0; j < value.length; j++) {
-                this.xhr.setRequestHeader(key, value[j]);
-            }
-        }
-        else this.xhr.setRequestHeader(key, value)
-    }
-
-    if (this.body.length === 0) {
-        this.xhr.send('');
-    }
-    else if (typeof this.body[0] === 'string') {
-        this.xhr.send(this.body.join(''));
-    }
-    else if (isArray(this.body[0])) {
-        var body = [];
-        for (var i = 0; i < this.body.length; i++) {
-            body.push.apply(body, this.body[i]);
-        }
-        this.xhr.send(body);
-    }
-    else if (/Array/.test(Object.prototype.toString.call(this.body[0]))) {
-        var len = 0;
-        for (var i = 0; i < this.body.length; i++) {
-            len += this.body[i].length;
-        }
-        var body = new(this.body[0].constructor)(len);
-        var k = 0;
-        
-        for (var i = 0; i < this.body.length; i++) {
-            var b = this.body[i];
-            for (var j = 0; j < b.length; j++) {
-                body[k++] = b[j];
-            }
-        }
-        this.xhr.send(body);
-    }
-    else if (isXHR2Compatible(this.body[0])) {
-        this.xhr.send(this.body[0]);
-    }
-    else {
-        var body = '';
-        for (var i = 0; i < this.body.length; i++) {
-            body += this.body[i].toString();
-        }
-        this.xhr.send(body);
-    }
-};
-
-// Taken from http://dxr.mozilla.org/mozilla/mozilla-central/content/base/src/nsXMLHttpRequest.cpp.html
-Request.unsafeHeaders = [
-    "accept-charset",
-    "accept-encoding",
-    "access-control-request-headers",
-    "access-control-request-method",
-    "connection",
-    "content-length",
-    "cookie",
-    "cookie2",
-    "content-transfer-encoding",
-    "date",
-    "expect",
-    "host",
-    "keep-alive",
-    "origin",
-    "referer",
-    "te",
-    "trailer",
-    "transfer-encoding",
-    "upgrade",
-    "user-agent",
-    "via"
-];
-
-Request.prototype.isSafeRequestHeader = function (headerName) {
-    if (!headerName) return false;
-    return indexOf(Request.unsafeHeaders, headerName.toLowerCase()) === -1;
-};
-
-var objectKeys = Object.keys || function (obj) {
-    var keys = [];
-    for (var key in obj) keys.push(key);
-    return keys;
-};
-
-var isArray = Array.isArray || function (xs) {
-    return Object.prototype.toString.call(xs) === '[object Array]';
-};
-
-var indexOf = function (xs, x) {
-    if (xs.indexOf) return xs.indexOf(x);
-    for (var i = 0; i < xs.length; i++) {
-        if (xs[i] === x) return i;
-    }
-    return -1;
-};
-
-var isXHR2Compatible = function (obj) {
-    if (typeof Blob !== 'undefined' && obj instanceof Blob) return true;
-    if (typeof ArrayBuffer !== 'undefined' && obj instanceof ArrayBuffer) return true;
-    if (typeof FormData !== 'undefined' && obj instanceof FormData) return true;
-};
-
-},{"./response":84,"Base64":85,"inherits":86,"stream":63}],84:[function(require,module,exports){
-var Stream = require('stream');
-var util = require('util');
-
-var Response = module.exports = function (res) {
-    this.offset = 0;
-    this.readable = true;
-};
-
-util.inherits(Response, Stream);
-
-var capable = {
-    streaming : true,
-    status2 : true
-};
-
-function parseHeaders (res) {
-    var lines = res.getAllResponseHeaders().split(/\r?\n/);
-    var headers = {};
-    for (var i = 0; i < lines.length; i++) {
-        var line = lines[i];
-        if (line === '') continue;
-        
-        var m = line.match(/^([^:]+):\s*(.*)/);
-        if (m) {
-            var key = m[1].toLowerCase(), value = m[2];
-            
-            if (headers[key] !== undefined) {
-            
-                if (isArray(headers[key])) {
-                    headers[key].push(value);
-                }
-                else {
-                    headers[key] = [ headers[key], value ];
-                }
-            }
-            else {
-                headers[key] = value;
-            }
-        }
-        else {
-            headers[line] = true;
-        }
-    }
-    return headers;
-}
-
-Response.prototype.getResponse = function (xhr) {
-    var respType = String(xhr.responseType).toLowerCase();
-    if (respType === 'blob') return xhr.responseBlob || xhr.response;
-    if (respType === 'arraybuffer') return xhr.response;
-    return xhr.responseText;
-}
-
-Response.prototype.getHeader = function (key) {
-    return this.headers[key.toLowerCase()];
-};
-
-Response.prototype.handle = function (res) {
-    if (res.readyState === 2 && capable.status2) {
-        try {
-            this.statusCode = res.status;
-            this.headers = parseHeaders(res);
-        }
-        catch (err) {
-            capable.status2 = false;
-        }
-        
-        if (capable.status2) {
-            this.emit('ready');
-        }
-    }
-    else if (capable.streaming && res.readyState === 3) {
-        try {
-            if (!this.statusCode) {
-                this.statusCode = res.status;
-                this.headers = parseHeaders(res);
-                this.emit('ready');
-            }
-        }
-        catch (err) {}
-        
-        try {
-            this._emitData(res);
-        }
-        catch (err) {
-            capable.streaming = false;
-        }
-    }
-    else if (res.readyState === 4) {
-        if (!this.statusCode) {
-            this.statusCode = res.status;
-            this.emit('ready');
-        }
-        this._emitData(res);
-        
-        if (res.error) {
-            this.emit('error', this.getResponse(res));
-        }
-        else this.emit('end');
-        
-        this.emit('close');
-    }
-};
-
-Response.prototype._emitData = function (res) {
-    var respBody = this.getResponse(res);
-    if (respBody.toString().match(/ArrayBuffer/)) {
-        this.emit('data', new Uint8Array(respBody, this.offset));
-        this.offset = respBody.byteLength;
-        return;
-    }
-    if (respBody.length > this.offset) {
-        this.emit('data', respBody.slice(this.offset));
-        this.offset = respBody.length;
-    }
-};
-
-var isArray = Array.isArray || function (xs) {
-    return Object.prototype.toString.call(xs) === '[object Array]';
-};
-
-},{"stream":63,"util":67}],85:[function(require,module,exports){
-;(function () {
-
-  var object = typeof exports != 'undefined' ? exports : this; // #8: web workers
-  var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-
-  function InvalidCharacterError(message) {
-    this.message = message;
-  }
-  InvalidCharacterError.prototype = new Error;
-  InvalidCharacterError.prototype.name = 'InvalidCharacterError';
-
-  // encoder
-  // [https://gist.github.com/999166] by [https://github.com/nignag]
-  object.btoa || (
-  object.btoa = function (input) {
-    for (
-      // initialize result and counter
-      var block, charCode, idx = 0, map = chars, output = '';
-      // if the next input index does not exist:
-      //   change the mapping table to "="
-      //   check if d has no fractional digits
-      input.charAt(idx | 0) || (map = '=', idx % 1);
-      // "8 - idx % 1 * 8" generates the sequence 2, 4, 6, 8
-      output += map.charAt(63 & block >> 8 - idx % 1 * 8)
-    ) {
-      charCode = input.charCodeAt(idx += 3/4);
-      if (charCode > 0xFF) {
-        throw new InvalidCharacterError("'btoa' failed: The string to be encoded contains characters outside of the Latin1 range.");
-      }
-      block = block << 8 | charCode;
-    }
-    return output;
-  });
-
-  // decoder
-  // [https://gist.github.com/1020396] by [https://github.com/atk]
-  object.atob || (
-  object.atob = function (input) {
-    input = input.replace(/=+$/, '');
-    if (input.length % 4 == 1) {
-      throw new InvalidCharacterError("'atob' failed: The string to be decoded is not correctly encoded.");
-    }
-    for (
-      // initialize result and counters
-      var bc = 0, bs, buffer, idx = 0, output = '';
-      // get next character
-      buffer = input.charAt(idx++);
-      // character found in table? initialize bit storage and add its ascii value;
-      ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer,
-        // and if not first of each 4 characters,
-        // convert the first 8 bits to one ascii character
-        bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
-    ) {
-      // try to find character in table (0-63, not found => -1)
-      buffer = chars.indexOf(buffer);
-    }
-    return output;
-  });
-
-}());
-
-},{}],86:[function(require,module,exports){
-if (typeof Object.create === 'function') {
-  // implementation from standard node.js 'util' module
-  module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    ctor.prototype = Object.create(superCtor.prototype, {
-      constructor: {
-        value: ctor,
-        enumerable: false,
-        writable: true,
-        configurable: true
-      }
-    });
+function createFindIndex(fromRight) {
+  return function(array, predicate, thisArg) {
+    if (!(array && array.length)) {
+      return -1;
+    }
+    predicate = baseCallback(predicate, thisArg, 3);
+    return baseFindIndex(array, predicate, fromRight);
   };
-} else {
-  // old school shim for old browsers
-  module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    var TempCtor = function () {}
-    TempCtor.prototype = superCtor.prototype
-    ctor.prototype = new TempCtor()
-    ctor.prototype.constructor = ctor
-  }
 }
 
-},{}],87:[function(require,module,exports){
-(function (global){
 /**
- * @license
- * Lo-Dash 2.4.1 (Custom Build) <http://lodash.com/>
- * Build: `lodash modern -o ./dist/lodash.js`
- * Copyright 2012-2013 The Dojo Foundation <http://dojofoundation.org/>
- * Based on Underscore.js 1.5.2 <http://underscorejs.org/LICENSE>
- * Copyright 2009-2013 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
- * Available under MIT license <http://lodash.com/license>
+ * This method is like `_.find` except that it returns the index of the first
+ * element `predicate` returns truthy for instead of the element itself.
+ *
+ * If a property name is provided for `predicate` the created `_.property`
+ * style callback returns the property value of the given element.
+ *
+ * If a value is also provided for `thisArg` the created `_.matchesProperty`
+ * style callback returns `true` for elements that have a matching property
+ * value, else `false`.
+ *
+ * If an object is provided for `predicate` the created `_.matches` style
+ * callback returns `true` for elements that have the properties of the given
+ * object, else `false`.
+ *
+ * @static
+ * @memberOf _
+ * @category Array
+ * @param {Array} array The array to search.
+ * @param {Function|Object|string} [predicate=_.identity] The function invoked
+ *  per iteration.
+ * @param {*} [thisArg] The `this` binding of `predicate`.
+ * @returns {number} Returns the index of the found element, else `-1`.
+ * @example
+ *
+ * var users = [
+ *   { 'user': 'barney',  'active': false },
+ *   { 'user': 'fred',    'active': false },
+ *   { 'user': 'pebbles', 'active': true }
+ * ];
+ *
+ * _.findIndex(users, function(chr) {
+ *   return chr.user == 'barney';
+ * });
+ * // => 0
+ *
+ * // using the `_.matches` callback shorthand
+ * _.findIndex(users, { 'user': 'fred', 'active': false });
+ * // => 1
+ *
+ * // using the `_.matchesProperty` callback shorthand
+ * _.findIndex(users, 'active', false);
+ * // => 0
+ *
+ * // using the `_.property` callback shorthand
+ * _.findIndex(users, 'active');
+ * // => 2
  */
-;(function() {
+var findIndex = createFindIndex();
 
-  /** Used as a safe reference for `undefined` in pre ES5 environments */
-  var undefined;
+module.exports = findIndex;
 
-  /** Used to pool arrays and objects used internally */
-  var arrayPool = [],
-      objectPool = [];
+},{"lodash._basecallback":53,"lodash._basefindindex":64}],53:[function(require,module,exports){
+/**
+ * lodash 3.3.1 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+var baseIsEqual = require('lodash._baseisequal'),
+    bindCallback = require('lodash._bindcallback'),
+    isArray = require('lodash.isarray'),
+    pairs = require('lodash.pairs');
 
-  /** Used to generate unique IDs */
-  var idCounter = 0;
+/** Used to match property names within property paths. */
+var reIsDeepProp = /\.|\[(?:[^[\]]*|(["'])(?:(?!\1)[^\n\\]|\\.)*?\1)\]/,
+    reIsPlainProp = /^\w*$/,
+    rePropName = /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\n\\]|\\.)*?)\2)\]/g;
 
-  /** Used to prefix keys to avoid issues with `__proto__` and properties on `Object.prototype` */
-  var keyPrefix = +new Date + '';
+/** Used to match backslashes in property paths. */
+var reEscapeChar = /\\(\\)?/g;
 
-  /** Used as the size when optimizations are enabled for large arrays */
-  var largeArraySize = 75;
+/**
+ * Converts `value` to a string if it's not one. An empty string is returned
+ * for `null` or `undefined` values.
+ *
+ * @private
+ * @param {*} value The value to process.
+ * @returns {string} Returns the string.
+ */
+function baseToString(value) {
+  return value == null ? '' : (value + '');
+}
 
-  /** Used as the max size of the `arrayPool` and `objectPool` */
-  var maxPoolSize = 40;
-
-  /** Used to detect and test whitespace */
-  var whitespace = (
-    // whitespace
-    ' \t\x0B\f\xA0\ufeff' +
-
-    // line terminators
-    '\n\r\u2028\u2029' +
-
-    // unicode category "Zs" space separators
-    '\u1680\u180e\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000'
-  );
-
-  /** Used to match empty string literals in compiled template source */
-  var reEmptyStringLeading = /\b__p \+= '';/g,
-      reEmptyStringMiddle = /\b(__p \+=) '' \+/g,
-      reEmptyStringTrailing = /(__e\(.*?\)|\b__t\)) \+\n'';/g;
-
-  /**
-   * Used to match ES6 template delimiters
-   * http://people.mozilla.org/~jorendorff/es6-draft.html#sec-literals-string-literals
-   */
-  var reEsTemplate = /\$\{([^\\}]*(?:\\.[^\\}]*)*)\}/g;
-
-  /** Used to match regexp flags from their coerced string values */
-  var reFlags = /\w*$/;
-
-  /** Used to detected named functions */
-  var reFuncName = /^\s*function[ \n\r\t]+\w/;
-
-  /** Used to match "interpolate" template delimiters */
-  var reInterpolate = /<%=([\s\S]+?)%>/g;
-
-  /** Used to match leading whitespace and zeros to be removed */
-  var reLeadingSpacesAndZeros = RegExp('^[' + whitespace + ']*0+(?=.$)');
-
-  /** Used to ensure capturing order of template delimiters */
-  var reNoMatch = /($^)/;
-
-  /** Used to detect functions containing a `this` reference */
-  var reThis = /\bthis\b/;
-
-  /** Used to match unescaped characters in compiled string literals */
-  var reUnescapedString = /['\n\r\t\u2028\u2029\\]/g;
-
-  /** Used to assign default `context` object properties */
-  var contextProps = [
-    'Array', 'Boolean', 'Date', 'Function', 'Math', 'Number', 'Object',
-    'RegExp', 'String', '_', 'attachEvent', 'clearTimeout', 'isFinite', 'isNaN',
-    'parseInt', 'setTimeout'
-  ];
-
-  /** Used to make template sourceURLs easier to identify */
-  var templateCounter = 0;
-
-  /** `Object#toString` result shortcuts */
-  var argsClass = '[object Arguments]',
-      arrayClass = '[object Array]',
-      boolClass = '[object Boolean]',
-      dateClass = '[object Date]',
-      funcClass = '[object Function]',
-      numberClass = '[object Number]',
-      objectClass = '[object Object]',
-      regexpClass = '[object RegExp]',
-      stringClass = '[object String]';
-
-  /** Used to identify object classifications that `_.clone` supports */
-  var cloneableClasses = {};
-  cloneableClasses[funcClass] = false;
-  cloneableClasses[argsClass] = cloneableClasses[arrayClass] =
-  cloneableClasses[boolClass] = cloneableClasses[dateClass] =
-  cloneableClasses[numberClass] = cloneableClasses[objectClass] =
-  cloneableClasses[regexpClass] = cloneableClasses[stringClass] = true;
-
-  /** Used as an internal `_.debounce` options object */
-  var debounceOptions = {
-    'leading': false,
-    'maxWait': 0,
-    'trailing': false
-  };
-
-  /** Used as the property descriptor for `__bindData__` */
-  var descriptor = {
-    'configurable': false,
-    'enumerable': false,
-    'value': null,
-    'writable': false
-  };
-
-  /** Used to determine if values are of the language type Object */
-  var objectTypes = {
-    'boolean': false,
-    'function': true,
-    'object': true,
-    'number': false,
-    'string': false,
-    'undefined': false
-  };
-
-  /** Used to escape characters for inclusion in compiled string literals */
-  var stringEscapes = {
-    '\\': '\\',
-    "'": "'",
-    '\n': 'n',
-    '\r': 'r',
-    '\t': 't',
-    '\u2028': 'u2028',
-    '\u2029': 'u2029'
-  };
-
-  /** Used as a reference to the global object */
-  var root = (objectTypes[typeof window] && window) || this;
-
-  /** Detect free variable `exports` */
-  var freeExports = objectTypes[typeof exports] && exports && !exports.nodeType && exports;
-
-  /** Detect free variable `module` */
-  var freeModule = objectTypes[typeof module] && module && !module.nodeType && module;
-
-  /** Detect the popular CommonJS extension `module.exports` */
-  var moduleExports = freeModule && freeModule.exports === freeExports && freeExports;
-
-  /** Detect free variable `global` from Node.js or Browserified code and use it as `root` */
-  var freeGlobal = objectTypes[typeof global] && global;
-  if (freeGlobal && (freeGlobal.global === freeGlobal || freeGlobal.window === freeGlobal)) {
-    root = freeGlobal;
+/**
+ * The base implementation of `_.callback` which supports specifying the
+ * number of arguments to provide to `func`.
+ *
+ * @private
+ * @param {*} [func=_.identity] The value to convert to a callback.
+ * @param {*} [thisArg] The `this` binding of `func`.
+ * @param {number} [argCount] The number of arguments to provide to `func`.
+ * @returns {Function} Returns the callback.
+ */
+function baseCallback(func, thisArg, argCount) {
+  var type = typeof func;
+  if (type == 'function') {
+    return thisArg === undefined
+      ? func
+      : bindCallback(func, thisArg, argCount);
   }
-
-  /*--------------------------------------------------------------------------*/
-
-  /**
-   * The base implementation of `_.indexOf` without support for binary searches
-   * or `fromIndex` constraints.
-   *
-   * @private
-   * @param {Array} array The array to search.
-   * @param {*} value The value to search for.
-   * @param {number} [fromIndex=0] The index to search from.
-   * @returns {number} Returns the index of the matched value or `-1`.
-   */
-  function baseIndexOf(array, value, fromIndex) {
-    var index = (fromIndex || 0) - 1,
-        length = array ? array.length : 0;
-
-    while (++index < length) {
-      if (array[index] === value) {
-        return index;
-      }
-    }
-    return -1;
+  if (func == null) {
+    return identity;
   }
-
-  /**
-   * An implementation of `_.contains` for cache objects that mimics the return
-   * signature of `_.indexOf` by returning `0` if the value is found, else `-1`.
-   *
-   * @private
-   * @param {Object} cache The cache object to inspect.
-   * @param {*} value The value to search for.
-   * @returns {number} Returns `0` if `value` is found, else `-1`.
-   */
-  function cacheIndexOf(cache, value) {
-    var type = typeof value;
-    cache = cache.cache;
-
-    if (type == 'boolean' || value == null) {
-      return cache[value] ? 0 : -1;
-    }
-    if (type != 'number' && type != 'string') {
-      type = 'object';
-    }
-    var key = type == 'number' ? value : keyPrefix + value;
-    cache = (cache = cache[type]) && cache[key];
-
-    return type == 'object'
-      ? (cache && baseIndexOf(cache, value) > -1 ? 0 : -1)
-      : (cache ? 0 : -1);
+  if (type == 'object') {
+    return baseMatches(func);
   }
+  return thisArg === undefined
+    ? property(func)
+    : baseMatchesProperty(func, thisArg);
+}
 
-  /**
-   * Adds a given value to the corresponding cache object.
-   *
-   * @private
-   * @param {*} value The value to add to the cache.
-   */
-  function cachePush(value) {
-    var cache = this.cache,
-        type = typeof value;
-
-    if (type == 'boolean' || value == null) {
-      cache[value] = true;
-    } else {
-      if (type != 'number' && type != 'string') {
-        type = 'object';
-      }
-      var key = type == 'number' ? value : keyPrefix + value,
-          typeCache = cache[type] || (cache[type] = {});
-
-      if (type == 'object') {
-        (typeCache[key] || (typeCache[key] = [])).push(value);
-      } else {
-        typeCache[key] = true;
-      }
-    }
+/**
+ * The base implementation of `get` without support for string paths
+ * and default values.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @param {Array} path The path of the property to get.
+ * @param {string} [pathKey] The key representation of path.
+ * @returns {*} Returns the resolved value.
+ */
+function baseGet(object, path, pathKey) {
+  if (object == null) {
+    return;
   }
-
-  /**
-   * Used by `_.max` and `_.min` as the default callback when a given
-   * collection is a string value.
-   *
-   * @private
-   * @param {string} value The character to inspect.
-   * @returns {number} Returns the code unit of given character.
-   */
-  function charAtCallback(value) {
-    return value.charCodeAt(0);
+  if (pathKey !== undefined && pathKey in toObject(object)) {
+    path = [pathKey];
   }
+  var index = 0,
+      length = path.length;
 
-  /**
-   * Used by `sortBy` to compare transformed `collection` elements, stable sorting
-   * them in ascending order.
-   *
-   * @private
-   * @param {Object} a The object to compare to `b`.
-   * @param {Object} b The object to compare to `a`.
-   * @returns {number} Returns the sort order indicator of `1` or `-1`.
-   */
-  function compareAscending(a, b) {
-    var ac = a.criteria,
-        bc = b.criteria,
-        index = -1,
-        length = ac.length;
-
-    while (++index < length) {
-      var value = ac[index],
-          other = bc[index];
-
-      if (value !== other) {
-        if (value > other || typeof value == 'undefined') {
-          return 1;
-        }
-        if (value < other || typeof other == 'undefined') {
-          return -1;
-        }
-      }
-    }
-    // Fixes an `Array#sort` bug in the JS engine embedded in Adobe applications
-    // that causes it, under certain circumstances, to return the same value for
-    // `a` and `b`. See https://github.com/jashkenas/underscore/pull/1247
-    //
-    // This also ensures a stable sort in V8 and other engines.
-    // See http://code.google.com/p/v8/issues/detail?id=90
-    return a.index - b.index;
+  while (object != null && index < length) {
+    object = object[path[index++]];
   }
+  return (index && index == length) ? object : undefined;
+}
 
-  /**
-   * Creates a cache object to optimize linear searches of large arrays.
-   *
-   * @private
-   * @param {Array} [array=[]] The array to search.
-   * @returns {null|Object} Returns the cache object or `null` if caching should not be used.
-   */
-  function createCache(array) {
-    var index = -1,
-        length = array.length,
-        first = array[0],
-        mid = array[(length / 2) | 0],
-        last = array[length - 1];
+/**
+ * The base implementation of `_.isMatch` without support for callback
+ * shorthands and `this` binding.
+ *
+ * @private
+ * @param {Object} object The object to inspect.
+ * @param {Array} matchData The propery names, values, and compare flags to match.
+ * @param {Function} [customizer] The function to customize comparing objects.
+ * @returns {boolean} Returns `true` if `object` is a match, else `false`.
+ */
+function baseIsMatch(object, matchData, customizer) {
+  var index = matchData.length,
+      length = index,
+      noCustomizer = !customizer;
 
-    if (first && typeof first == 'object' &&
-        mid && typeof mid == 'object' && last && typeof last == 'object') {
+  if (object == null) {
+    return !length;
+  }
+  object = toObject(object);
+  while (index--) {
+    var data = matchData[index];
+    if ((noCustomizer && data[2])
+          ? data[1] !== object[data[0]]
+          : !(data[0] in object)
+        ) {
       return false;
     }
-    var cache = getObject();
-    cache['false'] = cache['null'] = cache['true'] = cache['undefined'] = false;
-
-    var result = getObject();
-    result.array = array;
-    result.cache = cache;
-    result.push = cachePush;
-
-    while (++index < length) {
-      result.push(array[index]);
-    }
-    return result;
   }
+  while (++index < length) {
+    data = matchData[index];
+    var key = data[0],
+        objValue = object[key],
+        srcValue = data[1];
 
-  /**
-   * Used by `template` to escape characters for inclusion in compiled
-   * string literals.
-   *
-   * @private
-   * @param {string} match The matched character to escape.
-   * @returns {string} Returns the escaped character.
-   */
-  function escapeStringChar(match) {
-    return '\\' + stringEscapes[match];
-  }
-
-  /**
-   * Gets an array from the array pool or creates a new one if the pool is empty.
-   *
-   * @private
-   * @returns {Array} The array from the pool.
-   */
-  function getArray() {
-    return arrayPool.pop() || [];
-  }
-
-  /**
-   * Gets an object from the object pool or creates a new one if the pool is empty.
-   *
-   * @private
-   * @returns {Object} The object from the pool.
-   */
-  function getObject() {
-    return objectPool.pop() || {
-      'array': null,
-      'cache': null,
-      'criteria': null,
-      'false': false,
-      'index': 0,
-      'null': false,
-      'number': null,
-      'object': null,
-      'push': null,
-      'string': null,
-      'true': false,
-      'undefined': false,
-      'value': null
-    };
-  }
-
-  /**
-   * Releases the given array back to the array pool.
-   *
-   * @private
-   * @param {Array} [array] The array to release.
-   */
-  function releaseArray(array) {
-    array.length = 0;
-    if (arrayPool.length < maxPoolSize) {
-      arrayPool.push(array);
-    }
-  }
-
-  /**
-   * Releases the given object back to the object pool.
-   *
-   * @private
-   * @param {Object} [object] The object to release.
-   */
-  function releaseObject(object) {
-    var cache = object.cache;
-    if (cache) {
-      releaseObject(cache);
-    }
-    object.array = object.cache = object.criteria = object.object = object.number = object.string = object.value = null;
-    if (objectPool.length < maxPoolSize) {
-      objectPool.push(object);
-    }
-  }
-
-  /**
-   * Slices the `collection` from the `start` index up to, but not including,
-   * the `end` index.
-   *
-   * Note: This function is used instead of `Array#slice` to support node lists
-   * in IE < 9 and to ensure dense arrays are returned.
-   *
-   * @private
-   * @param {Array|Object|string} collection The collection to slice.
-   * @param {number} start The start index.
-   * @param {number} end The end index.
-   * @returns {Array} Returns the new array.
-   */
-  function slice(array, start, end) {
-    start || (start = 0);
-    if (typeof end == 'undefined') {
-      end = array ? array.length : 0;
-    }
-    var index = -1,
-        length = end - start || 0,
-        result = Array(length < 0 ? 0 : length);
-
-    while (++index < length) {
-      result[index] = array[start + index];
-    }
-    return result;
-  }
-
-  /*--------------------------------------------------------------------------*/
-
-  /**
-   * Create a new `lodash` function using the given context object.
-   *
-   * @static
-   * @memberOf _
-   * @category Utilities
-   * @param {Object} [context=root] The context object.
-   * @returns {Function} Returns the `lodash` function.
-   */
-  function runInContext(context) {
-    // Avoid issues with some ES3 environments that attempt to use values, named
-    // after built-in constructors like `Object`, for the creation of literals.
-    // ES5 clears this up by stating that literals must use built-in constructors.
-    // See http://es5.github.io/#x11.1.5.
-    context = context ? _.defaults(root.Object(), context, _.pick(root, contextProps)) : root;
-
-    /** Native constructor references */
-    var Array = context.Array,
-        Boolean = context.Boolean,
-        Date = context.Date,
-        Function = context.Function,
-        Math = context.Math,
-        Number = context.Number,
-        Object = context.Object,
-        RegExp = context.RegExp,
-        String = context.String,
-        TypeError = context.TypeError;
-
-    /**
-     * Used for `Array` method references.
-     *
-     * Normally `Array.prototype` would suffice, however, using an array literal
-     * avoids issues in Narwhal.
-     */
-    var arrayRef = [];
-
-    /** Used for native method references */
-    var objectProto = Object.prototype;
-
-    /** Used to restore the original `_` reference in `noConflict` */
-    var oldDash = context._;
-
-    /** Used to resolve the internal [[Class]] of values */
-    var toString = objectProto.toString;
-
-    /** Used to detect if a method is native */
-    var reNative = RegExp('^' +
-      String(toString)
-        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        .replace(/toString| for [^\]]+/g, '.*?') + '$'
-    );
-
-    /** Native method shortcuts */
-    var ceil = Math.ceil,
-        clearTimeout = context.clearTimeout,
-        floor = Math.floor,
-        fnToString = Function.prototype.toString,
-        getPrototypeOf = isNative(getPrototypeOf = Object.getPrototypeOf) && getPrototypeOf,
-        hasOwnProperty = objectProto.hasOwnProperty,
-        push = arrayRef.push,
-        setTimeout = context.setTimeout,
-        splice = arrayRef.splice,
-        unshift = arrayRef.unshift;
-
-    /** Used to set meta data on functions */
-    var defineProperty = (function() {
-      // IE 8 only accepts DOM elements
-      try {
-        var o = {},
-            func = isNative(func = Object.defineProperty) && func,
-            result = func(o, o, o) && func;
-      } catch(e) { }
-      return result;
-    }());
-
-    /* Native method shortcuts for methods with the same name as other `lodash` methods */
-    var nativeCreate = isNative(nativeCreate = Object.create) && nativeCreate,
-        nativeIsArray = isNative(nativeIsArray = Array.isArray) && nativeIsArray,
-        nativeIsFinite = context.isFinite,
-        nativeIsNaN = context.isNaN,
-        nativeKeys = isNative(nativeKeys = Object.keys) && nativeKeys,
-        nativeMax = Math.max,
-        nativeMin = Math.min,
-        nativeParseInt = context.parseInt,
-        nativeRandom = Math.random;
-
-    /** Used to lookup a built-in constructor by [[Class]] */
-    var ctorByClass = {};
-    ctorByClass[arrayClass] = Array;
-    ctorByClass[boolClass] = Boolean;
-    ctorByClass[dateClass] = Date;
-    ctorByClass[funcClass] = Function;
-    ctorByClass[objectClass] = Object;
-    ctorByClass[numberClass] = Number;
-    ctorByClass[regexpClass] = RegExp;
-    ctorByClass[stringClass] = String;
-
-    /*--------------------------------------------------------------------------*/
-
-    /**
-     * Creates a `lodash` object which wraps the given value to enable intuitive
-     * method chaining.
-     *
-     * In addition to Lo-Dash methods, wrappers also have the following `Array` methods:
-     * `concat`, `join`, `pop`, `push`, `reverse`, `shift`, `slice`, `sort`, `splice`,
-     * and `unshift`
-     *
-     * Chaining is supported in custom builds as long as the `value` method is
-     * implicitly or explicitly included in the build.
-     *
-     * The chainable wrapper functions are:
-     * `after`, `assign`, `bind`, `bindAll`, `bindKey`, `chain`, `compact`,
-     * `compose`, `concat`, `countBy`, `create`, `createCallback`, `curry`,
-     * `debounce`, `defaults`, `defer`, `delay`, `difference`, `filter`, `flatten`,
-     * `forEach`, `forEachRight`, `forIn`, `forInRight`, `forOwn`, `forOwnRight`,
-     * `functions`, `groupBy`, `indexBy`, `initial`, `intersection`, `invert`,
-     * `invoke`, `keys`, `map`, `max`, `memoize`, `merge`, `min`, `object`, `omit`,
-     * `once`, `pairs`, `partial`, `partialRight`, `pick`, `pluck`, `pull`, `push`,
-     * `range`, `reject`, `remove`, `rest`, `reverse`, `shuffle`, `slice`, `sort`,
-     * `sortBy`, `splice`, `tap`, `throttle`, `times`, `toArray`, `transform`,
-     * `union`, `uniq`, `unshift`, `unzip`, `values`, `where`, `without`, `wrap`,
-     * and `zip`
-     *
-     * The non-chainable wrapper functions are:
-     * `clone`, `cloneDeep`, `contains`, `escape`, `every`, `find`, `findIndex`,
-     * `findKey`, `findLast`, `findLastIndex`, `findLastKey`, `has`, `identity`,
-     * `indexOf`, `isArguments`, `isArray`, `isBoolean`, `isDate`, `isElement`,
-     * `isEmpty`, `isEqual`, `isFinite`, `isFunction`, `isNaN`, `isNull`, `isNumber`,
-     * `isObject`, `isPlainObject`, `isRegExp`, `isString`, `isUndefined`, `join`,
-     * `lastIndexOf`, `mixin`, `noConflict`, `parseInt`, `pop`, `random`, `reduce`,
-     * `reduceRight`, `result`, `shift`, `size`, `some`, `sortedIndex`, `runInContext`,
-     * `template`, `unescape`, `uniqueId`, and `value`
-     *
-     * The wrapper functions `first` and `last` return wrapped values when `n` is
-     * provided, otherwise they return unwrapped values.
-     *
-     * Explicit chaining can be enabled by using the `_.chain` method.
-     *
-     * @name _
-     * @constructor
-     * @category Chaining
-     * @param {*} value The value to wrap in a `lodash` instance.
-     * @returns {Object} Returns a `lodash` instance.
-     * @example
-     *
-     * var wrapped = _([1, 2, 3]);
-     *
-     * // returns an unwrapped value
-     * wrapped.reduce(function(sum, num) {
-     *   return sum + num;
-     * });
-     * // => 6
-     *
-     * // returns a wrapped value
-     * var squares = wrapped.map(function(num) {
-     *   return num * num;
-     * });
-     *
-     * _.isArray(squares);
-     * // => false
-     *
-     * _.isArray(squares.value());
-     * // => true
-     */
-    function lodash(value) {
-      // don't wrap if already wrapped, even if wrapped by a different `lodash` constructor
-      return (value && typeof value == 'object' && !isArray(value) && hasOwnProperty.call(value, '__wrapped__'))
-       ? value
-       : new lodashWrapper(value);
-    }
-
-    /**
-     * A fast path for creating `lodash` wrapper objects.
-     *
-     * @private
-     * @param {*} value The value to wrap in a `lodash` instance.
-     * @param {boolean} chainAll A flag to enable chaining for all methods
-     * @returns {Object} Returns a `lodash` instance.
-     */
-    function lodashWrapper(value, chainAll) {
-      this.__chain__ = !!chainAll;
-      this.__wrapped__ = value;
-    }
-    // ensure `new lodashWrapper` is an instance of `lodash`
-    lodashWrapper.prototype = lodash.prototype;
-
-    /**
-     * An object used to flag environments features.
-     *
-     * @static
-     * @memberOf _
-     * @type Object
-     */
-    var support = lodash.support = {};
-
-    /**
-     * Detect if functions can be decompiled by `Function#toString`
-     * (all but PS3 and older Opera mobile browsers & avoided in Windows 8 apps).
-     *
-     * @memberOf _.support
-     * @type boolean
-     */
-    support.funcDecomp = !isNative(context.WinRTError) && reThis.test(runInContext);
-
-    /**
-     * Detect if `Function#name` is supported (all but IE).
-     *
-     * @memberOf _.support
-     * @type boolean
-     */
-    support.funcNames = typeof Function.name == 'string';
-
-    /**
-     * By default, the template delimiters used by Lo-Dash are similar to those in
-     * embedded Ruby (ERB). Change the following template settings to use alternative
-     * delimiters.
-     *
-     * @static
-     * @memberOf _
-     * @type Object
-     */
-    lodash.templateSettings = {
-
-      /**
-       * Used to detect `data` property values to be HTML-escaped.
-       *
-       * @memberOf _.templateSettings
-       * @type RegExp
-       */
-      'escape': /<%-([\s\S]+?)%>/g,
-
-      /**
-       * Used to detect code to be evaluated.
-       *
-       * @memberOf _.templateSettings
-       * @type RegExp
-       */
-      'evaluate': /<%([\s\S]+?)%>/g,
-
-      /**
-       * Used to detect `data` property values to inject.
-       *
-       * @memberOf _.templateSettings
-       * @type RegExp
-       */
-      'interpolate': reInterpolate,
-
-      /**
-       * Used to reference the data object in the template text.
-       *
-       * @memberOf _.templateSettings
-       * @type string
-       */
-      'variable': '',
-
-      /**
-       * Used to import variables into the compiled template.
-       *
-       * @memberOf _.templateSettings
-       * @type Object
-       */
-      'imports': {
-
-        /**
-         * A reference to the `lodash` function.
-         *
-         * @memberOf _.templateSettings.imports
-         * @type Function
-         */
-        '_': lodash
-      }
-    };
-
-    /*--------------------------------------------------------------------------*/
-
-    /**
-     * The base implementation of `_.bind` that creates the bound function and
-     * sets its meta data.
-     *
-     * @private
-     * @param {Array} bindData The bind data array.
-     * @returns {Function} Returns the new bound function.
-     */
-    function baseBind(bindData) {
-      var func = bindData[0],
-          partialArgs = bindData[2],
-          thisArg = bindData[4];
-
-      function bound() {
-        // `Function#bind` spec
-        // http://es5.github.io/#x15.3.4.5
-        if (partialArgs) {
-          // avoid `arguments` object deoptimizations by using `slice` instead
-          // of `Array.prototype.slice.call` and not assigning `arguments` to a
-          // variable as a ternary expression
-          var args = slice(partialArgs);
-          push.apply(args, arguments);
-        }
-        // mimic the constructor's `return` behavior
-        // http://es5.github.io/#x13.2.2
-        if (this instanceof bound) {
-          // ensure `new bound` is an instance of `func`
-          var thisBinding = baseCreate(func.prototype),
-              result = func.apply(thisBinding, args || arguments);
-          return isObject(result) ? result : thisBinding;
-        }
-        return func.apply(thisArg, args || arguments);
-      }
-      setBindData(bound, bindData);
-      return bound;
-    }
-
-    /**
-     * The base implementation of `_.clone` without argument juggling or support
-     * for `thisArg` binding.
-     *
-     * @private
-     * @param {*} value The value to clone.
-     * @param {boolean} [isDeep=false] Specify a deep clone.
-     * @param {Function} [callback] The function to customize cloning values.
-     * @param {Array} [stackA=[]] Tracks traversed source objects.
-     * @param {Array} [stackB=[]] Associates clones with source counterparts.
-     * @returns {*} Returns the cloned value.
-     */
-    function baseClone(value, isDeep, callback, stackA, stackB) {
-      if (callback) {
-        var result = callback(value);
-        if (typeof result != 'undefined') {
-          return result;
-        }
-      }
-      // inspect [[Class]]
-      var isObj = isObject(value);
-      if (isObj) {
-        var className = toString.call(value);
-        if (!cloneableClasses[className]) {
-          return value;
-        }
-        var ctor = ctorByClass[className];
-        switch (className) {
-          case boolClass:
-          case dateClass:
-            return new ctor(+value);
-
-          case numberClass:
-          case stringClass:
-            return new ctor(value);
-
-          case regexpClass:
-            result = ctor(value.source, reFlags.exec(value));
-            result.lastIndex = value.lastIndex;
-            return result;
-        }
-      } else {
-        return value;
-      }
-      var isArr = isArray(value);
-      if (isDeep) {
-        // check for circular references and return corresponding clone
-        var initedStack = !stackA;
-        stackA || (stackA = getArray());
-        stackB || (stackB = getArray());
-
-        var length = stackA.length;
-        while (length--) {
-          if (stackA[length] == value) {
-            return stackB[length];
-          }
-        }
-        result = isArr ? ctor(value.length) : {};
-      }
-      else {
-        result = isArr ? slice(value) : assign({}, value);
-      }
-      // add array properties assigned by `RegExp#exec`
-      if (isArr) {
-        if (hasOwnProperty.call(value, 'index')) {
-          result.index = value.index;
-        }
-        if (hasOwnProperty.call(value, 'input')) {
-          result.input = value.input;
-        }
-      }
-      // exit for shallow clone
-      if (!isDeep) {
-        return result;
-      }
-      // add the source value to the stack of traversed objects
-      // and associate it with its clone
-      stackA.push(value);
-      stackB.push(result);
-
-      // recursively populate clone (susceptible to call stack limits)
-      (isArr ? forEach : forOwn)(value, function(objValue, key) {
-        result[key] = baseClone(objValue, isDeep, callback, stackA, stackB);
-      });
-
-      if (initedStack) {
-        releaseArray(stackA);
-        releaseArray(stackB);
-      }
-      return result;
-    }
-
-    /**
-     * The base implementation of `_.create` without support for assigning
-     * properties to the created object.
-     *
-     * @private
-     * @param {Object} prototype The object to inherit from.
-     * @returns {Object} Returns the new object.
-     */
-    function baseCreate(prototype, properties) {
-      return isObject(prototype) ? nativeCreate(prototype) : {};
-    }
-    // fallback for browsers without `Object.create`
-    if (!nativeCreate) {
-      baseCreate = (function() {
-        function Object() {}
-        return function(prototype) {
-          if (isObject(prototype)) {
-            Object.prototype = prototype;
-            var result = new Object;
-            Object.prototype = null;
-          }
-          return result || context.Object();
-        };
-      }());
-    }
-
-    /**
-     * The base implementation of `_.createCallback` without support for creating
-     * "_.pluck" or "_.where" style callbacks.
-     *
-     * @private
-     * @param {*} [func=identity] The value to convert to a callback.
-     * @param {*} [thisArg] The `this` binding of the created callback.
-     * @param {number} [argCount] The number of arguments the callback accepts.
-     * @returns {Function} Returns a callback function.
-     */
-    function baseCreateCallback(func, thisArg, argCount) {
-      if (typeof func != 'function') {
-        return identity;
-      }
-      // exit early for no `thisArg` or already bound by `Function#bind`
-      if (typeof thisArg == 'undefined' || !('prototype' in func)) {
-        return func;
-      }
-      var bindData = func.__bindData__;
-      if (typeof bindData == 'undefined') {
-        if (support.funcNames) {
-          bindData = !func.name;
-        }
-        bindData = bindData || !support.funcDecomp;
-        if (!bindData) {
-          var source = fnToString.call(func);
-          if (!support.funcNames) {
-            bindData = !reFuncName.test(source);
-          }
-          if (!bindData) {
-            // checks if `func` references the `this` keyword and stores the result
-            bindData = reThis.test(source);
-            setBindData(func, bindData);
-          }
-        }
-      }
-      // exit early if there are no `this` references or `func` is bound
-      if (bindData === false || (bindData !== true && bindData[1] & 1)) {
-        return func;
-      }
-      switch (argCount) {
-        case 1: return function(value) {
-          return func.call(thisArg, value);
-        };
-        case 2: return function(a, b) {
-          return func.call(thisArg, a, b);
-        };
-        case 3: return function(value, index, collection) {
-          return func.call(thisArg, value, index, collection);
-        };
-        case 4: return function(accumulator, value, index, collection) {
-          return func.call(thisArg, accumulator, value, index, collection);
-        };
-      }
-      return bind(func, thisArg);
-    }
-
-    /**
-     * The base implementation of `createWrapper` that creates the wrapper and
-     * sets its meta data.
-     *
-     * @private
-     * @param {Array} bindData The bind data array.
-     * @returns {Function} Returns the new function.
-     */
-    function baseCreateWrapper(bindData) {
-      var func = bindData[0],
-          bitmask = bindData[1],
-          partialArgs = bindData[2],
-          partialRightArgs = bindData[3],
-          thisArg = bindData[4],
-          arity = bindData[5];
-
-      var isBind = bitmask & 1,
-          isBindKey = bitmask & 2,
-          isCurry = bitmask & 4,
-          isCurryBound = bitmask & 8,
-          key = func;
-
-      function bound() {
-        var thisBinding = isBind ? thisArg : this;
-        if (partialArgs) {
-          var args = slice(partialArgs);
-          push.apply(args, arguments);
-        }
-        if (partialRightArgs || isCurry) {
-          args || (args = slice(arguments));
-          if (partialRightArgs) {
-            push.apply(args, partialRightArgs);
-          }
-          if (isCurry && args.length < arity) {
-            bitmask |= 16 & ~32;
-            return baseCreateWrapper([func, (isCurryBound ? bitmask : bitmask & ~3), args, null, thisArg, arity]);
-          }
-        }
-        args || (args = arguments);
-        if (isBindKey) {
-          func = thisBinding[key];
-        }
-        if (this instanceof bound) {
-          thisBinding = baseCreate(func.prototype);
-          var result = func.apply(thisBinding, args);
-          return isObject(result) ? result : thisBinding;
-        }
-        return func.apply(thisBinding, args);
-      }
-      setBindData(bound, bindData);
-      return bound;
-    }
-
-    /**
-     * The base implementation of `_.difference` that accepts a single array
-     * of values to exclude.
-     *
-     * @private
-     * @param {Array} array The array to process.
-     * @param {Array} [values] The array of values to exclude.
-     * @returns {Array} Returns a new array of filtered values.
-     */
-    function baseDifference(array, values) {
-      var index = -1,
-          indexOf = getIndexOf(),
-          length = array ? array.length : 0,
-          isLarge = length >= largeArraySize && indexOf === baseIndexOf,
-          result = [];
-
-      if (isLarge) {
-        var cache = createCache(values);
-        if (cache) {
-          indexOf = cacheIndexOf;
-          values = cache;
-        } else {
-          isLarge = false;
-        }
-      }
-      while (++index < length) {
-        var value = array[index];
-        if (indexOf(values, value) < 0) {
-          result.push(value);
-        }
-      }
-      if (isLarge) {
-        releaseObject(values);
-      }
-      return result;
-    }
-
-    /**
-     * The base implementation of `_.flatten` without support for callback
-     * shorthands or `thisArg` binding.
-     *
-     * @private
-     * @param {Array} array The array to flatten.
-     * @param {boolean} [isShallow=false] A flag to restrict flattening to a single level.
-     * @param {boolean} [isStrict=false] A flag to restrict flattening to arrays and `arguments` objects.
-     * @param {number} [fromIndex=0] The index to start from.
-     * @returns {Array} Returns a new flattened array.
-     */
-    function baseFlatten(array, isShallow, isStrict, fromIndex) {
-      var index = (fromIndex || 0) - 1,
-          length = array ? array.length : 0,
-          result = [];
-
-      while (++index < length) {
-        var value = array[index];
-
-        if (value && typeof value == 'object' && typeof value.length == 'number'
-            && (isArray(value) || isArguments(value))) {
-          // recursively flatten arrays (susceptible to call stack limits)
-          if (!isShallow) {
-            value = baseFlatten(value, isShallow, isStrict);
-          }
-          var valIndex = -1,
-              valLength = value.length,
-              resIndex = result.length;
-
-          result.length += valLength;
-          while (++valIndex < valLength) {
-            result[resIndex++] = value[valIndex];
-          }
-        } else if (!isStrict) {
-          result.push(value);
-        }
-      }
-      return result;
-    }
-
-    /**
-     * The base implementation of `_.isEqual`, without support for `thisArg` binding,
-     * that allows partial "_.where" style comparisons.
-     *
-     * @private
-     * @param {*} a The value to compare.
-     * @param {*} b The other value to compare.
-     * @param {Function} [callback] The function to customize comparing values.
-     * @param {Function} [isWhere=false] A flag to indicate performing partial comparisons.
-     * @param {Array} [stackA=[]] Tracks traversed `a` objects.
-     * @param {Array} [stackB=[]] Tracks traversed `b` objects.
-     * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
-     */
-    function baseIsEqual(a, b, callback, isWhere, stackA, stackB) {
-      // used to indicate that when comparing objects, `a` has at least the properties of `b`
-      if (callback) {
-        var result = callback(a, b);
-        if (typeof result != 'undefined') {
-          return !!result;
-        }
-      }
-      // exit early for identical values
-      if (a === b) {
-        // treat `+0` vs. `-0` as not equal
-        return a !== 0 || (1 / a == 1 / b);
-      }
-      var type = typeof a,
-          otherType = typeof b;
-
-      // exit early for unlike primitive values
-      if (a === a &&
-          !(a && objectTypes[type]) &&
-          !(b && objectTypes[otherType])) {
+    if (noCustomizer && data[2]) {
+      if (objValue === undefined && !(key in object)) {
         return false;
       }
-      // exit early for `null` and `undefined` avoiding ES3's Function#call behavior
-      // http://es5.github.io/#x15.3.4.4
-      if (a == null || b == null) {
-        return a === b;
-      }
-      // compare [[Class]] names
-      var className = toString.call(a),
-          otherClass = toString.call(b);
-
-      if (className == argsClass) {
-        className = objectClass;
-      }
-      if (otherClass == argsClass) {
-        otherClass = objectClass;
-      }
-      if (className != otherClass) {
+    } else {
+      var result = customizer ? customizer(objValue, srcValue, key) : undefined;
+      if (!(result === undefined ? baseIsEqual(srcValue, objValue, customizer, true) : result)) {
         return false;
       }
-      switch (className) {
-        case boolClass:
-        case dateClass:
-          // coerce dates and booleans to numbers, dates to milliseconds and booleans
-          // to `1` or `0` treating invalid dates coerced to `NaN` as not equal
-          return +a == +b;
-
-        case numberClass:
-          // treat `NaN` vs. `NaN` as equal
-          return (a != +a)
-            ? b != +b
-            // but treat `+0` vs. `-0` as not equal
-            : (a == 0 ? (1 / a == 1 / b) : a == +b);
-
-        case regexpClass:
-        case stringClass:
-          // coerce regexes to strings (http://es5.github.io/#x15.10.6.4)
-          // treat string primitives and their corresponding object instances as equal
-          return a == String(b);
-      }
-      var isArr = className == arrayClass;
-      if (!isArr) {
-        // unwrap any `lodash` wrapped values
-        var aWrapped = hasOwnProperty.call(a, '__wrapped__'),
-            bWrapped = hasOwnProperty.call(b, '__wrapped__');
-
-        if (aWrapped || bWrapped) {
-          return baseIsEqual(aWrapped ? a.__wrapped__ : a, bWrapped ? b.__wrapped__ : b, callback, isWhere, stackA, stackB);
-        }
-        // exit for functions and DOM nodes
-        if (className != objectClass) {
-          return false;
-        }
-        // in older versions of Opera, `arguments` objects have `Array` constructors
-        var ctorA = a.constructor,
-            ctorB = b.constructor;
-
-        // non `Object` object instances with different constructors are not equal
-        if (ctorA != ctorB &&
-              !(isFunction(ctorA) && ctorA instanceof ctorA && isFunction(ctorB) && ctorB instanceof ctorB) &&
-              ('constructor' in a && 'constructor' in b)
-            ) {
-          return false;
-        }
-      }
-      // assume cyclic structures are equal
-      // the algorithm for detecting cyclic structures is adapted from ES 5.1
-      // section 15.12.3, abstract operation `JO` (http://es5.github.io/#x15.12.3)
-      var initedStack = !stackA;
-      stackA || (stackA = getArray());
-      stackB || (stackB = getArray());
-
-      var length = stackA.length;
-      while (length--) {
-        if (stackA[length] == a) {
-          return stackB[length] == b;
-        }
-      }
-      var size = 0;
-      result = true;
-
-      // add `a` and `b` to the stack of traversed objects
-      stackA.push(a);
-      stackB.push(b);
-
-      // recursively compare objects and arrays (susceptible to call stack limits)
-      if (isArr) {
-        // compare lengths to determine if a deep comparison is necessary
-        length = a.length;
-        size = b.length;
-        result = size == length;
-
-        if (result || isWhere) {
-          // deep compare the contents, ignoring non-numeric properties
-          while (size--) {
-            var index = length,
-                value = b[size];
-
-            if (isWhere) {
-              while (index--) {
-                if ((result = baseIsEqual(a[index], value, callback, isWhere, stackA, stackB))) {
-                  break;
-                }
-              }
-            } else if (!(result = baseIsEqual(a[size], value, callback, isWhere, stackA, stackB))) {
-              break;
-            }
-          }
-        }
-      }
-      else {
-        // deep compare objects using `forIn`, instead of `forOwn`, to avoid `Object.keys`
-        // which, in this case, is more costly
-        forIn(b, function(value, key, b) {
-          if (hasOwnProperty.call(b, key)) {
-            // count the number of properties.
-            size++;
-            // deep compare each property value.
-            return (result = hasOwnProperty.call(a, key) && baseIsEqual(a[key], value, callback, isWhere, stackA, stackB));
-          }
-        });
-
-        if (result && !isWhere) {
-          // ensure both objects have the same number of properties
-          forIn(a, function(value, key, a) {
-            if (hasOwnProperty.call(a, key)) {
-              // `size` will be `-1` if `a` has more properties than `b`
-              return (result = --size > -1);
-            }
-          });
-        }
-      }
-      stackA.pop();
-      stackB.pop();
-
-      if (initedStack) {
-        releaseArray(stackA);
-        releaseArray(stackB);
-      }
-      return result;
     }
+  }
+  return true;
+}
 
-    /**
-     * The base implementation of `_.merge` without argument juggling or support
-     * for `thisArg` binding.
-     *
-     * @private
-     * @param {Object} object The destination object.
-     * @param {Object} source The source object.
-     * @param {Function} [callback] The function to customize merging properties.
-     * @param {Array} [stackA=[]] Tracks traversed source objects.
-     * @param {Array} [stackB=[]] Associates values with source counterparts.
-     */
-    function baseMerge(object, source, callback, stackA, stackB) {
-      (isArray(source) ? forEach : forOwn)(source, function(source, key) {
-        var found,
-            isArr,
-            result = source,
-            value = object[key];
+/**
+ * The base implementation of `_.matches` which does not clone `source`.
+ *
+ * @private
+ * @param {Object} source The object of property values to match.
+ * @returns {Function} Returns the new function.
+ */
+function baseMatches(source) {
+  var matchData = getMatchData(source);
+  if (matchData.length == 1 && matchData[0][2]) {
+    var key = matchData[0][0],
+        value = matchData[0][1];
 
-        if (source && ((isArr = isArray(source)) || isPlainObject(source))) {
-          // avoid merging previously merged cyclic sources
-          var stackLength = stackA.length;
-          while (stackLength--) {
-            if ((found = stackA[stackLength] == source)) {
-              value = stackB[stackLength];
-              break;
-            }
-          }
-          if (!found) {
-            var isShallow;
-            if (callback) {
-              result = callback(value, source);
-              if ((isShallow = typeof result != 'undefined')) {
-                value = result;
-              }
-            }
-            if (!isShallow) {
-              value = isArr
-                ? (isArray(value) ? value : [])
-                : (isPlainObject(value) ? value : {});
-            }
-            // add `source` and associated `value` to the stack of traversed objects
-            stackA.push(source);
-            stackB.push(value);
-
-            // recursively merge objects and arrays (susceptible to call stack limits)
-            if (!isShallow) {
-              baseMerge(value, source, callback, stackA, stackB);
-            }
-          }
-        }
-        else {
-          if (callback) {
-            result = callback(value, source);
-            if (typeof result == 'undefined') {
-              result = source;
-            }
-          }
-          if (typeof result != 'undefined') {
-            value = result;
-          }
-        }
-        object[key] = value;
-      });
-    }
-
-    /**
-     * The base implementation of `_.random` without argument juggling or support
-     * for returning floating-point numbers.
-     *
-     * @private
-     * @param {number} min The minimum possible value.
-     * @param {number} max The maximum possible value.
-     * @returns {number} Returns a random number.
-     */
-    function baseRandom(min, max) {
-      return min + floor(nativeRandom() * (max - min + 1));
-    }
-
-    /**
-     * The base implementation of `_.uniq` without support for callback shorthands
-     * or `thisArg` binding.
-     *
-     * @private
-     * @param {Array} array The array to process.
-     * @param {boolean} [isSorted=false] A flag to indicate that `array` is sorted.
-     * @param {Function} [callback] The function called per iteration.
-     * @returns {Array} Returns a duplicate-value-free array.
-     */
-    function baseUniq(array, isSorted, callback) {
-      var index = -1,
-          indexOf = getIndexOf(),
-          length = array ? array.length : 0,
-          result = [];
-
-      var isLarge = !isSorted && length >= largeArraySize && indexOf === baseIndexOf,
-          seen = (callback || isLarge) ? getArray() : result;
-
-      if (isLarge) {
-        var cache = createCache(seen);
-        indexOf = cacheIndexOf;
-        seen = cache;
-      }
-      while (++index < length) {
-        var value = array[index],
-            computed = callback ? callback(value, index, array) : value;
-
-        if (isSorted
-              ? !index || seen[seen.length - 1] !== computed
-              : indexOf(seen, computed) < 0
-            ) {
-          if (callback || isLarge) {
-            seen.push(computed);
-          }
-          result.push(value);
-        }
-      }
-      if (isLarge) {
-        releaseArray(seen.array);
-        releaseObject(seen);
-      } else if (callback) {
-        releaseArray(seen);
-      }
-      return result;
-    }
-
-    /**
-     * Creates a function that aggregates a collection, creating an object composed
-     * of keys generated from the results of running each element of the collection
-     * through a callback. The given `setter` function sets the keys and values
-     * of the composed object.
-     *
-     * @private
-     * @param {Function} setter The setter function.
-     * @returns {Function} Returns the new aggregator function.
-     */
-    function createAggregator(setter) {
-      return function(collection, callback, thisArg) {
-        var result = {};
-        callback = lodash.createCallback(callback, thisArg, 3);
-
-        var index = -1,
-            length = collection ? collection.length : 0;
-
-        if (typeof length == 'number') {
-          while (++index < length) {
-            var value = collection[index];
-            setter(result, value, callback(value, index, collection), collection);
-          }
-        } else {
-          forOwn(collection, function(value, key, collection) {
-            setter(result, value, callback(value, key, collection), collection);
-          });
-        }
-        return result;
-      };
-    }
-
-    /**
-     * Creates a function that, when called, either curries or invokes `func`
-     * with an optional `this` binding and partially applied arguments.
-     *
-     * @private
-     * @param {Function|string} func The function or method name to reference.
-     * @param {number} bitmask The bitmask of method flags to compose.
-     *  The bitmask may be composed of the following flags:
-     *  1 - `_.bind`
-     *  2 - `_.bindKey`
-     *  4 - `_.curry`
-     *  8 - `_.curry` (bound)
-     *  16 - `_.partial`
-     *  32 - `_.partialRight`
-     * @param {Array} [partialArgs] An array of arguments to prepend to those
-     *  provided to the new function.
-     * @param {Array} [partialRightArgs] An array of arguments to append to those
-     *  provided to the new function.
-     * @param {*} [thisArg] The `this` binding of `func`.
-     * @param {number} [arity] The arity of `func`.
-     * @returns {Function} Returns the new function.
-     */
-    function createWrapper(func, bitmask, partialArgs, partialRightArgs, thisArg, arity) {
-      var isBind = bitmask & 1,
-          isBindKey = bitmask & 2,
-          isCurry = bitmask & 4,
-          isCurryBound = bitmask & 8,
-          isPartial = bitmask & 16,
-          isPartialRight = bitmask & 32;
-
-      if (!isBindKey && !isFunction(func)) {
-        throw new TypeError;
-      }
-      if (isPartial && !partialArgs.length) {
-        bitmask &= ~16;
-        isPartial = partialArgs = false;
-      }
-      if (isPartialRight && !partialRightArgs.length) {
-        bitmask &= ~32;
-        isPartialRight = partialRightArgs = false;
-      }
-      var bindData = func && func.__bindData__;
-      if (bindData && bindData !== true) {
-        // clone `bindData`
-        bindData = slice(bindData);
-        if (bindData[2]) {
-          bindData[2] = slice(bindData[2]);
-        }
-        if (bindData[3]) {
-          bindData[3] = slice(bindData[3]);
-        }
-        // set `thisBinding` is not previously bound
-        if (isBind && !(bindData[1] & 1)) {
-          bindData[4] = thisArg;
-        }
-        // set if previously bound but not currently (subsequent curried functions)
-        if (!isBind && bindData[1] & 1) {
-          bitmask |= 8;
-        }
-        // set curried arity if not yet set
-        if (isCurry && !(bindData[1] & 4)) {
-          bindData[5] = arity;
-        }
-        // append partial left arguments
-        if (isPartial) {
-          push.apply(bindData[2] || (bindData[2] = []), partialArgs);
-        }
-        // append partial right arguments
-        if (isPartialRight) {
-          unshift.apply(bindData[3] || (bindData[3] = []), partialRightArgs);
-        }
-        // merge flags
-        bindData[1] |= bitmask;
-        return createWrapper.apply(null, bindData);
-      }
-      // fast path for `_.bind`
-      var creater = (bitmask == 1 || bitmask === 17) ? baseBind : baseCreateWrapper;
-      return creater([func, bitmask, partialArgs, partialRightArgs, thisArg, arity]);
-    }
-
-    /**
-     * Used by `escape` to convert characters to HTML entities.
-     *
-     * @private
-     * @param {string} match The matched character to escape.
-     * @returns {string} Returns the escaped character.
-     */
-    function escapeHtmlChar(match) {
-      return htmlEscapes[match];
-    }
-
-    /**
-     * Gets the appropriate "indexOf" function. If the `_.indexOf` method is
-     * customized, this method returns the custom method, otherwise it returns
-     * the `baseIndexOf` function.
-     *
-     * @private
-     * @returns {Function} Returns the "indexOf" function.
-     */
-    function getIndexOf() {
-      var result = (result = lodash.indexOf) === indexOf ? baseIndexOf : result;
-      return result;
-    }
-
-    /**
-     * Checks if `value` is a native function.
-     *
-     * @private
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is a native function, else `false`.
-     */
-    function isNative(value) {
-      return typeof value == 'function' && reNative.test(value);
-    }
-
-    /**
-     * Sets `this` binding data on a given function.
-     *
-     * @private
-     * @param {Function} func The function to set data on.
-     * @param {Array} value The data array to set.
-     */
-    var setBindData = !defineProperty ? noop : function(func, value) {
-      descriptor.value = value;
-      defineProperty(func, '__bindData__', descriptor);
-    };
-
-    /**
-     * A fallback implementation of `isPlainObject` which checks if a given value
-     * is an object created by the `Object` constructor, assuming objects created
-     * by the `Object` constructor have no inherited enumerable properties and that
-     * there are no `Object.prototype` extensions.
-     *
-     * @private
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if `value` is a plain object, else `false`.
-     */
-    function shimIsPlainObject(value) {
-      var ctor,
-          result;
-
-      // avoid non Object objects, `arguments` objects, and DOM elements
-      if (!(value && toString.call(value) == objectClass) ||
-          (ctor = value.constructor, isFunction(ctor) && !(ctor instanceof ctor))) {
+    return function(object) {
+      if (object == null) {
         return false;
       }
-      // In most environments an object's own properties are iterated before
-      // its inherited properties. If the last iterated property is an object's
-      // own property then there are no inherited enumerable properties.
-      forIn(value, function(value, key) {
-        result = key;
-      });
-      return typeof result == 'undefined' || hasOwnProperty.call(value, result);
-    }
-
-    /**
-     * Used by `unescape` to convert HTML entities to characters.
-     *
-     * @private
-     * @param {string} match The matched character to unescape.
-     * @returns {string} Returns the unescaped character.
-     */
-    function unescapeHtmlChar(match) {
-      return htmlUnescapes[match];
-    }
-
-    /*--------------------------------------------------------------------------*/
-
-    /**
-     * Checks if `value` is an `arguments` object.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is an `arguments` object, else `false`.
-     * @example
-     *
-     * (function() { return _.isArguments(arguments); })(1, 2, 3);
-     * // => true
-     *
-     * _.isArguments([1, 2, 3]);
-     * // => false
-     */
-    function isArguments(value) {
-      return value && typeof value == 'object' && typeof value.length == 'number' &&
-        toString.call(value) == argsClass || false;
-    }
-
-    /**
-     * Checks if `value` is an array.
-     *
-     * @static
-     * @memberOf _
-     * @type Function
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is an array, else `false`.
-     * @example
-     *
-     * (function() { return _.isArray(arguments); })();
-     * // => false
-     *
-     * _.isArray([1, 2, 3]);
-     * // => true
-     */
-    var isArray = nativeIsArray || function(value) {
-      return value && typeof value == 'object' && typeof value.length == 'number' &&
-        toString.call(value) == arrayClass || false;
+      return object[key] === value && (value !== undefined || (key in toObject(object)));
     };
+  }
+  return function(object) {
+    return baseIsMatch(object, matchData);
+  };
+}
 
-    /**
-     * A fallback implementation of `Object.keys` which produces an array of the
-     * given object's own enumerable property names.
-     *
-     * @private
-     * @type Function
-     * @param {Object} object The object to inspect.
-     * @returns {Array} Returns an array of property names.
-     */
-    var shimKeys = function(object) {
-      var index, iterable = object, result = [];
-      if (!iterable) return result;
-      if (!(objectTypes[typeof object])) return result;
-        for (index in iterable) {
-          if (hasOwnProperty.call(iterable, index)) {
-            result.push(index);
-          }
-        }
-      return result
-    };
+/**
+ * The base implementation of `_.matchesProperty` which does not clone `srcValue`.
+ *
+ * @private
+ * @param {string} path The path of the property to get.
+ * @param {*} srcValue The value to compare.
+ * @returns {Function} Returns the new function.
+ */
+function baseMatchesProperty(path, srcValue) {
+  var isArr = isArray(path),
+      isCommon = isKey(path) && isStrictComparable(srcValue),
+      pathKey = (path + '');
 
-    /**
-     * Creates an array composed of the own enumerable property names of an object.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The object to inspect.
-     * @returns {Array} Returns an array of property names.
-     * @example
-     *
-     * _.keys({ 'one': 1, 'two': 2, 'three': 3 });
-     * // => ['one', 'two', 'three'] (property order is not guaranteed across environments)
-     */
-    var keys = !nativeKeys ? shimKeys : function(object) {
-      if (!isObject(object)) {
-        return [];
-      }
-      return nativeKeys(object);
-    };
-
-    /**
-     * Used to convert characters to HTML entities:
-     *
-     * Though the `>` character is escaped for symmetry, characters like `>` and `/`
-     * don't require escaping in HTML and have no special meaning unless they're part
-     * of a tag or an unquoted attribute value.
-     * http://mathiasbynens.be/notes/ambiguous-ampersands (under "semi-related fun fact")
-     */
-    var htmlEscapes = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;'
-    };
-
-    /** Used to convert HTML entities to characters */
-    var htmlUnescapes = invert(htmlEscapes);
-
-    /** Used to match HTML entities and HTML characters */
-    var reEscapedHtml = RegExp('(' + keys(htmlUnescapes).join('|') + ')', 'g'),
-        reUnescapedHtml = RegExp('[' + keys(htmlEscapes).join('') + ']', 'g');
-
-    /*--------------------------------------------------------------------------*/
-
-    /**
-     * Assigns own enumerable properties of source object(s) to the destination
-     * object. Subsequent sources will overwrite property assignments of previous
-     * sources. If a callback is provided it will be executed to produce the
-     * assigned values. The callback is bound to `thisArg` and invoked with two
-     * arguments; (objectValue, sourceValue).
-     *
-     * @static
-     * @memberOf _
-     * @type Function
-     * @alias extend
-     * @category Objects
-     * @param {Object} object The destination object.
-     * @param {...Object} [source] The source objects.
-     * @param {Function} [callback] The function to customize assigning values.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Object} Returns the destination object.
-     * @example
-     *
-     * _.assign({ 'name': 'fred' }, { 'employer': 'slate' });
-     * // => { 'name': 'fred', 'employer': 'slate' }
-     *
-     * var defaults = _.partialRight(_.assign, function(a, b) {
-     *   return typeof a == 'undefined' ? b : a;
-     * });
-     *
-     * var object = { 'name': 'barney' };
-     * defaults(object, { 'name': 'fred', 'employer': 'slate' });
-     * // => { 'name': 'barney', 'employer': 'slate' }
-     */
-    var assign = function(object, source, guard) {
-      var index, iterable = object, result = iterable;
-      if (!iterable) return result;
-      var args = arguments,
-          argsIndex = 0,
-          argsLength = typeof guard == 'number' ? 2 : args.length;
-      if (argsLength > 3 && typeof args[argsLength - 2] == 'function') {
-        var callback = baseCreateCallback(args[--argsLength - 1], args[argsLength--], 2);
-      } else if (argsLength > 2 && typeof args[argsLength - 1] == 'function') {
-        callback = args[--argsLength];
-      }
-      while (++argsIndex < argsLength) {
-        iterable = args[argsIndex];
-        if (iterable && objectTypes[typeof iterable]) {
-        var ownIndex = -1,
-            ownProps = objectTypes[typeof iterable] && keys(iterable),
-            length = ownProps ? ownProps.length : 0;
-
-        while (++ownIndex < length) {
-          index = ownProps[ownIndex];
-          result[index] = callback ? callback(result[index], iterable[index]) : iterable[index];
-        }
-        }
-      }
-      return result
-    };
-
-    /**
-     * Creates a clone of `value`. If `isDeep` is `true` nested objects will also
-     * be cloned, otherwise they will be assigned by reference. If a callback
-     * is provided it will be executed to produce the cloned values. If the
-     * callback returns `undefined` cloning will be handled by the method instead.
-     * The callback is bound to `thisArg` and invoked with one argument; (value).
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to clone.
-     * @param {boolean} [isDeep=false] Specify a deep clone.
-     * @param {Function} [callback] The function to customize cloning values.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {*} Returns the cloned value.
-     * @example
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36 },
-     *   { 'name': 'fred',   'age': 40 }
-     * ];
-     *
-     * var shallow = _.clone(characters);
-     * shallow[0] === characters[0];
-     * // => true
-     *
-     * var deep = _.clone(characters, true);
-     * deep[0] === characters[0];
-     * // => false
-     *
-     * _.mixin({
-     *   'clone': _.partialRight(_.clone, function(value) {
-     *     return _.isElement(value) ? value.cloneNode(false) : undefined;
-     *   })
-     * });
-     *
-     * var clone = _.clone(document.body);
-     * clone.childNodes.length;
-     * // => 0
-     */
-    function clone(value, isDeep, callback, thisArg) {
-      // allows working with "Collections" methods without using their `index`
-      // and `collection` arguments for `isDeep` and `callback`
-      if (typeof isDeep != 'boolean' && isDeep != null) {
-        thisArg = callback;
-        callback = isDeep;
-        isDeep = false;
-      }
-      return baseClone(value, isDeep, typeof callback == 'function' && baseCreateCallback(callback, thisArg, 1));
+  path = toPath(path);
+  return function(object) {
+    if (object == null) {
+      return false;
     }
-
-    /**
-     * Creates a deep clone of `value`. If a callback is provided it will be
-     * executed to produce the cloned values. If the callback returns `undefined`
-     * cloning will be handled by the method instead. The callback is bound to
-     * `thisArg` and invoked with one argument; (value).
-     *
-     * Note: This method is loosely based on the structured clone algorithm. Functions
-     * and DOM nodes are **not** cloned. The enumerable properties of `arguments` objects and
-     * objects created by constructors other than `Object` are cloned to plain `Object` objects.
-     * See http://www.w3.org/TR/html5/infrastructure.html#internal-structured-cloning-algorithm.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to deep clone.
-     * @param {Function} [callback] The function to customize cloning values.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {*} Returns the deep cloned value.
-     * @example
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36 },
-     *   { 'name': 'fred',   'age': 40 }
-     * ];
-     *
-     * var deep = _.cloneDeep(characters);
-     * deep[0] === characters[0];
-     * // => false
-     *
-     * var view = {
-     *   'label': 'docs',
-     *   'node': element
-     * };
-     *
-     * var clone = _.cloneDeep(view, function(value) {
-     *   return _.isElement(value) ? value.cloneNode(true) : undefined;
-     * });
-     *
-     * clone.node == view.node;
-     * // => false
-     */
-    function cloneDeep(value, callback, thisArg) {
-      return baseClone(value, true, typeof callback == 'function' && baseCreateCallback(callback, thisArg, 1));
-    }
-
-    /**
-     * Creates an object that inherits from the given `prototype` object. If a
-     * `properties` object is provided its own enumerable properties are assigned
-     * to the created object.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} prototype The object to inherit from.
-     * @param {Object} [properties] The properties to assign to the object.
-     * @returns {Object} Returns the new object.
-     * @example
-     *
-     * function Shape() {
-     *   this.x = 0;
-     *   this.y = 0;
-     * }
-     *
-     * function Circle() {
-     *   Shape.call(this);
-     * }
-     *
-     * Circle.prototype = _.create(Shape.prototype, { 'constructor': Circle });
-     *
-     * var circle = new Circle;
-     * circle instanceof Circle;
-     * // => true
-     *
-     * circle instanceof Shape;
-     * // => true
-     */
-    function create(prototype, properties) {
-      var result = baseCreate(prototype);
-      return properties ? assign(result, properties) : result;
-    }
-
-    /**
-     * Assigns own enumerable properties of source object(s) to the destination
-     * object for all destination properties that resolve to `undefined`. Once a
-     * property is set, additional defaults of the same property will be ignored.
-     *
-     * @static
-     * @memberOf _
-     * @type Function
-     * @category Objects
-     * @param {Object} object The destination object.
-     * @param {...Object} [source] The source objects.
-     * @param- {Object} [guard] Allows working with `_.reduce` without using its
-     *  `key` and `object` arguments as sources.
-     * @returns {Object} Returns the destination object.
-     * @example
-     *
-     * var object = { 'name': 'barney' };
-     * _.defaults(object, { 'name': 'fred', 'employer': 'slate' });
-     * // => { 'name': 'barney', 'employer': 'slate' }
-     */
-    var defaults = function(object, source, guard) {
-      var index, iterable = object, result = iterable;
-      if (!iterable) return result;
-      var args = arguments,
-          argsIndex = 0,
-          argsLength = typeof guard == 'number' ? 2 : args.length;
-      while (++argsIndex < argsLength) {
-        iterable = args[argsIndex];
-        if (iterable && objectTypes[typeof iterable]) {
-        var ownIndex = -1,
-            ownProps = objectTypes[typeof iterable] && keys(iterable),
-            length = ownProps ? ownProps.length : 0;
-
-        while (++ownIndex < length) {
-          index = ownProps[ownIndex];
-          if (typeof result[index] == 'undefined') result[index] = iterable[index];
-        }
-        }
-      }
-      return result
-    };
-
-    /**
-     * This method is like `_.findIndex` except that it returns the key of the
-     * first element that passes the callback check, instead of the element itself.
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The object to search.
-     * @param {Function|Object|string} [callback=identity] The function called per
-     *  iteration. If a property name or object is provided it will be used to
-     *  create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {string|undefined} Returns the key of the found element, else `undefined`.
-     * @example
-     *
-     * var characters = {
-     *   'barney': {  'age': 36, 'blocked': false },
-     *   'fred': {    'age': 40, 'blocked': true },
-     *   'pebbles': { 'age': 1,  'blocked': false }
-     * };
-     *
-     * _.findKey(characters, function(chr) {
-     *   return chr.age < 40;
-     * });
-     * // => 'barney' (property order is not guaranteed across environments)
-     *
-     * // using "_.where" callback shorthand
-     * _.findKey(characters, { 'age': 1 });
-     * // => 'pebbles'
-     *
-     * // using "_.pluck" callback shorthand
-     * _.findKey(characters, 'blocked');
-     * // => 'fred'
-     */
-    function findKey(object, callback, thisArg) {
-      var result;
-      callback = lodash.createCallback(callback, thisArg, 3);
-      forOwn(object, function(value, key, object) {
-        if (callback(value, key, object)) {
-          result = key;
-          return false;
-        }
-      });
-      return result;
-    }
-
-    /**
-     * This method is like `_.findKey` except that it iterates over elements
-     * of a `collection` in the opposite order.
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The object to search.
-     * @param {Function|Object|string} [callback=identity] The function called per
-     *  iteration. If a property name or object is provided it will be used to
-     *  create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {string|undefined} Returns the key of the found element, else `undefined`.
-     * @example
-     *
-     * var characters = {
-     *   'barney': {  'age': 36, 'blocked': true },
-     *   'fred': {    'age': 40, 'blocked': false },
-     *   'pebbles': { 'age': 1,  'blocked': true }
-     * };
-     *
-     * _.findLastKey(characters, function(chr) {
-     *   return chr.age < 40;
-     * });
-     * // => returns `pebbles`, assuming `_.findKey` returns `barney`
-     *
-     * // using "_.where" callback shorthand
-     * _.findLastKey(characters, { 'age': 40 });
-     * // => 'fred'
-     *
-     * // using "_.pluck" callback shorthand
-     * _.findLastKey(characters, 'blocked');
-     * // => 'pebbles'
-     */
-    function findLastKey(object, callback, thisArg) {
-      var result;
-      callback = lodash.createCallback(callback, thisArg, 3);
-      forOwnRight(object, function(value, key, object) {
-        if (callback(value, key, object)) {
-          result = key;
-          return false;
-        }
-      });
-      return result;
-    }
-
-    /**
-     * Iterates over own and inherited enumerable properties of an object,
-     * executing the callback for each property. The callback is bound to `thisArg`
-     * and invoked with three arguments; (value, key, object). Callbacks may exit
-     * iteration early by explicitly returning `false`.
-     *
-     * @static
-     * @memberOf _
-     * @type Function
-     * @category Objects
-     * @param {Object} object The object to iterate over.
-     * @param {Function} [callback=identity] The function called per iteration.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Object} Returns `object`.
-     * @example
-     *
-     * function Shape() {
-     *   this.x = 0;
-     *   this.y = 0;
-     * }
-     *
-     * Shape.prototype.move = function(x, y) {
-     *   this.x += x;
-     *   this.y += y;
-     * };
-     *
-     * _.forIn(new Shape, function(value, key) {
-     *   console.log(key);
-     * });
-     * // => logs 'x', 'y', and 'move' (property order is not guaranteed across environments)
-     */
-    var forIn = function(collection, callback, thisArg) {
-      var index, iterable = collection, result = iterable;
-      if (!iterable) return result;
-      if (!objectTypes[typeof iterable]) return result;
-      callback = callback && typeof thisArg == 'undefined' ? callback : baseCreateCallback(callback, thisArg, 3);
-        for (index in iterable) {
-          if (callback(iterable[index], index, collection) === false) return result;
-        }
-      return result
-    };
-
-    /**
-     * This method is like `_.forIn` except that it iterates over elements
-     * of a `collection` in the opposite order.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The object to iterate over.
-     * @param {Function} [callback=identity] The function called per iteration.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Object} Returns `object`.
-     * @example
-     *
-     * function Shape() {
-     *   this.x = 0;
-     *   this.y = 0;
-     * }
-     *
-     * Shape.prototype.move = function(x, y) {
-     *   this.x += x;
-     *   this.y += y;
-     * };
-     *
-     * _.forInRight(new Shape, function(value, key) {
-     *   console.log(key);
-     * });
-     * // => logs 'move', 'y', and 'x' assuming `_.forIn ` logs 'x', 'y', and 'move'
-     */
-    function forInRight(object, callback, thisArg) {
-      var pairs = [];
-
-      forIn(object, function(value, key) {
-        pairs.push(key, value);
-      });
-
-      var length = pairs.length;
-      callback = baseCreateCallback(callback, thisArg, 3);
-      while (length--) {
-        if (callback(pairs[length--], pairs[length], object) === false) {
-          break;
-        }
-      }
-      return object;
-    }
-
-    /**
-     * Iterates over own enumerable properties of an object, executing the callback
-     * for each property. The callback is bound to `thisArg` and invoked with three
-     * arguments; (value, key, object). Callbacks may exit iteration early by
-     * explicitly returning `false`.
-     *
-     * @static
-     * @memberOf _
-     * @type Function
-     * @category Objects
-     * @param {Object} object The object to iterate over.
-     * @param {Function} [callback=identity] The function called per iteration.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Object} Returns `object`.
-     * @example
-     *
-     * _.forOwn({ '0': 'zero', '1': 'one', 'length': 2 }, function(num, key) {
-     *   console.log(key);
-     * });
-     * // => logs '0', '1', and 'length' (property order is not guaranteed across environments)
-     */
-    var forOwn = function(collection, callback, thisArg) {
-      var index, iterable = collection, result = iterable;
-      if (!iterable) return result;
-      if (!objectTypes[typeof iterable]) return result;
-      callback = callback && typeof thisArg == 'undefined' ? callback : baseCreateCallback(callback, thisArg, 3);
-        var ownIndex = -1,
-            ownProps = objectTypes[typeof iterable] && keys(iterable),
-            length = ownProps ? ownProps.length : 0;
-
-        while (++ownIndex < length) {
-          index = ownProps[ownIndex];
-          if (callback(iterable[index], index, collection) === false) return result;
-        }
-      return result
-    };
-
-    /**
-     * This method is like `_.forOwn` except that it iterates over elements
-     * of a `collection` in the opposite order.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The object to iterate over.
-     * @param {Function} [callback=identity] The function called per iteration.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Object} Returns `object`.
-     * @example
-     *
-     * _.forOwnRight({ '0': 'zero', '1': 'one', 'length': 2 }, function(num, key) {
-     *   console.log(key);
-     * });
-     * // => logs 'length', '1', and '0' assuming `_.forOwn` logs '0', '1', and 'length'
-     */
-    function forOwnRight(object, callback, thisArg) {
-      var props = keys(object),
-          length = props.length;
-
-      callback = baseCreateCallback(callback, thisArg, 3);
-      while (length--) {
-        var key = props[length];
-        if (callback(object[key], key, object) === false) {
-          break;
-        }
-      }
-      return object;
-    }
-
-    /**
-     * Creates a sorted array of property names of all enumerable properties,
-     * own and inherited, of `object` that have function values.
-     *
-     * @static
-     * @memberOf _
-     * @alias methods
-     * @category Objects
-     * @param {Object} object The object to inspect.
-     * @returns {Array} Returns an array of property names that have function values.
-     * @example
-     *
-     * _.functions(_);
-     * // => ['all', 'any', 'bind', 'bindAll', 'clone', 'compact', 'compose', ...]
-     */
-    function functions(object) {
-      var result = [];
-      forIn(object, function(value, key) {
-        if (isFunction(value)) {
-          result.push(key);
-        }
-      });
-      return result.sort();
-    }
-
-    /**
-     * Checks if the specified property name exists as a direct property of `object`,
-     * instead of an inherited property.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The object to inspect.
-     * @param {string} key The name of the property to check.
-     * @returns {boolean} Returns `true` if key is a direct property, else `false`.
-     * @example
-     *
-     * _.has({ 'a': 1, 'b': 2, 'c': 3 }, 'b');
-     * // => true
-     */
-    function has(object, key) {
-      return object ? hasOwnProperty.call(object, key) : false;
-    }
-
-    /**
-     * Creates an object composed of the inverted keys and values of the given object.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The object to invert.
-     * @returns {Object} Returns the created inverted object.
-     * @example
-     *
-     * _.invert({ 'first': 'fred', 'second': 'barney' });
-     * // => { 'fred': 'first', 'barney': 'second' }
-     */
-    function invert(object) {
-      var index = -1,
-          props = keys(object),
-          length = props.length,
-          result = {};
-
-      while (++index < length) {
-        var key = props[index];
-        result[object[key]] = key;
-      }
-      return result;
-    }
-
-    /**
-     * Checks if `value` is a boolean value.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is a boolean value, else `false`.
-     * @example
-     *
-     * _.isBoolean(null);
-     * // => false
-     */
-    function isBoolean(value) {
-      return value === true || value === false ||
-        value && typeof value == 'object' && toString.call(value) == boolClass || false;
-    }
-
-    /**
-     * Checks if `value` is a date.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is a date, else `false`.
-     * @example
-     *
-     * _.isDate(new Date);
-     * // => true
-     */
-    function isDate(value) {
-      return value && typeof value == 'object' && toString.call(value) == dateClass || false;
-    }
-
-    /**
-     * Checks if `value` is a DOM element.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is a DOM element, else `false`.
-     * @example
-     *
-     * _.isElement(document.body);
-     * // => true
-     */
-    function isElement(value) {
-      return value && value.nodeType === 1 || false;
-    }
-
-    /**
-     * Checks if `value` is empty. Arrays, strings, or `arguments` objects with a
-     * length of `0` and objects with no own enumerable properties are considered
-     * "empty".
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Array|Object|string} value The value to inspect.
-     * @returns {boolean} Returns `true` if the `value` is empty, else `false`.
-     * @example
-     *
-     * _.isEmpty([1, 2, 3]);
-     * // => false
-     *
-     * _.isEmpty({});
-     * // => true
-     *
-     * _.isEmpty('');
-     * // => true
-     */
-    function isEmpty(value) {
-      var result = true;
-      if (!value) {
-        return result;
-      }
-      var className = toString.call(value),
-          length = value.length;
-
-      if ((className == arrayClass || className == stringClass || className == argsClass ) ||
-          (className == objectClass && typeof length == 'number' && isFunction(value.splice))) {
-        return !length;
-      }
-      forOwn(value, function() {
-        return (result = false);
-      });
-      return result;
-    }
-
-    /**
-     * Performs a deep comparison between two values to determine if they are
-     * equivalent to each other. If a callback is provided it will be executed
-     * to compare values. If the callback returns `undefined` comparisons will
-     * be handled by the method instead. The callback is bound to `thisArg` and
-     * invoked with two arguments; (a, b).
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} a The value to compare.
-     * @param {*} b The other value to compare.
-     * @param {Function} [callback] The function to customize comparing values.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
-     * @example
-     *
-     * var object = { 'name': 'fred' };
-     * var copy = { 'name': 'fred' };
-     *
-     * object == copy;
-     * // => false
-     *
-     * _.isEqual(object, copy);
-     * // => true
-     *
-     * var words = ['hello', 'goodbye'];
-     * var otherWords = ['hi', 'goodbye'];
-     *
-     * _.isEqual(words, otherWords, function(a, b) {
-     *   var reGreet = /^(?:hello|hi)$/i,
-     *       aGreet = _.isString(a) && reGreet.test(a),
-     *       bGreet = _.isString(b) && reGreet.test(b);
-     *
-     *   return (aGreet || bGreet) ? (aGreet == bGreet) : undefined;
-     * });
-     * // => true
-     */
-    function isEqual(a, b, callback, thisArg) {
-      return baseIsEqual(a, b, typeof callback == 'function' && baseCreateCallback(callback, thisArg, 2));
-    }
-
-    /**
-     * Checks if `value` is, or can be coerced to, a finite number.
-     *
-     * Note: This is not the same as native `isFinite` which will return true for
-     * booleans and empty strings. See http://es5.github.io/#x15.1.2.5.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is finite, else `false`.
-     * @example
-     *
-     * _.isFinite(-101);
-     * // => true
-     *
-     * _.isFinite('10');
-     * // => true
-     *
-     * _.isFinite(true);
-     * // => false
-     *
-     * _.isFinite('');
-     * // => false
-     *
-     * _.isFinite(Infinity);
-     * // => false
-     */
-    function isFinite(value) {
-      return nativeIsFinite(value) && !nativeIsNaN(parseFloat(value));
-    }
-
-    /**
-     * Checks if `value` is a function.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is a function, else `false`.
-     * @example
-     *
-     * _.isFunction(_);
-     * // => true
-     */
-    function isFunction(value) {
-      return typeof value == 'function';
-    }
-
-    /**
-     * Checks if `value` is the language type of Object.
-     * (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is an object, else `false`.
-     * @example
-     *
-     * _.isObject({});
-     * // => true
-     *
-     * _.isObject([1, 2, 3]);
-     * // => true
-     *
-     * _.isObject(1);
-     * // => false
-     */
-    function isObject(value) {
-      // check if the value is the ECMAScript language type of Object
-      // http://es5.github.io/#x8
-      // and avoid a V8 bug
-      // http://code.google.com/p/v8/issues/detail?id=2291
-      return !!(value && objectTypes[typeof value]);
-    }
-
-    /**
-     * Checks if `value` is `NaN`.
-     *
-     * Note: This is not the same as native `isNaN` which will return `true` for
-     * `undefined` and other non-numeric values. See http://es5.github.io/#x15.1.2.4.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is `NaN`, else `false`.
-     * @example
-     *
-     * _.isNaN(NaN);
-     * // => true
-     *
-     * _.isNaN(new Number(NaN));
-     * // => true
-     *
-     * isNaN(undefined);
-     * // => true
-     *
-     * _.isNaN(undefined);
-     * // => false
-     */
-    function isNaN(value) {
-      // `NaN` as a primitive is the only value that is not equal to itself
-      // (perform the [[Class]] check first to avoid errors with some host objects in IE)
-      return isNumber(value) && value != +value;
-    }
-
-    /**
-     * Checks if `value` is `null`.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is `null`, else `false`.
-     * @example
-     *
-     * _.isNull(null);
-     * // => true
-     *
-     * _.isNull(undefined);
-     * // => false
-     */
-    function isNull(value) {
-      return value === null;
-    }
-
-    /**
-     * Checks if `value` is a number.
-     *
-     * Note: `NaN` is considered a number. See http://es5.github.io/#x8.5.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is a number, else `false`.
-     * @example
-     *
-     * _.isNumber(8.4 * 5);
-     * // => true
-     */
-    function isNumber(value) {
-      return typeof value == 'number' ||
-        value && typeof value == 'object' && toString.call(value) == numberClass || false;
-    }
-
-    /**
-     * Checks if `value` is an object created by the `Object` constructor.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if `value` is a plain object, else `false`.
-     * @example
-     *
-     * function Shape() {
-     *   this.x = 0;
-     *   this.y = 0;
-     * }
-     *
-     * _.isPlainObject(new Shape);
-     * // => false
-     *
-     * _.isPlainObject([1, 2, 3]);
-     * // => false
-     *
-     * _.isPlainObject({ 'x': 0, 'y': 0 });
-     * // => true
-     */
-    var isPlainObject = !getPrototypeOf ? shimIsPlainObject : function(value) {
-      if (!(value && toString.call(value) == objectClass)) {
+    var key = pathKey;
+    object = toObject(object);
+    if ((isArr || !isCommon) && !(key in object)) {
+      object = path.length == 1 ? object : baseGet(object, baseSlice(path, 0, -1));
+      if (object == null) {
         return false;
       }
-      var valueOf = value.valueOf,
-          objProto = isNative(valueOf) && (objProto = getPrototypeOf(valueOf)) && getPrototypeOf(objProto);
-
-      return objProto
-        ? (value == objProto || getPrototypeOf(value) == objProto)
-        : shimIsPlainObject(value);
-    };
-
-    /**
-     * Checks if `value` is a regular expression.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is a regular expression, else `false`.
-     * @example
-     *
-     * _.isRegExp(/fred/);
-     * // => true
-     */
-    function isRegExp(value) {
-      return value && typeof value == 'object' && toString.call(value) == regexpClass || false;
+      key = last(path);
+      object = toObject(object);
     }
-
-    /**
-     * Checks if `value` is a string.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is a string, else `false`.
-     * @example
-     *
-     * _.isString('fred');
-     * // => true
-     */
-    function isString(value) {
-      return typeof value == 'string' ||
-        value && typeof value == 'object' && toString.call(value) == stringClass || false;
-    }
-
-    /**
-     * Checks if `value` is `undefined`.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {*} value The value to check.
-     * @returns {boolean} Returns `true` if the `value` is `undefined`, else `false`.
-     * @example
-     *
-     * _.isUndefined(void 0);
-     * // => true
-     */
-    function isUndefined(value) {
-      return typeof value == 'undefined';
-    }
-
-    /**
-     * Creates an object with the same keys as `object` and values generated by
-     * running each own enumerable property of `object` through the callback.
-     * The callback is bound to `thisArg` and invoked with three arguments;
-     * (value, key, object).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The object to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array} Returns a new object with values of the results of each `callback` execution.
-     * @example
-     *
-     * _.mapValues({ 'a': 1, 'b': 2, 'c': 3} , function(num) { return num * 3; });
-     * // => { 'a': 3, 'b': 6, 'c': 9 }
-     *
-     * var characters = {
-     *   'fred': { 'name': 'fred', 'age': 40 },
-     *   'pebbles': { 'name': 'pebbles', 'age': 1 }
-     * };
-     *
-     * // using "_.pluck" callback shorthand
-     * _.mapValues(characters, 'age');
-     * // => { 'fred': 40, 'pebbles': 1 }
-     */
-    function mapValues(object, callback, thisArg) {
-      var result = {};
-      callback = lodash.createCallback(callback, thisArg, 3);
-
-      forOwn(object, function(value, key, object) {
-        result[key] = callback(value, key, object);
-      });
-      return result;
-    }
-
-    /**
-     * Recursively merges own enumerable properties of the source object(s), that
-     * don't resolve to `undefined` into the destination object. Subsequent sources
-     * will overwrite property assignments of previous sources. If a callback is
-     * provided it will be executed to produce the merged values of the destination
-     * and source properties. If the callback returns `undefined` merging will
-     * be handled by the method instead. The callback is bound to `thisArg` and
-     * invoked with two arguments; (objectValue, sourceValue).
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The destination object.
-     * @param {...Object} [source] The source objects.
-     * @param {Function} [callback] The function to customize merging properties.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Object} Returns the destination object.
-     * @example
-     *
-     * var names = {
-     *   'characters': [
-     *     { 'name': 'barney' },
-     *     { 'name': 'fred' }
-     *   ]
-     * };
-     *
-     * var ages = {
-     *   'characters': [
-     *     { 'age': 36 },
-     *     { 'age': 40 }
-     *   ]
-     * };
-     *
-     * _.merge(names, ages);
-     * // => { 'characters': [{ 'name': 'barney', 'age': 36 }, { 'name': 'fred', 'age': 40 }] }
-     *
-     * var food = {
-     *   'fruits': ['apple'],
-     *   'vegetables': ['beet']
-     * };
-     *
-     * var otherFood = {
-     *   'fruits': ['banana'],
-     *   'vegetables': ['carrot']
-     * };
-     *
-     * _.merge(food, otherFood, function(a, b) {
-     *   return _.isArray(a) ? a.concat(b) : undefined;
-     * });
-     * // => { 'fruits': ['apple', 'banana'], 'vegetables': ['beet', 'carrot] }
-     */
-    function merge(object) {
-      var args = arguments,
-          length = 2;
-
-      if (!isObject(object)) {
-        return object;
-      }
-      // allows working with `_.reduce` and `_.reduceRight` without using
-      // their `index` and `collection` arguments
-      if (typeof args[2] != 'number') {
-        length = args.length;
-      }
-      if (length > 3 && typeof args[length - 2] == 'function') {
-        var callback = baseCreateCallback(args[--length - 1], args[length--], 2);
-      } else if (length > 2 && typeof args[length - 1] == 'function') {
-        callback = args[--length];
-      }
-      var sources = slice(arguments, 1, length),
-          index = -1,
-          stackA = getArray(),
-          stackB = getArray();
-
-      while (++index < length) {
-        baseMerge(object, sources[index], callback, stackA, stackB);
-      }
-      releaseArray(stackA);
-      releaseArray(stackB);
-      return object;
-    }
-
-    /**
-     * Creates a shallow clone of `object` excluding the specified properties.
-     * Property names may be specified as individual arguments or as arrays of
-     * property names. If a callback is provided it will be executed for each
-     * property of `object` omitting the properties the callback returns truey
-     * for. The callback is bound to `thisArg` and invoked with three arguments;
-     * (value, key, object).
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The source object.
-     * @param {Function|...string|string[]} [callback] The properties to omit or the
-     *  function called per iteration.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Object} Returns an object without the omitted properties.
-     * @example
-     *
-     * _.omit({ 'name': 'fred', 'age': 40 }, 'age');
-     * // => { 'name': 'fred' }
-     *
-     * _.omit({ 'name': 'fred', 'age': 40 }, function(value) {
-     *   return typeof value == 'number';
-     * });
-     * // => { 'name': 'fred' }
-     */
-    function omit(object, callback, thisArg) {
-      var result = {};
-      if (typeof callback != 'function') {
-        var props = [];
-        forIn(object, function(value, key) {
-          props.push(key);
-        });
-        props = baseDifference(props, baseFlatten(arguments, true, false, 1));
-
-        var index = -1,
-            length = props.length;
-
-        while (++index < length) {
-          var key = props[index];
-          result[key] = object[key];
-        }
-      } else {
-        callback = lodash.createCallback(callback, thisArg, 3);
-        forIn(object, function(value, key, object) {
-          if (!callback(value, key, object)) {
-            result[key] = value;
-          }
-        });
-      }
-      return result;
-    }
-
-    /**
-     * Creates a two dimensional array of an object's key-value pairs,
-     * i.e. `[[key1, value1], [key2, value2]]`.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The object to inspect.
-     * @returns {Array} Returns new array of key-value pairs.
-     * @example
-     *
-     * _.pairs({ 'barney': 36, 'fred': 40 });
-     * // => [['barney', 36], ['fred', 40]] (property order is not guaranteed across environments)
-     */
-    function pairs(object) {
-      var index = -1,
-          props = keys(object),
-          length = props.length,
-          result = Array(length);
-
-      while (++index < length) {
-        var key = props[index];
-        result[index] = [key, object[key]];
-      }
-      return result;
-    }
-
-    /**
-     * Creates a shallow clone of `object` composed of the specified properties.
-     * Property names may be specified as individual arguments or as arrays of
-     * property names. If a callback is provided it will be executed for each
-     * property of `object` picking the properties the callback returns truey
-     * for. The callback is bound to `thisArg` and invoked with three arguments;
-     * (value, key, object).
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The source object.
-     * @param {Function|...string|string[]} [callback] The function called per
-     *  iteration or property names to pick, specified as individual property
-     *  names or arrays of property names.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Object} Returns an object composed of the picked properties.
-     * @example
-     *
-     * _.pick({ 'name': 'fred', '_userid': 'fred1' }, 'name');
-     * // => { 'name': 'fred' }
-     *
-     * _.pick({ 'name': 'fred', '_userid': 'fred1' }, function(value, key) {
-     *   return key.charAt(0) != '_';
-     * });
-     * // => { 'name': 'fred' }
-     */
-    function pick(object, callback, thisArg) {
-      var result = {};
-      if (typeof callback != 'function') {
-        var index = -1,
-            props = baseFlatten(arguments, true, false, 1),
-            length = isObject(object) ? props.length : 0;
-
-        while (++index < length) {
-          var key = props[index];
-          if (key in object) {
-            result[key] = object[key];
-          }
-        }
-      } else {
-        callback = lodash.createCallback(callback, thisArg, 3);
-        forIn(object, function(value, key, object) {
-          if (callback(value, key, object)) {
-            result[key] = value;
-          }
-        });
-      }
-      return result;
-    }
-
-    /**
-     * An alternative to `_.reduce` this method transforms `object` to a new
-     * `accumulator` object which is the result of running each of its own
-     * enumerable properties through a callback, with each callback execution
-     * potentially mutating the `accumulator` object. The callback is bound to
-     * `thisArg` and invoked with four arguments; (accumulator, value, key, object).
-     * Callbacks may exit iteration early by explicitly returning `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Array|Object} object The object to iterate over.
-     * @param {Function} [callback=identity] The function called per iteration.
-     * @param {*} [accumulator] The custom accumulator value.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {*} Returns the accumulated value.
-     * @example
-     *
-     * var squares = _.transform([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], function(result, num) {
-     *   num *= num;
-     *   if (num % 2) {
-     *     return result.push(num) < 3;
-     *   }
-     * });
-     * // => [1, 9, 25]
-     *
-     * var mapped = _.transform({ 'a': 1, 'b': 2, 'c': 3 }, function(result, num, key) {
-     *   result[key] = num * 3;
-     * });
-     * // => { 'a': 3, 'b': 6, 'c': 9 }
-     */
-    function transform(object, callback, accumulator, thisArg) {
-      var isArr = isArray(object);
-      if (accumulator == null) {
-        if (isArr) {
-          accumulator = [];
-        } else {
-          var ctor = object && object.constructor,
-              proto = ctor && ctor.prototype;
-
-          accumulator = baseCreate(proto);
-        }
-      }
-      if (callback) {
-        callback = lodash.createCallback(callback, thisArg, 4);
-        (isArr ? forEach : forOwn)(object, function(value, index, object) {
-          return callback(accumulator, value, index, object);
-        });
-      }
-      return accumulator;
-    }
-
-    /**
-     * Creates an array composed of the own enumerable property values of `object`.
-     *
-     * @static
-     * @memberOf _
-     * @category Objects
-     * @param {Object} object The object to inspect.
-     * @returns {Array} Returns an array of property values.
-     * @example
-     *
-     * _.values({ 'one': 1, 'two': 2, 'three': 3 });
-     * // => [1, 2, 3] (property order is not guaranteed across environments)
-     */
-    function values(object) {
-      var index = -1,
-          props = keys(object),
-          length = props.length,
-          result = Array(length);
-
-      while (++index < length) {
-        result[index] = object[props[index]];
-      }
-      return result;
-    }
-
-    /*--------------------------------------------------------------------------*/
-
-    /**
-     * Creates an array of elements from the specified indexes, or keys, of the
-     * `collection`. Indexes may be specified as individual arguments or as arrays
-     * of indexes.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {...(number|number[]|string|string[])} [index] The indexes of `collection`
-     *   to retrieve, specified as individual indexes or arrays of indexes.
-     * @returns {Array} Returns a new array of elements corresponding to the
-     *  provided indexes.
-     * @example
-     *
-     * _.at(['a', 'b', 'c', 'd', 'e'], [0, 2, 4]);
-     * // => ['a', 'c', 'e']
-     *
-     * _.at(['fred', 'barney', 'pebbles'], 0, 2);
-     * // => ['fred', 'pebbles']
-     */
-    function at(collection) {
-      var args = arguments,
-          index = -1,
-          props = baseFlatten(args, true, false, 1),
-          length = (args[2] && args[2][args[1]] === collection) ? 1 : props.length,
-          result = Array(length);
-
-      while(++index < length) {
-        result[index] = collection[props[index]];
-      }
-      return result;
-    }
-
-    /**
-     * Checks if a given value is present in a collection using strict equality
-     * for comparisons, i.e. `===`. If `fromIndex` is negative, it is used as the
-     * offset from the end of the collection.
-     *
-     * @static
-     * @memberOf _
-     * @alias include
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {*} target The value to check for.
-     * @param {number} [fromIndex=0] The index to search from.
-     * @returns {boolean} Returns `true` if the `target` element is found, else `false`.
-     * @example
-     *
-     * _.contains([1, 2, 3], 1);
-     * // => true
-     *
-     * _.contains([1, 2, 3], 1, 2);
-     * // => false
-     *
-     * _.contains({ 'name': 'fred', 'age': 40 }, 'fred');
-     * // => true
-     *
-     * _.contains('pebbles', 'eb');
-     * // => true
-     */
-    function contains(collection, target, fromIndex) {
-      var index = -1,
-          indexOf = getIndexOf(),
-          length = collection ? collection.length : 0,
-          result = false;
-
-      fromIndex = (fromIndex < 0 ? nativeMax(0, length + fromIndex) : fromIndex) || 0;
-      if (isArray(collection)) {
-        result = indexOf(collection, target, fromIndex) > -1;
-      } else if (typeof length == 'number') {
-        result = (isString(collection) ? collection.indexOf(target, fromIndex) : indexOf(collection, target, fromIndex)) > -1;
-      } else {
-        forOwn(collection, function(value) {
-          if (++index >= fromIndex) {
-            return !(result = value === target);
-          }
-        });
-      }
-      return result;
-    }
-
-    /**
-     * Creates an object composed of keys generated from the results of running
-     * each element of `collection` through the callback. The corresponding value
-     * of each key is the number of times the key was returned by the callback.
-     * The callback is bound to `thisArg` and invoked with three arguments;
-     * (value, index|key, collection).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Object} Returns the composed aggregate object.
-     * @example
-     *
-     * _.countBy([4.3, 6.1, 6.4], function(num) { return Math.floor(num); });
-     * // => { '4': 1, '6': 2 }
-     *
-     * _.countBy([4.3, 6.1, 6.4], function(num) { return this.floor(num); }, Math);
-     * // => { '4': 1, '6': 2 }
-     *
-     * _.countBy(['one', 'two', 'three'], 'length');
-     * // => { '3': 2, '5': 1 }
-     */
-    var countBy = createAggregator(function(result, value, key) {
-      (hasOwnProperty.call(result, key) ? result[key]++ : result[key] = 1);
-    });
-
-    /**
-     * Checks if the given callback returns truey value for **all** elements of
-     * a collection. The callback is bound to `thisArg` and invoked with three
-     * arguments; (value, index|key, collection).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @alias all
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {boolean} Returns `true` if all elements passed the callback check,
-     *  else `false`.
-     * @example
-     *
-     * _.every([true, 1, null, 'yes']);
-     * // => false
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36 },
-     *   { 'name': 'fred',   'age': 40 }
-     * ];
-     *
-     * // using "_.pluck" callback shorthand
-     * _.every(characters, 'age');
-     * // => true
-     *
-     * // using "_.where" callback shorthand
-     * _.every(characters, { 'age': 36 });
-     * // => false
-     */
-    function every(collection, callback, thisArg) {
-      var result = true;
-      callback = lodash.createCallback(callback, thisArg, 3);
-
-      var index = -1,
-          length = collection ? collection.length : 0;
-
-      if (typeof length == 'number') {
-        while (++index < length) {
-          if (!(result = !!callback(collection[index], index, collection))) {
-            break;
-          }
-        }
-      } else {
-        forOwn(collection, function(value, index, collection) {
-          return (result = !!callback(value, index, collection));
-        });
-      }
-      return result;
-    }
-
-    /**
-     * Iterates over elements of a collection, returning an array of all elements
-     * the callback returns truey for. The callback is bound to `thisArg` and
-     * invoked with three arguments; (value, index|key, collection).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @alias select
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array} Returns a new array of elements that passed the callback check.
-     * @example
-     *
-     * var evens = _.filter([1, 2, 3, 4, 5, 6], function(num) { return num % 2 == 0; });
-     * // => [2, 4, 6]
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36, 'blocked': false },
-     *   { 'name': 'fred',   'age': 40, 'blocked': true }
-     * ];
-     *
-     * // using "_.pluck" callback shorthand
-     * _.filter(characters, 'blocked');
-     * // => [{ 'name': 'fred', 'age': 40, 'blocked': true }]
-     *
-     * // using "_.where" callback shorthand
-     * _.filter(characters, { 'age': 36 });
-     * // => [{ 'name': 'barney', 'age': 36, 'blocked': false }]
-     */
-    function filter(collection, callback, thisArg) {
-      var result = [];
-      callback = lodash.createCallback(callback, thisArg, 3);
-
-      var index = -1,
-          length = collection ? collection.length : 0;
-
-      if (typeof length == 'number') {
-        while (++index < length) {
-          var value = collection[index];
-          if (callback(value, index, collection)) {
-            result.push(value);
-          }
-        }
-      } else {
-        forOwn(collection, function(value, index, collection) {
-          if (callback(value, index, collection)) {
-            result.push(value);
-          }
-        });
-      }
-      return result;
-    }
-
-    /**
-     * Iterates over elements of a collection, returning the first element that
-     * the callback returns truey for. The callback is bound to `thisArg` and
-     * invoked with three arguments; (value, index|key, collection).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @alias detect, findWhere
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {*} Returns the found element, else `undefined`.
-     * @example
-     *
-     * var characters = [
-     *   { 'name': 'barney',  'age': 36, 'blocked': false },
-     *   { 'name': 'fred',    'age': 40, 'blocked': true },
-     *   { 'name': 'pebbles', 'age': 1,  'blocked': false }
-     * ];
-     *
-     * _.find(characters, function(chr) {
-     *   return chr.age < 40;
-     * });
-     * // => { 'name': 'barney', 'age': 36, 'blocked': false }
-     *
-     * // using "_.where" callback shorthand
-     * _.find(characters, { 'age': 1 });
-     * // =>  { 'name': 'pebbles', 'age': 1, 'blocked': false }
-     *
-     * // using "_.pluck" callback shorthand
-     * _.find(characters, 'blocked');
-     * // => { 'name': 'fred', 'age': 40, 'blocked': true }
-     */
-    function find(collection, callback, thisArg) {
-      callback = lodash.createCallback(callback, thisArg, 3);
-
-      var index = -1,
-          length = collection ? collection.length : 0;
-
-      if (typeof length == 'number') {
-        while (++index < length) {
-          var value = collection[index];
-          if (callback(value, index, collection)) {
-            return value;
-          }
-        }
-      } else {
-        var result;
-        forOwn(collection, function(value, index, collection) {
-          if (callback(value, index, collection)) {
-            result = value;
-            return false;
-          }
-        });
-        return result;
-      }
-    }
-
-    /**
-     * This method is like `_.find` except that it iterates over elements
-     * of a `collection` from right to left.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {*} Returns the found element, else `undefined`.
-     * @example
-     *
-     * _.findLast([1, 2, 3, 4], function(num) {
-     *   return num % 2 == 1;
-     * });
-     * // => 3
-     */
-    function findLast(collection, callback, thisArg) {
-      var result;
-      callback = lodash.createCallback(callback, thisArg, 3);
-      forEachRight(collection, function(value, index, collection) {
-        if (callback(value, index, collection)) {
-          result = value;
-          return false;
-        }
-      });
-      return result;
-    }
-
-    /**
-     * Iterates over elements of a collection, executing the callback for each
-     * element. The callback is bound to `thisArg` and invoked with three arguments;
-     * (value, index|key, collection). Callbacks may exit iteration early by
-     * explicitly returning `false`.
-     *
-     * Note: As with other "Collections" methods, objects with a `length` property
-     * are iterated like arrays. To avoid this behavior `_.forIn` or `_.forOwn`
-     * may be used for object iteration.
-     *
-     * @static
-     * @memberOf _
-     * @alias each
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function} [callback=identity] The function called per iteration.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array|Object|string} Returns `collection`.
-     * @example
-     *
-     * _([1, 2, 3]).forEach(function(num) { console.log(num); }).join(',');
-     * // => logs each number and returns '1,2,3'
-     *
-     * _.forEach({ 'one': 1, 'two': 2, 'three': 3 }, function(num) { console.log(num); });
-     * // => logs each number and returns the object (property order is not guaranteed across environments)
-     */
-    function forEach(collection, callback, thisArg) {
-      var index = -1,
-          length = collection ? collection.length : 0;
-
-      callback = callback && typeof thisArg == 'undefined' ? callback : baseCreateCallback(callback, thisArg, 3);
-      if (typeof length == 'number') {
-        while (++index < length) {
-          if (callback(collection[index], index, collection) === false) {
-            break;
-          }
-        }
-      } else {
-        forOwn(collection, callback);
-      }
-      return collection;
-    }
-
-    /**
-     * This method is like `_.forEach` except that it iterates over elements
-     * of a `collection` from right to left.
-     *
-     * @static
-     * @memberOf _
-     * @alias eachRight
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function} [callback=identity] The function called per iteration.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array|Object|string} Returns `collection`.
-     * @example
-     *
-     * _([1, 2, 3]).forEachRight(function(num) { console.log(num); }).join(',');
-     * // => logs each number from right to left and returns '3,2,1'
-     */
-    function forEachRight(collection, callback, thisArg) {
-      var length = collection ? collection.length : 0;
-      callback = callback && typeof thisArg == 'undefined' ? callback : baseCreateCallback(callback, thisArg, 3);
-      if (typeof length == 'number') {
-        while (length--) {
-          if (callback(collection[length], length, collection) === false) {
-            break;
-          }
-        }
-      } else {
-        var props = keys(collection);
-        length = props.length;
-        forOwn(collection, function(value, key, collection) {
-          key = props ? props[--length] : --length;
-          return callback(collection[key], key, collection);
-        });
-      }
-      return collection;
-    }
-
-    /**
-     * Creates an object composed of keys generated from the results of running
-     * each element of a collection through the callback. The corresponding value
-     * of each key is an array of the elements responsible for generating the key.
-     * The callback is bound to `thisArg` and invoked with three arguments;
-     * (value, index|key, collection).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Object} Returns the composed aggregate object.
-     * @example
-     *
-     * _.groupBy([4.2, 6.1, 6.4], function(num) { return Math.floor(num); });
-     * // => { '4': [4.2], '6': [6.1, 6.4] }
-     *
-     * _.groupBy([4.2, 6.1, 6.4], function(num) { return this.floor(num); }, Math);
-     * // => { '4': [4.2], '6': [6.1, 6.4] }
-     *
-     * // using "_.pluck" callback shorthand
-     * _.groupBy(['one', 'two', 'three'], 'length');
-     * // => { '3': ['one', 'two'], '5': ['three'] }
-     */
-    var groupBy = createAggregator(function(result, value, key) {
-      (hasOwnProperty.call(result, key) ? result[key] : result[key] = []).push(value);
-    });
-
-    /**
-     * Creates an object composed of keys generated from the results of running
-     * each element of the collection through the given callback. The corresponding
-     * value of each key is the last element responsible for generating the key.
-     * The callback is bound to `thisArg` and invoked with three arguments;
-     * (value, index|key, collection).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Object} Returns the composed aggregate object.
-     * @example
-     *
-     * var keys = [
-     *   { 'dir': 'left', 'code': 97 },
-     *   { 'dir': 'right', 'code': 100 }
-     * ];
-     *
-     * _.indexBy(keys, 'dir');
-     * // => { 'left': { 'dir': 'left', 'code': 97 }, 'right': { 'dir': 'right', 'code': 100 } }
-     *
-     * _.indexBy(keys, function(key) { return String.fromCharCode(key.code); });
-     * // => { 'a': { 'dir': 'left', 'code': 97 }, 'd': { 'dir': 'right', 'code': 100 } }
-     *
-     * _.indexBy(characters, function(key) { this.fromCharCode(key.code); }, String);
-     * // => { 'a': { 'dir': 'left', 'code': 97 }, 'd': { 'dir': 'right', 'code': 100 } }
-     */
-    var indexBy = createAggregator(function(result, value, key) {
-      result[key] = value;
-    });
-
-    /**
-     * Invokes the method named by `methodName` on each element in the `collection`
-     * returning an array of the results of each invoked method. Additional arguments
-     * will be provided to each invoked method. If `methodName` is a function it
-     * will be invoked for, and `this` bound to, each element in the `collection`.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|string} methodName The name of the method to invoke or
-     *  the function invoked per iteration.
-     * @param {...*} [arg] Arguments to invoke the method with.
-     * @returns {Array} Returns a new array of the results of each invoked method.
-     * @example
-     *
-     * _.invoke([[5, 1, 7], [3, 2, 1]], 'sort');
-     * // => [[1, 5, 7], [1, 2, 3]]
-     *
-     * _.invoke([123, 456], String.prototype.split, '');
-     * // => [['1', '2', '3'], ['4', '5', '6']]
-     */
-    function invoke(collection, methodName) {
-      var args = slice(arguments, 2),
-          index = -1,
-          isFunc = typeof methodName == 'function',
-          length = collection ? collection.length : 0,
-          result = Array(typeof length == 'number' ? length : 0);
-
-      forEach(collection, function(value) {
-        result[++index] = (isFunc ? methodName : value[methodName]).apply(value, args);
-      });
-      return result;
-    }
-
-    /**
-     * Creates an array of values by running each element in the collection
-     * through the callback. The callback is bound to `thisArg` and invoked with
-     * three arguments; (value, index|key, collection).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @alias collect
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array} Returns a new array of the results of each `callback` execution.
-     * @example
-     *
-     * _.map([1, 2, 3], function(num) { return num * 3; });
-     * // => [3, 6, 9]
-     *
-     * _.map({ 'one': 1, 'two': 2, 'three': 3 }, function(num) { return num * 3; });
-     * // => [3, 6, 9] (property order is not guaranteed across environments)
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36 },
-     *   { 'name': 'fred',   'age': 40 }
-     * ];
-     *
-     * // using "_.pluck" callback shorthand
-     * _.map(characters, 'name');
-     * // => ['barney', 'fred']
-     */
-    function map(collection, callback, thisArg) {
-      var index = -1,
-          length = collection ? collection.length : 0;
-
-      callback = lodash.createCallback(callback, thisArg, 3);
-      if (typeof length == 'number') {
-        var result = Array(length);
-        while (++index < length) {
-          result[index] = callback(collection[index], index, collection);
-        }
-      } else {
-        result = [];
-        forOwn(collection, function(value, key, collection) {
-          result[++index] = callback(value, key, collection);
-        });
-      }
-      return result;
-    }
-
-    /**
-     * Retrieves the maximum value of a collection. If the collection is empty or
-     * falsey `-Infinity` is returned. If a callback is provided it will be executed
-     * for each value in the collection to generate the criterion by which the value
-     * is ranked. The callback is bound to `thisArg` and invoked with three
-     * arguments; (value, index, collection).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {*} Returns the maximum value.
-     * @example
-     *
-     * _.max([4, 2, 8, 6]);
-     * // => 8
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36 },
-     *   { 'name': 'fred',   'age': 40 }
-     * ];
-     *
-     * _.max(characters, function(chr) { return chr.age; });
-     * // => { 'name': 'fred', 'age': 40 };
-     *
-     * // using "_.pluck" callback shorthand
-     * _.max(characters, 'age');
-     * // => { 'name': 'fred', 'age': 40 };
-     */
-    function max(collection, callback, thisArg) {
-      var computed = -Infinity,
-          result = computed;
-
-      // allows working with functions like `_.map` without using
-      // their `index` argument as a callback
-      if (typeof callback != 'function' && thisArg && thisArg[callback] === collection) {
-        callback = null;
-      }
-      if (callback == null && isArray(collection)) {
-        var index = -1,
-            length = collection.length;
-
-        while (++index < length) {
-          var value = collection[index];
-          if (value > result) {
-            result = value;
-          }
-        }
-      } else {
-        callback = (callback == null && isString(collection))
-          ? charAtCallback
-          : lodash.createCallback(callback, thisArg, 3);
-
-        forEach(collection, function(value, index, collection) {
-          var current = callback(value, index, collection);
-          if (current > computed) {
-            computed = current;
-            result = value;
-          }
-        });
-      }
-      return result;
-    }
-
-    /**
-     * Retrieves the minimum value of a collection. If the collection is empty or
-     * falsey `Infinity` is returned. If a callback is provided it will be executed
-     * for each value in the collection to generate the criterion by which the value
-     * is ranked. The callback is bound to `thisArg` and invoked with three
-     * arguments; (value, index, collection).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {*} Returns the minimum value.
-     * @example
-     *
-     * _.min([4, 2, 8, 6]);
-     * // => 2
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36 },
-     *   { 'name': 'fred',   'age': 40 }
-     * ];
-     *
-     * _.min(characters, function(chr) { return chr.age; });
-     * // => { 'name': 'barney', 'age': 36 };
-     *
-     * // using "_.pluck" callback shorthand
-     * _.min(characters, 'age');
-     * // => { 'name': 'barney', 'age': 36 };
-     */
-    function min(collection, callback, thisArg) {
-      var computed = Infinity,
-          result = computed;
-
-      // allows working with functions like `_.map` without using
-      // their `index` argument as a callback
-      if (typeof callback != 'function' && thisArg && thisArg[callback] === collection) {
-        callback = null;
-      }
-      if (callback == null && isArray(collection)) {
-        var index = -1,
-            length = collection.length;
-
-        while (++index < length) {
-          var value = collection[index];
-          if (value < result) {
-            result = value;
-          }
-        }
-      } else {
-        callback = (callback == null && isString(collection))
-          ? charAtCallback
-          : lodash.createCallback(callback, thisArg, 3);
-
-        forEach(collection, function(value, index, collection) {
-          var current = callback(value, index, collection);
-          if (current < computed) {
-            computed = current;
-            result = value;
-          }
-        });
-      }
-      return result;
-    }
-
-    /**
-     * Retrieves the value of a specified property from all elements in the collection.
-     *
-     * @static
-     * @memberOf _
-     * @type Function
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {string} property The name of the property to pluck.
-     * @returns {Array} Returns a new array of property values.
-     * @example
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36 },
-     *   { 'name': 'fred',   'age': 40 }
-     * ];
-     *
-     * _.pluck(characters, 'name');
-     * // => ['barney', 'fred']
-     */
-    var pluck = map;
-
-    /**
-     * Reduces a collection to a value which is the accumulated result of running
-     * each element in the collection through the callback, where each successive
-     * callback execution consumes the return value of the previous execution. If
-     * `accumulator` is not provided the first element of the collection will be
-     * used as the initial `accumulator` value. The callback is bound to `thisArg`
-     * and invoked with four arguments; (accumulator, value, index|key, collection).
-     *
-     * @static
-     * @memberOf _
-     * @alias foldl, inject
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function} [callback=identity] The function called per iteration.
-     * @param {*} [accumulator] Initial value of the accumulator.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {*} Returns the accumulated value.
-     * @example
-     *
-     * var sum = _.reduce([1, 2, 3], function(sum, num) {
-     *   return sum + num;
-     * });
-     * // => 6
-     *
-     * var mapped = _.reduce({ 'a': 1, 'b': 2, 'c': 3 }, function(result, num, key) {
-     *   result[key] = num * 3;
-     *   return result;
-     * }, {});
-     * // => { 'a': 3, 'b': 6, 'c': 9 }
-     */
-    function reduce(collection, callback, accumulator, thisArg) {
-      if (!collection) return accumulator;
-      var noaccum = arguments.length < 3;
-      callback = lodash.createCallback(callback, thisArg, 4);
-
-      var index = -1,
-          length = collection.length;
-
-      if (typeof length == 'number') {
-        if (noaccum) {
-          accumulator = collection[++index];
-        }
-        while (++index < length) {
-          accumulator = callback(accumulator, collection[index], index, collection);
-        }
-      } else {
-        forOwn(collection, function(value, index, collection) {
-          accumulator = noaccum
-            ? (noaccum = false, value)
-            : callback(accumulator, value, index, collection)
-        });
-      }
-      return accumulator;
-    }
-
-    /**
-     * This method is like `_.reduce` except that it iterates over elements
-     * of a `collection` from right to left.
-     *
-     * @static
-     * @memberOf _
-     * @alias foldr
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function} [callback=identity] The function called per iteration.
-     * @param {*} [accumulator] Initial value of the accumulator.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {*} Returns the accumulated value.
-     * @example
-     *
-     * var list = [[0, 1], [2, 3], [4, 5]];
-     * var flat = _.reduceRight(list, function(a, b) { return a.concat(b); }, []);
-     * // => [4, 5, 2, 3, 0, 1]
-     */
-    function reduceRight(collection, callback, accumulator, thisArg) {
-      var noaccum = arguments.length < 3;
-      callback = lodash.createCallback(callback, thisArg, 4);
-      forEachRight(collection, function(value, index, collection) {
-        accumulator = noaccum
-          ? (noaccum = false, value)
-          : callback(accumulator, value, index, collection);
-      });
-      return accumulator;
-    }
-
-    /**
-     * The opposite of `_.filter` this method returns the elements of a
-     * collection that the callback does **not** return truey for.
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array} Returns a new array of elements that failed the callback check.
-     * @example
-     *
-     * var odds = _.reject([1, 2, 3, 4, 5, 6], function(num) { return num % 2 == 0; });
-     * // => [1, 3, 5]
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36, 'blocked': false },
-     *   { 'name': 'fred',   'age': 40, 'blocked': true }
-     * ];
-     *
-     * // using "_.pluck" callback shorthand
-     * _.reject(characters, 'blocked');
-     * // => [{ 'name': 'barney', 'age': 36, 'blocked': false }]
-     *
-     * // using "_.where" callback shorthand
-     * _.reject(characters, { 'age': 36 });
-     * // => [{ 'name': 'fred', 'age': 40, 'blocked': true }]
-     */
-    function reject(collection, callback, thisArg) {
-      callback = lodash.createCallback(callback, thisArg, 3);
-      return filter(collection, function(value, index, collection) {
-        return !callback(value, index, collection);
-      });
-    }
-
-    /**
-     * Retrieves a random element or `n` random elements from a collection.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to sample.
-     * @param {number} [n] The number of elements to sample.
-     * @param- {Object} [guard] Allows working with functions like `_.map`
-     *  without using their `index` arguments as `n`.
-     * @returns {Array} Returns the random sample(s) of `collection`.
-     * @example
-     *
-     * _.sample([1, 2, 3, 4]);
-     * // => 2
-     *
-     * _.sample([1, 2, 3, 4], 2);
-     * // => [3, 1]
-     */
-    function sample(collection, n, guard) {
-      if (collection && typeof collection.length != 'number') {
-        collection = values(collection);
-      }
-      if (n == null || guard) {
-        return collection ? collection[baseRandom(0, collection.length - 1)] : undefined;
-      }
-      var result = shuffle(collection);
-      result.length = nativeMin(nativeMax(0, n), result.length);
-      return result;
-    }
-
-    /**
-     * Creates an array of shuffled values, using a version of the Fisher-Yates
-     * shuffle. See http://en.wikipedia.org/wiki/Fisher-Yates_shuffle.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to shuffle.
-     * @returns {Array} Returns a new shuffled collection.
-     * @example
-     *
-     * _.shuffle([1, 2, 3, 4, 5, 6]);
-     * // => [4, 1, 6, 3, 5, 2]
-     */
-    function shuffle(collection) {
-      var index = -1,
-          length = collection ? collection.length : 0,
-          result = Array(typeof length == 'number' ? length : 0);
-
-      forEach(collection, function(value) {
-        var rand = baseRandom(0, ++index);
-        result[index] = result[rand];
-        result[rand] = value;
-      });
-      return result;
-    }
-
-    /**
-     * Gets the size of the `collection` by returning `collection.length` for arrays
-     * and array-like objects or the number of own enumerable properties for objects.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to inspect.
-     * @returns {number} Returns `collection.length` or number of own enumerable properties.
-     * @example
-     *
-     * _.size([1, 2]);
-     * // => 2
-     *
-     * _.size({ 'one': 1, 'two': 2, 'three': 3 });
-     * // => 3
-     *
-     * _.size('pebbles');
-     * // => 7
-     */
-    function size(collection) {
-      var length = collection ? collection.length : 0;
-      return typeof length == 'number' ? length : keys(collection).length;
-    }
-
-    /**
-     * Checks if the callback returns a truey value for **any** element of a
-     * collection. The function returns as soon as it finds a passing value and
-     * does not iterate over the entire collection. The callback is bound to
-     * `thisArg` and invoked with three arguments; (value, index|key, collection).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @alias any
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {boolean} Returns `true` if any element passed the callback check,
-     *  else `false`.
-     * @example
-     *
-     * _.some([null, 0, 'yes', false], Boolean);
-     * // => true
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36, 'blocked': false },
-     *   { 'name': 'fred',   'age': 40, 'blocked': true }
-     * ];
-     *
-     * // using "_.pluck" callback shorthand
-     * _.some(characters, 'blocked');
-     * // => true
-     *
-     * // using "_.where" callback shorthand
-     * _.some(characters, { 'age': 1 });
-     * // => false
-     */
-    function some(collection, callback, thisArg) {
-      var result;
-      callback = lodash.createCallback(callback, thisArg, 3);
-
-      var index = -1,
-          length = collection ? collection.length : 0;
-
-      if (typeof length == 'number') {
-        while (++index < length) {
-          if ((result = callback(collection[index], index, collection))) {
-            break;
-          }
-        }
-      } else {
-        forOwn(collection, function(value, index, collection) {
-          return !(result = callback(value, index, collection));
-        });
-      }
-      return !!result;
-    }
-
-    /**
-     * Creates an array of elements, sorted in ascending order by the results of
-     * running each element in a collection through the callback. This method
-     * performs a stable sort, that is, it will preserve the original sort order
-     * of equal elements. The callback is bound to `thisArg` and invoked with
-     * three arguments; (value, index|key, collection).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an array of property names is provided for `callback` the collection
-     * will be sorted by each property value.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Array|Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array} Returns a new array of sorted elements.
-     * @example
-     *
-     * _.sortBy([1, 2, 3], function(num) { return Math.sin(num); });
-     * // => [3, 1, 2]
-     *
-     * _.sortBy([1, 2, 3], function(num) { return this.sin(num); }, Math);
-     * // => [3, 1, 2]
-     *
-     * var characters = [
-     *   { 'name': 'barney',  'age': 36 },
-     *   { 'name': 'fred',    'age': 40 },
-     *   { 'name': 'barney',  'age': 26 },
-     *   { 'name': 'fred',    'age': 30 }
-     * ];
-     *
-     * // using "_.pluck" callback shorthand
-     * _.map(_.sortBy(characters, 'age'), _.values);
-     * // => [['barney', 26], ['fred', 30], ['barney', 36], ['fred', 40]]
-     *
-     * // sorting by multiple properties
-     * _.map(_.sortBy(characters, ['name', 'age']), _.values);
-     * // = > [['barney', 26], ['barney', 36], ['fred', 30], ['fred', 40]]
-     */
-    function sortBy(collection, callback, thisArg) {
-      var index = -1,
-          isArr = isArray(callback),
-          length = collection ? collection.length : 0,
-          result = Array(typeof length == 'number' ? length : 0);
-
-      if (!isArr) {
-        callback = lodash.createCallback(callback, thisArg, 3);
-      }
-      forEach(collection, function(value, key, collection) {
-        var object = result[++index] = getObject();
-        if (isArr) {
-          object.criteria = map(callback, function(key) { return value[key]; });
-        } else {
-          (object.criteria = getArray())[0] = callback(value, key, collection);
-        }
-        object.index = index;
-        object.value = value;
-      });
-
+    return object[key] === srcValue
+      ? (srcValue !== undefined || (key in object))
+      : baseIsEqual(srcValue, object[key], undefined, true);
+  };
+}
+
+/**
+ * The base implementation of `_.property` without support for deep paths.
+ *
+ * @private
+ * @param {string} key The key of the property to get.
+ * @returns {Function} Returns the new function.
+ */
+function baseProperty(key) {
+  return function(object) {
+    return object == null ? undefined : object[key];
+  };
+}
+
+/**
+ * A specialized version of `baseProperty` which supports deep paths.
+ *
+ * @private
+ * @param {Array|string} path The path of the property to get.
+ * @returns {Function} Returns the new function.
+ */
+function basePropertyDeep(path) {
+  var pathKey = (path + '');
+  path = toPath(path);
+  return function(object) {
+    return baseGet(object, path, pathKey);
+  };
+}
+
+/**
+ * The base implementation of `_.slice` without an iteratee call guard.
+ *
+ * @private
+ * @param {Array} array The array to slice.
+ * @param {number} [start=0] The start position.
+ * @param {number} [end=array.length] The end position.
+ * @returns {Array} Returns the slice of `array`.
+ */
+function baseSlice(array, start, end) {
+  var index = -1,
+      length = array.length;
+
+  start = start == null ? 0 : (+start || 0);
+  if (start < 0) {
+    start = -start > length ? 0 : (length + start);
+  }
+  end = (end === undefined || end > length) ? length : (+end || 0);
+  if (end < 0) {
+    end += length;
+  }
+  length = start > end ? 0 : ((end - start) >>> 0);
+  start >>>= 0;
+
+  var result = Array(length);
+  while (++index < length) {
+    result[index] = array[index + start];
+  }
+  return result;
+}
+
+/**
+ * Gets the propery names, values, and compare flags of `object`.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @returns {Array} Returns the match data of `object`.
+ */
+function getMatchData(object) {
+  var result = pairs(object),
       length = result.length;
-      result.sort(compareAscending);
-      while (length--) {
-        var object = result[length];
-        result[length] = object.value;
-        if (!isArr) {
-          releaseArray(object.criteria);
-        }
-        releaseObject(object);
+
+  while (length--) {
+    result[length][2] = isStrictComparable(result[length][1]);
+  }
+  return result;
+}
+
+/**
+ * Checks if `value` is a property name and not a property path.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @param {Object} [object] The object to query keys on.
+ * @returns {boolean} Returns `true` if `value` is a property name, else `false`.
+ */
+function isKey(value, object) {
+  var type = typeof value;
+  if ((type == 'string' && reIsPlainProp.test(value)) || type == 'number') {
+    return true;
+  }
+  if (isArray(value)) {
+    return false;
+  }
+  var result = !reIsDeepProp.test(value);
+  return result || (object != null && value in toObject(object));
+}
+
+/**
+ * Checks if `value` is suitable for strict equality comparisons, i.e. `===`.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` if suitable for strict
+ *  equality comparisons, else `false`.
+ */
+function isStrictComparable(value) {
+  return value === value && !isObject(value);
+}
+
+/**
+ * Converts `value` to an object if it's not one.
+ *
+ * @private
+ * @param {*} value The value to process.
+ * @returns {Object} Returns the object.
+ */
+function toObject(value) {
+  return isObject(value) ? value : Object(value);
+}
+
+/**
+ * Converts `value` to property path array if it's not one.
+ *
+ * @private
+ * @param {*} value The value to process.
+ * @returns {Array} Returns the property path array.
+ */
+function toPath(value) {
+  if (isArray(value)) {
+    return value;
+  }
+  var result = [];
+  baseToString(value).replace(rePropName, function(match, number, quote, string) {
+    result.push(quote ? string.replace(reEscapeChar, '$1') : (number || match));
+  });
+  return result;
+}
+
+/**
+ * Gets the last element of `array`.
+ *
+ * @static
+ * @memberOf _
+ * @category Array
+ * @param {Array} array The array to query.
+ * @returns {*} Returns the last element of `array`.
+ * @example
+ *
+ * _.last([1, 2, 3]);
+ * // => 3
+ */
+function last(array) {
+  var length = array ? array.length : 0;
+  return length ? array[length - 1] : undefined;
+}
+
+/**
+ * Checks if `value` is the [language type](https://es5.github.io/#x8) of `Object`.
+ * (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(1);
+ * // => false
+ */
+function isObject(value) {
+  // Avoid a V8 JIT bug in Chrome 19-20.
+  // See https://code.google.com/p/v8/issues/detail?id=2291 for more details.
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+/**
+ * This method returns the first argument provided to it.
+ *
+ * @static
+ * @memberOf _
+ * @category Utility
+ * @param {*} value Any value.
+ * @returns {*} Returns `value`.
+ * @example
+ *
+ * var object = { 'user': 'fred' };
+ *
+ * _.identity(object) === object;
+ * // => true
+ */
+function identity(value) {
+  return value;
+}
+
+/**
+ * Creates a function that returns the property value at `path` on a
+ * given object.
+ *
+ * @static
+ * @memberOf _
+ * @category Utility
+ * @param {Array|string} path The path of the property to get.
+ * @returns {Function} Returns the new function.
+ * @example
+ *
+ * var objects = [
+ *   { 'a': { 'b': { 'c': 2 } } },
+ *   { 'a': { 'b': { 'c': 1 } } }
+ * ];
+ *
+ * _.map(objects, _.property('a.b.c'));
+ * // => [2, 1]
+ *
+ * _.pluck(_.sortBy(objects, _.property(['a', 'b', 'c'])), 'a.b.c');
+ * // => [1, 2]
+ */
+function property(path) {
+  return isKey(path) ? baseProperty(path) : basePropertyDeep(path);
+}
+
+module.exports = baseCallback;
+
+},{"lodash._baseisequal":54,"lodash._bindcallback":59,"lodash.isarray":65,"lodash.pairs":60}],54:[function(require,module,exports){
+/**
+ * lodash 3.0.7 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+var isArray = require('lodash.isarray'),
+    isTypedArray = require('lodash.istypedarray'),
+    keys = require('lodash.keys');
+
+/** `Object#toString` result references. */
+var argsTag = '[object Arguments]',
+    arrayTag = '[object Array]',
+    boolTag = '[object Boolean]',
+    dateTag = '[object Date]',
+    errorTag = '[object Error]',
+    numberTag = '[object Number]',
+    objectTag = '[object Object]',
+    regexpTag = '[object RegExp]',
+    stringTag = '[object String]';
+
+/**
+ * Checks if `value` is object-like.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ */
+function isObjectLike(value) {
+  return !!value && typeof value == 'object';
+}
+
+/** Used for native method references. */
+var objectProto = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * Used to resolve the [`toStringTag`](https://people.mozilla.org/~jorendorff/es6-draft.html#sec-object.prototype.tostring)
+ * of values.
+ */
+var objToString = objectProto.toString;
+
+/**
+ * A specialized version of `_.some` for arrays without support for callback
+ * shorthands and `this` binding.
+ *
+ * @private
+ * @param {Array} array The array to iterate over.
+ * @param {Function} predicate The function invoked per iteration.
+ * @returns {boolean} Returns `true` if any element passes the predicate check,
+ *  else `false`.
+ */
+function arraySome(array, predicate) {
+  var index = -1,
+      length = array.length;
+
+  while (++index < length) {
+    if (predicate(array[index], index, array)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The base implementation of `_.isEqual` without support for `this` binding
+ * `customizer` functions.
+ *
+ * @private
+ * @param {*} value The value to compare.
+ * @param {*} other The other value to compare.
+ * @param {Function} [customizer] The function to customize comparing values.
+ * @param {boolean} [isLoose] Specify performing partial comparisons.
+ * @param {Array} [stackA] Tracks traversed `value` objects.
+ * @param {Array} [stackB] Tracks traversed `other` objects.
+ * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
+ */
+function baseIsEqual(value, other, customizer, isLoose, stackA, stackB) {
+  if (value === other) {
+    return true;
+  }
+  if (value == null || other == null || (!isObject(value) && !isObjectLike(other))) {
+    return value !== value && other !== other;
+  }
+  return baseIsEqualDeep(value, other, baseIsEqual, customizer, isLoose, stackA, stackB);
+}
+
+/**
+ * A specialized version of `baseIsEqual` for arrays and objects which performs
+ * deep comparisons and tracks traversed objects enabling objects with circular
+ * references to be compared.
+ *
+ * @private
+ * @param {Object} object The object to compare.
+ * @param {Object} other The other object to compare.
+ * @param {Function} equalFunc The function to determine equivalents of values.
+ * @param {Function} [customizer] The function to customize comparing objects.
+ * @param {boolean} [isLoose] Specify performing partial comparisons.
+ * @param {Array} [stackA=[]] Tracks traversed `value` objects.
+ * @param {Array} [stackB=[]] Tracks traversed `other` objects.
+ * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
+ */
+function baseIsEqualDeep(object, other, equalFunc, customizer, isLoose, stackA, stackB) {
+  var objIsArr = isArray(object),
+      othIsArr = isArray(other),
+      objTag = arrayTag,
+      othTag = arrayTag;
+
+  if (!objIsArr) {
+    objTag = objToString.call(object);
+    if (objTag == argsTag) {
+      objTag = objectTag;
+    } else if (objTag != objectTag) {
+      objIsArr = isTypedArray(object);
+    }
+  }
+  if (!othIsArr) {
+    othTag = objToString.call(other);
+    if (othTag == argsTag) {
+      othTag = objectTag;
+    } else if (othTag != objectTag) {
+      othIsArr = isTypedArray(other);
+    }
+  }
+  var objIsObj = objTag == objectTag,
+      othIsObj = othTag == objectTag,
+      isSameTag = objTag == othTag;
+
+  if (isSameTag && !(objIsArr || objIsObj)) {
+    return equalByTag(object, other, objTag);
+  }
+  if (!isLoose) {
+    var objIsWrapped = objIsObj && hasOwnProperty.call(object, '__wrapped__'),
+        othIsWrapped = othIsObj && hasOwnProperty.call(other, '__wrapped__');
+
+    if (objIsWrapped || othIsWrapped) {
+      return equalFunc(objIsWrapped ? object.value() : object, othIsWrapped ? other.value() : other, customizer, isLoose, stackA, stackB);
+    }
+  }
+  if (!isSameTag) {
+    return false;
+  }
+  // Assume cyclic values are equal.
+  // For more information on detecting circular references see https://es5.github.io/#JO.
+  stackA || (stackA = []);
+  stackB || (stackB = []);
+
+  var length = stackA.length;
+  while (length--) {
+    if (stackA[length] == object) {
+      return stackB[length] == other;
+    }
+  }
+  // Add `object` and `other` to the stack of traversed objects.
+  stackA.push(object);
+  stackB.push(other);
+
+  var result = (objIsArr ? equalArrays : equalObjects)(object, other, equalFunc, customizer, isLoose, stackA, stackB);
+
+  stackA.pop();
+  stackB.pop();
+
+  return result;
+}
+
+/**
+ * A specialized version of `baseIsEqualDeep` for arrays with support for
+ * partial deep comparisons.
+ *
+ * @private
+ * @param {Array} array The array to compare.
+ * @param {Array} other The other array to compare.
+ * @param {Function} equalFunc The function to determine equivalents of values.
+ * @param {Function} [customizer] The function to customize comparing arrays.
+ * @param {boolean} [isLoose] Specify performing partial comparisons.
+ * @param {Array} [stackA] Tracks traversed `value` objects.
+ * @param {Array} [stackB] Tracks traversed `other` objects.
+ * @returns {boolean} Returns `true` if the arrays are equivalent, else `false`.
+ */
+function equalArrays(array, other, equalFunc, customizer, isLoose, stackA, stackB) {
+  var index = -1,
+      arrLength = array.length,
+      othLength = other.length;
+
+  if (arrLength != othLength && !(isLoose && othLength > arrLength)) {
+    return false;
+  }
+  // Ignore non-index properties.
+  while (++index < arrLength) {
+    var arrValue = array[index],
+        othValue = other[index],
+        result = customizer ? customizer(isLoose ? othValue : arrValue, isLoose ? arrValue : othValue, index) : undefined;
+
+    if (result !== undefined) {
+      if (result) {
+        continue;
       }
-      return result;
+      return false;
     }
-
-    /**
-     * Converts the `collection` to an array.
-     *
-     * @static
-     * @memberOf _
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to convert.
-     * @returns {Array} Returns the new converted array.
-     * @example
-     *
-     * (function() { return _.toArray(arguments).slice(1); })(1, 2, 3, 4);
-     * // => [2, 3, 4]
-     */
-    function toArray(collection) {
-      if (collection && typeof collection.length == 'number') {
-        return slice(collection);
+    // Recursively compare arrays (susceptible to call stack limits).
+    if (isLoose) {
+      if (!arraySome(other, function(othValue) {
+            return arrValue === othValue || equalFunc(arrValue, othValue, customizer, isLoose, stackA, stackB);
+          })) {
+        return false;
       }
-      return values(collection);
+    } else if (!(arrValue === othValue || equalFunc(arrValue, othValue, customizer, isLoose, stackA, stackB))) {
+      return false;
     }
+  }
+  return true;
+}
 
-    /**
-     * Performs a deep comparison of each element in a `collection` to the given
-     * `properties` object, returning an array of all elements that have equivalent
-     * property values.
-     *
-     * @static
-     * @memberOf _
-     * @type Function
-     * @category Collections
-     * @param {Array|Object|string} collection The collection to iterate over.
-     * @param {Object} props The object of property values to filter by.
-     * @returns {Array} Returns a new array of elements that have the given properties.
-     * @example
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36, 'pets': ['hoppy'] },
-     *   { 'name': 'fred',   'age': 40, 'pets': ['baby puss', 'dino'] }
-     * ];
-     *
-     * _.where(characters, { 'age': 36 });
-     * // => [{ 'name': 'barney', 'age': 36, 'pets': ['hoppy'] }]
-     *
-     * _.where(characters, { 'pets': ['dino'] });
-     * // => [{ 'name': 'fred', 'age': 40, 'pets': ['baby puss', 'dino'] }]
-     */
-    var where = filter;
+/**
+ * A specialized version of `baseIsEqualDeep` for comparing objects of
+ * the same `toStringTag`.
+ *
+ * **Note:** This function only supports comparing values with tags of
+ * `Boolean`, `Date`, `Error`, `Number`, `RegExp`, or `String`.
+ *
+ * @private
+ * @param {Object} value The object to compare.
+ * @param {Object} other The other object to compare.
+ * @param {string} tag The `toStringTag` of the objects to compare.
+ * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
+ */
+function equalByTag(object, other, tag) {
+  switch (tag) {
+    case boolTag:
+    case dateTag:
+      // Coerce dates and booleans to numbers, dates to milliseconds and booleans
+      // to `1` or `0` treating invalid dates coerced to `NaN` as not equal.
+      return +object == +other;
 
-    /*--------------------------------------------------------------------------*/
+    case errorTag:
+      return object.name == other.name && object.message == other.message;
 
-    /**
-     * Creates an array with all falsey values removed. The values `false`, `null`,
-     * `0`, `""`, `undefined`, and `NaN` are all falsey.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to compact.
-     * @returns {Array} Returns a new array of filtered values.
-     * @example
-     *
-     * _.compact([0, 1, false, 2, '', 3]);
-     * // => [1, 2, 3]
-     */
-    function compact(array) {
-      var index = -1,
-          length = array ? array.length : 0,
-          result = [];
+    case numberTag:
+      // Treat `NaN` vs. `NaN` as equal.
+      return (object != +object)
+        ? other != +other
+        : object == +other;
 
-      while (++index < length) {
-        var value = array[index];
-        if (value) {
-          result.push(value);
-        }
-      }
-      return result;
+    case regexpTag:
+    case stringTag:
+      // Coerce regexes to strings and treat strings primitives and string
+      // objects as equal. See https://es5.github.io/#x15.10.6.4 for more details.
+      return object == (other + '');
+  }
+  return false;
+}
+
+/**
+ * A specialized version of `baseIsEqualDeep` for objects with support for
+ * partial deep comparisons.
+ *
+ * @private
+ * @param {Object} object The object to compare.
+ * @param {Object} other The other object to compare.
+ * @param {Function} equalFunc The function to determine equivalents of values.
+ * @param {Function} [customizer] The function to customize comparing values.
+ * @param {boolean} [isLoose] Specify performing partial comparisons.
+ * @param {Array} [stackA] Tracks traversed `value` objects.
+ * @param {Array} [stackB] Tracks traversed `other` objects.
+ * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
+ */
+function equalObjects(object, other, equalFunc, customizer, isLoose, stackA, stackB) {
+  var objProps = keys(object),
+      objLength = objProps.length,
+      othProps = keys(other),
+      othLength = othProps.length;
+
+  if (objLength != othLength && !isLoose) {
+    return false;
+  }
+  var index = objLength;
+  while (index--) {
+    var key = objProps[index];
+    if (!(isLoose ? key in other : hasOwnProperty.call(other, key))) {
+      return false;
     }
+  }
+  var skipCtor = isLoose;
+  while (++index < objLength) {
+    key = objProps[index];
+    var objValue = object[key],
+        othValue = other[key],
+        result = customizer ? customizer(isLoose ? othValue : objValue, isLoose? objValue : othValue, key) : undefined;
 
-    /**
-     * Creates an array excluding all values of the provided arrays using strict
-     * equality for comparisons, i.e. `===`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to process.
-     * @param {...Array} [values] The arrays of values to exclude.
-     * @returns {Array} Returns a new array of filtered values.
-     * @example
-     *
-     * _.difference([1, 2, 3, 4, 5], [5, 2, 10]);
-     * // => [1, 3, 4]
-     */
-    function difference(array) {
-      return baseDifference(array, baseFlatten(arguments, true, true, 1));
+    // Recursively compare objects (susceptible to call stack limits).
+    if (!(result === undefined ? equalFunc(objValue, othValue, customizer, isLoose, stackA, stackB) : result)) {
+      return false;
     }
+    skipCtor || (skipCtor = key == 'constructor');
+  }
+  if (!skipCtor) {
+    var objCtor = object.constructor,
+        othCtor = other.constructor;
 
-    /**
-     * This method is like `_.find` except that it returns the index of the first
-     * element that passes the callback check, instead of the element itself.
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to search.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {number} Returns the index of the found element, else `-1`.
-     * @example
-     *
-     * var characters = [
-     *   { 'name': 'barney',  'age': 36, 'blocked': false },
-     *   { 'name': 'fred',    'age': 40, 'blocked': true },
-     *   { 'name': 'pebbles', 'age': 1,  'blocked': false }
-     * ];
-     *
-     * _.findIndex(characters, function(chr) {
-     *   return chr.age < 20;
-     * });
-     * // => 2
-     *
-     * // using "_.where" callback shorthand
-     * _.findIndex(characters, { 'age': 36 });
-     * // => 0
-     *
-     * // using "_.pluck" callback shorthand
-     * _.findIndex(characters, 'blocked');
-     * // => 1
-     */
-    function findIndex(array, callback, thisArg) {
-      var index = -1,
-          length = array ? array.length : 0;
-
-      callback = lodash.createCallback(callback, thisArg, 3);
-      while (++index < length) {
-        if (callback(array[index], index, array)) {
-          return index;
-        }
-      }
-      return -1;
+    // Non `Object` object instances with different constructors are not equal.
+    if (objCtor != othCtor &&
+        ('constructor' in object && 'constructor' in other) &&
+        !(typeof objCtor == 'function' && objCtor instanceof objCtor &&
+          typeof othCtor == 'function' && othCtor instanceof othCtor)) {
+      return false;
     }
+  }
+  return true;
+}
 
-    /**
-     * This method is like `_.findIndex` except that it iterates over elements
-     * of a `collection` from right to left.
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to search.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {number} Returns the index of the found element, else `-1`.
-     * @example
-     *
-     * var characters = [
-     *   { 'name': 'barney',  'age': 36, 'blocked': true },
-     *   { 'name': 'fred',    'age': 40, 'blocked': false },
-     *   { 'name': 'pebbles', 'age': 1,  'blocked': true }
-     * ];
-     *
-     * _.findLastIndex(characters, function(chr) {
-     *   return chr.age > 30;
-     * });
-     * // => 1
-     *
-     * // using "_.where" callback shorthand
-     * _.findLastIndex(characters, { 'age': 36 });
-     * // => 0
-     *
-     * // using "_.pluck" callback shorthand
-     * _.findLastIndex(characters, 'blocked');
-     * // => 2
-     */
-    function findLastIndex(array, callback, thisArg) {
-      var length = array ? array.length : 0;
-      callback = lodash.createCallback(callback, thisArg, 3);
-      while (length--) {
-        if (callback(array[length], length, array)) {
-          return length;
-        }
-      }
-      return -1;
+/**
+ * Checks if `value` is the [language type](https://es5.github.io/#x8) of `Object`.
+ * (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(1);
+ * // => false
+ */
+function isObject(value) {
+  // Avoid a V8 JIT bug in Chrome 19-20.
+  // See https://code.google.com/p/v8/issues/detail?id=2291 for more details.
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+module.exports = baseIsEqual;
+
+},{"lodash.isarray":65,"lodash.istypedarray":55,"lodash.keys":56}],55:[function(require,module,exports){
+/**
+ * lodash 3.0.2 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+
+/** `Object#toString` result references. */
+var argsTag = '[object Arguments]',
+    arrayTag = '[object Array]',
+    boolTag = '[object Boolean]',
+    dateTag = '[object Date]',
+    errorTag = '[object Error]',
+    funcTag = '[object Function]',
+    mapTag = '[object Map]',
+    numberTag = '[object Number]',
+    objectTag = '[object Object]',
+    regexpTag = '[object RegExp]',
+    setTag = '[object Set]',
+    stringTag = '[object String]',
+    weakMapTag = '[object WeakMap]';
+
+var arrayBufferTag = '[object ArrayBuffer]',
+    float32Tag = '[object Float32Array]',
+    float64Tag = '[object Float64Array]',
+    int8Tag = '[object Int8Array]',
+    int16Tag = '[object Int16Array]',
+    int32Tag = '[object Int32Array]',
+    uint8Tag = '[object Uint8Array]',
+    uint8ClampedTag = '[object Uint8ClampedArray]',
+    uint16Tag = '[object Uint16Array]',
+    uint32Tag = '[object Uint32Array]';
+
+/** Used to identify `toStringTag` values of typed arrays. */
+var typedArrayTags = {};
+typedArrayTags[float32Tag] = typedArrayTags[float64Tag] =
+typedArrayTags[int8Tag] = typedArrayTags[int16Tag] =
+typedArrayTags[int32Tag] = typedArrayTags[uint8Tag] =
+typedArrayTags[uint8ClampedTag] = typedArrayTags[uint16Tag] =
+typedArrayTags[uint32Tag] = true;
+typedArrayTags[argsTag] = typedArrayTags[arrayTag] =
+typedArrayTags[arrayBufferTag] = typedArrayTags[boolTag] =
+typedArrayTags[dateTag] = typedArrayTags[errorTag] =
+typedArrayTags[funcTag] = typedArrayTags[mapTag] =
+typedArrayTags[numberTag] = typedArrayTags[objectTag] =
+typedArrayTags[regexpTag] = typedArrayTags[setTag] =
+typedArrayTags[stringTag] = typedArrayTags[weakMapTag] = false;
+
+/**
+ * Checks if `value` is object-like.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ */
+function isObjectLike(value) {
+  return !!value && typeof value == 'object';
+}
+
+/** Used for native method references. */
+var objectProto = Object.prototype;
+
+/**
+ * Used to resolve the [`toStringTag`](https://people.mozilla.org/~jorendorff/es6-draft.html#sec-object.prototype.tostring)
+ * of values.
+ */
+var objToString = objectProto.toString;
+
+/**
+ * Used as the [maximum length](https://people.mozilla.org/~jorendorff/es6-draft.html#sec-number.max_safe_integer)
+ * of an array-like value.
+ */
+var MAX_SAFE_INTEGER = 9007199254740991;
+
+/**
+ * Checks if `value` is a valid array-like length.
+ *
+ * **Note:** This function is based on [`ToLength`](https://people.mozilla.org/~jorendorff/es6-draft.html#sec-tolength).
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
+ */
+function isLength(value) {
+  return typeof value == 'number' && value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER;
+}
+
+/**
+ * Checks if `value` is classified as a typed array.
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
+ * @example
+ *
+ * _.isTypedArray(new Uint8Array);
+ * // => true
+ *
+ * _.isTypedArray([]);
+ * // => false
+ */
+function isTypedArray(value) {
+  return isObjectLike(value) && isLength(value.length) && !!typedArrayTags[objToString.call(value)];
+}
+
+module.exports = isTypedArray;
+
+},{}],56:[function(require,module,exports){
+/**
+ * lodash 3.1.2 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+var getNative = require('lodash._getnative'),
+    isArguments = require('lodash.isarguments'),
+    isArray = require('lodash.isarray');
+
+/** Used to detect unsigned integer values. */
+var reIsUint = /^\d+$/;
+
+/** Used for native method references. */
+var objectProto = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/* Native method references for those with the same name as other `lodash` methods. */
+var nativeKeys = getNative(Object, 'keys');
+
+/**
+ * Used as the [maximum length](http://ecma-international.org/ecma-262/6.0/#sec-number.max_safe_integer)
+ * of an array-like value.
+ */
+var MAX_SAFE_INTEGER = 9007199254740991;
+
+/**
+ * The base implementation of `_.property` without support for deep paths.
+ *
+ * @private
+ * @param {string} key The key of the property to get.
+ * @returns {Function} Returns the new function.
+ */
+function baseProperty(key) {
+  return function(object) {
+    return object == null ? undefined : object[key];
+  };
+}
+
+/**
+ * Gets the "length" property value of `object`.
+ *
+ * **Note:** This function is used to avoid a [JIT bug](https://bugs.webkit.org/show_bug.cgi?id=142792)
+ * that affects Safari on at least iOS 8.1-8.3 ARM64.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @returns {*} Returns the "length" value.
+ */
+var getLength = baseProperty('length');
+
+/**
+ * Checks if `value` is array-like.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is array-like, else `false`.
+ */
+function isArrayLike(value) {
+  return value != null && isLength(getLength(value));
+}
+
+/**
+ * Checks if `value` is a valid array-like index.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @param {number} [length=MAX_SAFE_INTEGER] The upper bounds of a valid index.
+ * @returns {boolean} Returns `true` if `value` is a valid index, else `false`.
+ */
+function isIndex(value, length) {
+  value = (typeof value == 'number' || reIsUint.test(value)) ? +value : -1;
+  length = length == null ? MAX_SAFE_INTEGER : length;
+  return value > -1 && value % 1 == 0 && value < length;
+}
+
+/**
+ * Checks if `value` is a valid array-like length.
+ *
+ * **Note:** This function is based on [`ToLength`](http://ecma-international.org/ecma-262/6.0/#sec-tolength).
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
+ */
+function isLength(value) {
+  return typeof value == 'number' && value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER;
+}
+
+/**
+ * A fallback implementation of `Object.keys` which creates an array of the
+ * own enumerable property names of `object`.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @returns {Array} Returns the array of property names.
+ */
+function shimKeys(object) {
+  var props = keysIn(object),
+      propsLength = props.length,
+      length = propsLength && object.length;
+
+  var allowIndexes = !!length && isLength(length) &&
+    (isArray(object) || isArguments(object));
+
+  var index = -1,
+      result = [];
+
+  while (++index < propsLength) {
+    var key = props[index];
+    if ((allowIndexes && isIndex(key, length)) || hasOwnProperty.call(object, key)) {
+      result.push(key);
     }
+  }
+  return result;
+}
 
-    /**
-     * Gets the first element or first `n` elements of an array. If a callback
-     * is provided elements at the beginning of the array are returned as long
-     * as the callback returns truey. The callback is bound to `thisArg` and
-     * invoked with three arguments; (value, index, array).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @alias head, take
-     * @category Arrays
-     * @param {Array} array The array to query.
-     * @param {Function|Object|number|string} [callback] The function called
-     *  per element or the number of elements to return. If a property name or
-     *  object is provided it will be used to create a "_.pluck" or "_.where"
-     *  style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {*} Returns the first element(s) of `array`.
-     * @example
-     *
-     * _.first([1, 2, 3]);
-     * // => 1
-     *
-     * _.first([1, 2, 3], 2);
-     * // => [1, 2]
-     *
-     * _.first([1, 2, 3], function(num) {
-     *   return num < 3;
-     * });
-     * // => [1, 2]
-     *
-     * var characters = [
-     *   { 'name': 'barney',  'blocked': true,  'employer': 'slate' },
-     *   { 'name': 'fred',    'blocked': false, 'employer': 'slate' },
-     *   { 'name': 'pebbles', 'blocked': true,  'employer': 'na' }
-     * ];
-     *
-     * // using "_.pluck" callback shorthand
-     * _.first(characters, 'blocked');
-     * // => [{ 'name': 'barney', 'blocked': true, 'employer': 'slate' }]
-     *
-     * // using "_.where" callback shorthand
-     * _.pluck(_.first(characters, { 'employer': 'slate' }), 'name');
-     * // => ['barney', 'fred']
-     */
-    function first(array, callback, thisArg) {
-      var n = 0,
-          length = array ? array.length : 0;
+/**
+ * Checks if `value` is the [language type](https://es5.github.io/#x8) of `Object`.
+ * (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(1);
+ * // => false
+ */
+function isObject(value) {
+  // Avoid a V8 JIT bug in Chrome 19-20.
+  // See https://code.google.com/p/v8/issues/detail?id=2291 for more details.
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
 
-      if (typeof callback != 'number' && callback != null) {
-        var index = -1;
-        callback = lodash.createCallback(callback, thisArg, 3);
-        while (++index < length && callback(array[index], index, array)) {
-          n++;
-        }
-      } else {
-        n = callback;
-        if (n == null || thisArg) {
-          return array ? array[0] : undefined;
-        }
-      }
-      return slice(array, 0, nativeMin(nativeMax(0, n), length));
+/**
+ * Creates an array of the own enumerable property names of `object`.
+ *
+ * **Note:** Non-object values are coerced to objects. See the
+ * [ES spec](http://ecma-international.org/ecma-262/6.0/#sec-object.keys)
+ * for more details.
+ *
+ * @static
+ * @memberOf _
+ * @category Object
+ * @param {Object} object The object to query.
+ * @returns {Array} Returns the array of property names.
+ * @example
+ *
+ * function Foo() {
+ *   this.a = 1;
+ *   this.b = 2;
+ * }
+ *
+ * Foo.prototype.c = 3;
+ *
+ * _.keys(new Foo);
+ * // => ['a', 'b'] (iteration order is not guaranteed)
+ *
+ * _.keys('hi');
+ * // => ['0', '1']
+ */
+var keys = !nativeKeys ? shimKeys : function(object) {
+  var Ctor = object == null ? undefined : object.constructor;
+  if ((typeof Ctor == 'function' && Ctor.prototype === object) ||
+      (typeof object != 'function' && isArrayLike(object))) {
+    return shimKeys(object);
+  }
+  return isObject(object) ? nativeKeys(object) : [];
+};
+
+/**
+ * Creates an array of the own and inherited enumerable property names of `object`.
+ *
+ * **Note:** Non-object values are coerced to objects.
+ *
+ * @static
+ * @memberOf _
+ * @category Object
+ * @param {Object} object The object to query.
+ * @returns {Array} Returns the array of property names.
+ * @example
+ *
+ * function Foo() {
+ *   this.a = 1;
+ *   this.b = 2;
+ * }
+ *
+ * Foo.prototype.c = 3;
+ *
+ * _.keysIn(new Foo);
+ * // => ['a', 'b', 'c'] (iteration order is not guaranteed)
+ */
+function keysIn(object) {
+  if (object == null) {
+    return [];
+  }
+  if (!isObject(object)) {
+    object = Object(object);
+  }
+  var length = object.length;
+  length = (length && isLength(length) &&
+    (isArray(object) || isArguments(object)) && length) || 0;
+
+  var Ctor = object.constructor,
+      index = -1,
+      isProto = typeof Ctor == 'function' && Ctor.prototype === object,
+      result = Array(length),
+      skipIndexes = length > 0;
+
+  while (++index < length) {
+    result[index] = (index + '');
+  }
+  for (var key in object) {
+    if (!(skipIndexes && isIndex(key, length)) &&
+        !(key == 'constructor' && (isProto || !hasOwnProperty.call(object, key)))) {
+      result.push(key);
     }
-
-    /**
-     * Flattens a nested array (the nesting can be to any depth). If `isShallow`
-     * is truey, the array will only be flattened a single level. If a callback
-     * is provided each element of the array is passed through the callback before
-     * flattening. The callback is bound to `thisArg` and invoked with three
-     * arguments; (value, index, array).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to flatten.
-     * @param {boolean} [isShallow=false] A flag to restrict flattening to a single level.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array} Returns a new flattened array.
-     * @example
-     *
-     * _.flatten([1, [2], [3, [[4]]]]);
-     * // => [1, 2, 3, 4];
-     *
-     * _.flatten([1, [2], [3, [[4]]]], true);
-     * // => [1, 2, 3, [[4]]];
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 30, 'pets': ['hoppy'] },
-     *   { 'name': 'fred',   'age': 40, 'pets': ['baby puss', 'dino'] }
-     * ];
-     *
-     * // using "_.pluck" callback shorthand
-     * _.flatten(characters, 'pets');
-     * // => ['hoppy', 'baby puss', 'dino']
-     */
-    function flatten(array, isShallow, callback, thisArg) {
-      // juggle arguments
-      if (typeof isShallow != 'boolean' && isShallow != null) {
-        thisArg = callback;
-        callback = (typeof isShallow != 'function' && thisArg && thisArg[isShallow] === array) ? null : isShallow;
-        isShallow = false;
-      }
-      if (callback != null) {
-        array = map(array, callback, thisArg);
-      }
-      return baseFlatten(array, isShallow);
-    }
-
-    /**
-     * Gets the index at which the first occurrence of `value` is found using
-     * strict equality for comparisons, i.e. `===`. If the array is already sorted
-     * providing `true` for `fromIndex` will run a faster binary search.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to search.
-     * @param {*} value The value to search for.
-     * @param {boolean|number} [fromIndex=0] The index to search from or `true`
-     *  to perform a binary search on a sorted array.
-     * @returns {number} Returns the index of the matched value or `-1`.
-     * @example
-     *
-     * _.indexOf([1, 2, 3, 1, 2, 3], 2);
-     * // => 1
-     *
-     * _.indexOf([1, 2, 3, 1, 2, 3], 2, 3);
-     * // => 4
-     *
-     * _.indexOf([1, 1, 2, 2, 3, 3], 2, true);
-     * // => 2
-     */
-    function indexOf(array, value, fromIndex) {
-      if (typeof fromIndex == 'number') {
-        var length = array ? array.length : 0;
-        fromIndex = (fromIndex < 0 ? nativeMax(0, length + fromIndex) : fromIndex || 0);
-      } else if (fromIndex) {
-        var index = sortedIndex(array, value);
-        return array[index] === value ? index : -1;
-      }
-      return baseIndexOf(array, value, fromIndex);
-    }
-
-    /**
-     * Gets all but the last element or last `n` elements of an array. If a
-     * callback is provided elements at the end of the array are excluded from
-     * the result as long as the callback returns truey. The callback is bound
-     * to `thisArg` and invoked with three arguments; (value, index, array).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to query.
-     * @param {Function|Object|number|string} [callback=1] The function called
-     *  per element or the number of elements to exclude. If a property name or
-     *  object is provided it will be used to create a "_.pluck" or "_.where"
-     *  style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array} Returns a slice of `array`.
-     * @example
-     *
-     * _.initial([1, 2, 3]);
-     * // => [1, 2]
-     *
-     * _.initial([1, 2, 3], 2);
-     * // => [1]
-     *
-     * _.initial([1, 2, 3], function(num) {
-     *   return num > 1;
-     * });
-     * // => [1]
-     *
-     * var characters = [
-     *   { 'name': 'barney',  'blocked': false, 'employer': 'slate' },
-     *   { 'name': 'fred',    'blocked': true,  'employer': 'slate' },
-     *   { 'name': 'pebbles', 'blocked': true,  'employer': 'na' }
-     * ];
-     *
-     * // using "_.pluck" callback shorthand
-     * _.initial(characters, 'blocked');
-     * // => [{ 'name': 'barney',  'blocked': false, 'employer': 'slate' }]
-     *
-     * // using "_.where" callback shorthand
-     * _.pluck(_.initial(characters, { 'employer': 'na' }), 'name');
-     * // => ['barney', 'fred']
-     */
-    function initial(array, callback, thisArg) {
-      var n = 0,
-          length = array ? array.length : 0;
-
-      if (typeof callback != 'number' && callback != null) {
-        var index = length;
-        callback = lodash.createCallback(callback, thisArg, 3);
-        while (index-- && callback(array[index], index, array)) {
-          n++;
-        }
-      } else {
-        n = (callback == null || thisArg) ? 1 : callback || n;
-      }
-      return slice(array, 0, nativeMin(nativeMax(0, length - n), length));
-    }
-
-    /**
-     * Creates an array of unique values present in all provided arrays using
-     * strict equality for comparisons, i.e. `===`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {...Array} [array] The arrays to inspect.
-     * @returns {Array} Returns an array of shared values.
-     * @example
-     *
-     * _.intersection([1, 2, 3], [5, 2, 1, 4], [2, 1]);
-     * // => [1, 2]
-     */
-    function intersection() {
-      var args = [],
-          argsIndex = -1,
-          argsLength = arguments.length,
-          caches = getArray(),
-          indexOf = getIndexOf(),
-          trustIndexOf = indexOf === baseIndexOf,
-          seen = getArray();
-
-      while (++argsIndex < argsLength) {
-        var value = arguments[argsIndex];
-        if (isArray(value) || isArguments(value)) {
-          args.push(value);
-          caches.push(trustIndexOf && value.length >= largeArraySize &&
-            createCache(argsIndex ? args[argsIndex] : seen));
-        }
-      }
-      var array = args[0],
-          index = -1,
-          length = array ? array.length : 0,
-          result = [];
-
-      outer:
-      while (++index < length) {
-        var cache = caches[0];
-        value = array[index];
-
-        if ((cache ? cacheIndexOf(cache, value) : indexOf(seen, value)) < 0) {
-          argsIndex = argsLength;
-          (cache || seen).push(value);
-          while (--argsIndex) {
-            cache = caches[argsIndex];
-            if ((cache ? cacheIndexOf(cache, value) : indexOf(args[argsIndex], value)) < 0) {
-              continue outer;
-            }
-          }
-          result.push(value);
-        }
-      }
-      while (argsLength--) {
-        cache = caches[argsLength];
-        if (cache) {
-          releaseObject(cache);
-        }
-      }
-      releaseArray(caches);
-      releaseArray(seen);
-      return result;
-    }
-
-    /**
-     * Gets the last element or last `n` elements of an array. If a callback is
-     * provided elements at the end of the array are returned as long as the
-     * callback returns truey. The callback is bound to `thisArg` and invoked
-     * with three arguments; (value, index, array).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to query.
-     * @param {Function|Object|number|string} [callback] The function called
-     *  per element or the number of elements to return. If a property name or
-     *  object is provided it will be used to create a "_.pluck" or "_.where"
-     *  style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {*} Returns the last element(s) of `array`.
-     * @example
-     *
-     * _.last([1, 2, 3]);
-     * // => 3
-     *
-     * _.last([1, 2, 3], 2);
-     * // => [2, 3]
-     *
-     * _.last([1, 2, 3], function(num) {
-     *   return num > 1;
-     * });
-     * // => [2, 3]
-     *
-     * var characters = [
-     *   { 'name': 'barney',  'blocked': false, 'employer': 'slate' },
-     *   { 'name': 'fred',    'blocked': true,  'employer': 'slate' },
-     *   { 'name': 'pebbles', 'blocked': true,  'employer': 'na' }
-     * ];
-     *
-     * // using "_.pluck" callback shorthand
-     * _.pluck(_.last(characters, 'blocked'), 'name');
-     * // => ['fred', 'pebbles']
-     *
-     * // using "_.where" callback shorthand
-     * _.last(characters, { 'employer': 'na' });
-     * // => [{ 'name': 'pebbles', 'blocked': true, 'employer': 'na' }]
-     */
-    function last(array, callback, thisArg) {
-      var n = 0,
-          length = array ? array.length : 0;
-
-      if (typeof callback != 'number' && callback != null) {
-        var index = length;
-        callback = lodash.createCallback(callback, thisArg, 3);
-        while (index-- && callback(array[index], index, array)) {
-          n++;
-        }
-      } else {
-        n = callback;
-        if (n == null || thisArg) {
-          return array ? array[length - 1] : undefined;
-        }
-      }
-      return slice(array, nativeMax(0, length - n));
-    }
-
-    /**
-     * Gets the index at which the last occurrence of `value` is found using strict
-     * equality for comparisons, i.e. `===`. If `fromIndex` is negative, it is used
-     * as the offset from the end of the collection.
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to search.
-     * @param {*} value The value to search for.
-     * @param {number} [fromIndex=array.length-1] The index to search from.
-     * @returns {number} Returns the index of the matched value or `-1`.
-     * @example
-     *
-     * _.lastIndexOf([1, 2, 3, 1, 2, 3], 2);
-     * // => 4
-     *
-     * _.lastIndexOf([1, 2, 3, 1, 2, 3], 2, 3);
-     * // => 1
-     */
-    function lastIndexOf(array, value, fromIndex) {
-      var index = array ? array.length : 0;
-      if (typeof fromIndex == 'number') {
-        index = (fromIndex < 0 ? nativeMax(0, index + fromIndex) : nativeMin(fromIndex, index - 1)) + 1;
-      }
-      while (index--) {
-        if (array[index] === value) {
-          return index;
-        }
-      }
-      return -1;
-    }
-
-    /**
-     * Removes all provided values from the given array using strict equality for
-     * comparisons, i.e. `===`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to modify.
-     * @param {...*} [value] The values to remove.
-     * @returns {Array} Returns `array`.
-     * @example
-     *
-     * var array = [1, 2, 3, 1, 2, 3];
-     * _.pull(array, 2, 3);
-     * console.log(array);
-     * // => [1, 1]
-     */
-    function pull(array) {
-      var args = arguments,
-          argsIndex = 0,
-          argsLength = args.length,
-          length = array ? array.length : 0;
-
-      while (++argsIndex < argsLength) {
-        var index = -1,
-            value = args[argsIndex];
-        while (++index < length) {
-          if (array[index] === value) {
-            splice.call(array, index--, 1);
-            length--;
-          }
-        }
-      }
-      return array;
-    }
-
-    /**
-     * Creates an array of numbers (positive and/or negative) progressing from
-     * `start` up to but not including `end`. If `start` is less than `stop` a
-     * zero-length range is created unless a negative `step` is specified.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {number} [start=0] The start of the range.
-     * @param {number} end The end of the range.
-     * @param {number} [step=1] The value to increment or decrement by.
-     * @returns {Array} Returns a new range array.
-     * @example
-     *
-     * _.range(4);
-     * // => [0, 1, 2, 3]
-     *
-     * _.range(1, 5);
-     * // => [1, 2, 3, 4]
-     *
-     * _.range(0, 20, 5);
-     * // => [0, 5, 10, 15]
-     *
-     * _.range(0, -4, -1);
-     * // => [0, -1, -2, -3]
-     *
-     * _.range(1, 4, 0);
-     * // => [1, 1, 1]
-     *
-     * _.range(0);
-     * // => []
-     */
-    function range(start, end, step) {
-      start = +start || 0;
-      step = typeof step == 'number' ? step : (+step || 1);
-
-      if (end == null) {
-        end = start;
-        start = 0;
-      }
-      // use `Array(length)` so engines like Chakra and V8 avoid slower modes
-      // http://youtu.be/XAqIpGU8ZZk#t=17m25s
-      var index = -1,
-          length = nativeMax(0, ceil((end - start) / (step || 1))),
-          result = Array(length);
-
-      while (++index < length) {
-        result[index] = start;
-        start += step;
-      }
-      return result;
-    }
-
-    /**
-     * Removes all elements from an array that the callback returns truey for
-     * and returns an array of removed elements. The callback is bound to `thisArg`
-     * and invoked with three arguments; (value, index, array).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to modify.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array} Returns a new array of removed elements.
-     * @example
-     *
-     * var array = [1, 2, 3, 4, 5, 6];
-     * var evens = _.remove(array, function(num) { return num % 2 == 0; });
-     *
-     * console.log(array);
-     * // => [1, 3, 5]
-     *
-     * console.log(evens);
-     * // => [2, 4, 6]
-     */
-    function remove(array, callback, thisArg) {
-      var index = -1,
-          length = array ? array.length : 0,
-          result = [];
-
-      callback = lodash.createCallback(callback, thisArg, 3);
-      while (++index < length) {
-        var value = array[index];
-        if (callback(value, index, array)) {
-          result.push(value);
-          splice.call(array, index--, 1);
-          length--;
-        }
-      }
-      return result;
-    }
-
-    /**
-     * The opposite of `_.initial` this method gets all but the first element or
-     * first `n` elements of an array. If a callback function is provided elements
-     * at the beginning of the array are excluded from the result as long as the
-     * callback returns truey. The callback is bound to `thisArg` and invoked
-     * with three arguments; (value, index, array).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @alias drop, tail
-     * @category Arrays
-     * @param {Array} array The array to query.
-     * @param {Function|Object|number|string} [callback=1] The function called
-     *  per element or the number of elements to exclude. If a property name or
-     *  object is provided it will be used to create a "_.pluck" or "_.where"
-     *  style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array} Returns a slice of `array`.
-     * @example
-     *
-     * _.rest([1, 2, 3]);
-     * // => [2, 3]
-     *
-     * _.rest([1, 2, 3], 2);
-     * // => [3]
-     *
-     * _.rest([1, 2, 3], function(num) {
-     *   return num < 3;
-     * });
-     * // => [3]
-     *
-     * var characters = [
-     *   { 'name': 'barney',  'blocked': true,  'employer': 'slate' },
-     *   { 'name': 'fred',    'blocked': false,  'employer': 'slate' },
-     *   { 'name': 'pebbles', 'blocked': true, 'employer': 'na' }
-     * ];
-     *
-     * // using "_.pluck" callback shorthand
-     * _.pluck(_.rest(characters, 'blocked'), 'name');
-     * // => ['fred', 'pebbles']
-     *
-     * // using "_.where" callback shorthand
-     * _.rest(characters, { 'employer': 'slate' });
-     * // => [{ 'name': 'pebbles', 'blocked': true, 'employer': 'na' }]
-     */
-    function rest(array, callback, thisArg) {
-      if (typeof callback != 'number' && callback != null) {
-        var n = 0,
-            index = -1,
-            length = array ? array.length : 0;
-
-        callback = lodash.createCallback(callback, thisArg, 3);
-        while (++index < length && callback(array[index], index, array)) {
-          n++;
-        }
-      } else {
-        n = (callback == null || thisArg) ? 1 : nativeMax(0, callback);
-      }
-      return slice(array, n);
-    }
-
-    /**
-     * Uses a binary search to determine the smallest index at which a value
-     * should be inserted into a given sorted array in order to maintain the sort
-     * order of the array. If a callback is provided it will be executed for
-     * `value` and each element of `array` to compute their sort ranking. The
-     * callback is bound to `thisArg` and invoked with one argument; (value).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to inspect.
-     * @param {*} value The value to evaluate.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {number} Returns the index at which `value` should be inserted
-     *  into `array`.
-     * @example
-     *
-     * _.sortedIndex([20, 30, 50], 40);
-     * // => 2
-     *
-     * // using "_.pluck" callback shorthand
-     * _.sortedIndex([{ 'x': 20 }, { 'x': 30 }, { 'x': 50 }], { 'x': 40 }, 'x');
-     * // => 2
-     *
-     * var dict = {
-     *   'wordToNumber': { 'twenty': 20, 'thirty': 30, 'fourty': 40, 'fifty': 50 }
-     * };
-     *
-     * _.sortedIndex(['twenty', 'thirty', 'fifty'], 'fourty', function(word) {
-     *   return dict.wordToNumber[word];
-     * });
-     * // => 2
-     *
-     * _.sortedIndex(['twenty', 'thirty', 'fifty'], 'fourty', function(word) {
-     *   return this.wordToNumber[word];
-     * }, dict);
-     * // => 2
-     */
-    function sortedIndex(array, value, callback, thisArg) {
-      var low = 0,
-          high = array ? array.length : low;
-
-      // explicitly reference `identity` for better inlining in Firefox
-      callback = callback ? lodash.createCallback(callback, thisArg, 1) : identity;
-      value = callback(value);
-
-      while (low < high) {
-        var mid = (low + high) >>> 1;
-        (callback(array[mid]) < value)
-          ? low = mid + 1
-          : high = mid;
-      }
-      return low;
-    }
-
-    /**
-     * Creates an array of unique values, in order, of the provided arrays using
-     * strict equality for comparisons, i.e. `===`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {...Array} [array] The arrays to inspect.
-     * @returns {Array} Returns an array of combined values.
-     * @example
-     *
-     * _.union([1, 2, 3], [5, 2, 1, 4], [2, 1]);
-     * // => [1, 2, 3, 5, 4]
-     */
-    function union() {
-      return baseUniq(baseFlatten(arguments, true, true));
-    }
-
-    /**
-     * Creates a duplicate-value-free version of an array using strict equality
-     * for comparisons, i.e. `===`. If the array is sorted, providing
-     * `true` for `isSorted` will use a faster algorithm. If a callback is provided
-     * each element of `array` is passed through the callback before uniqueness
-     * is computed. The callback is bound to `thisArg` and invoked with three
-     * arguments; (value, index, array).
-     *
-     * If a property name is provided for `callback` the created "_.pluck" style
-     * callback will return the property value of the given element.
-     *
-     * If an object is provided for `callback` the created "_.where" style callback
-     * will return `true` for elements that have the properties of the given object,
-     * else `false`.
-     *
-     * @static
-     * @memberOf _
-     * @alias unique
-     * @category Arrays
-     * @param {Array} array The array to process.
-     * @param {boolean} [isSorted=false] A flag to indicate that `array` is sorted.
-     * @param {Function|Object|string} [callback=identity] The function called
-     *  per iteration. If a property name or object is provided it will be used
-     *  to create a "_.pluck" or "_.where" style callback, respectively.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array} Returns a duplicate-value-free array.
-     * @example
-     *
-     * _.uniq([1, 2, 1, 3, 1]);
-     * // => [1, 2, 3]
-     *
-     * _.uniq([1, 1, 2, 2, 3], true);
-     * // => [1, 2, 3]
-     *
-     * _.uniq(['A', 'b', 'C', 'a', 'B', 'c'], function(letter) { return letter.toLowerCase(); });
-     * // => ['A', 'b', 'C']
-     *
-     * _.uniq([1, 2.5, 3, 1.5, 2, 3.5], function(num) { return this.floor(num); }, Math);
-     * // => [1, 2.5, 3]
-     *
-     * // using "_.pluck" callback shorthand
-     * _.uniq([{ 'x': 1 }, { 'x': 2 }, { 'x': 1 }], 'x');
-     * // => [{ 'x': 1 }, { 'x': 2 }]
-     */
-    function uniq(array, isSorted, callback, thisArg) {
-      // juggle arguments
-      if (typeof isSorted != 'boolean' && isSorted != null) {
-        thisArg = callback;
-        callback = (typeof isSorted != 'function' && thisArg && thisArg[isSorted] === array) ? null : isSorted;
-        isSorted = false;
-      }
-      if (callback != null) {
-        callback = lodash.createCallback(callback, thisArg, 3);
-      }
-      return baseUniq(array, isSorted, callback);
-    }
-
-    /**
-     * Creates an array excluding all provided values using strict equality for
-     * comparisons, i.e. `===`.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {Array} array The array to filter.
-     * @param {...*} [value] The values to exclude.
-     * @returns {Array} Returns a new array of filtered values.
-     * @example
-     *
-     * _.without([1, 2, 1, 0, 3, 1, 4], 0, 1);
-     * // => [2, 3, 4]
-     */
-    function without(array) {
-      return baseDifference(array, slice(arguments, 1));
-    }
-
-    /**
-     * Creates an array that is the symmetric difference of the provided arrays.
-     * See http://en.wikipedia.org/wiki/Symmetric_difference.
-     *
-     * @static
-     * @memberOf _
-     * @category Arrays
-     * @param {...Array} [array] The arrays to inspect.
-     * @returns {Array} Returns an array of values.
-     * @example
-     *
-     * _.xor([1, 2, 3], [5, 2, 1, 4]);
-     * // => [3, 5, 4]
-     *
-     * _.xor([1, 2, 5], [2, 3, 5], [3, 4, 5]);
-     * // => [1, 4, 5]
-     */
-    function xor() {
-      var index = -1,
-          length = arguments.length;
-
-      while (++index < length) {
-        var array = arguments[index];
-        if (isArray(array) || isArguments(array)) {
-          var result = result
-            ? baseUniq(baseDifference(result, array).concat(baseDifference(array, result)))
-            : array;
-        }
-      }
-      return result || [];
-    }
-
-    /**
-     * Creates an array of grouped elements, the first of which contains the first
-     * elements of the given arrays, the second of which contains the second
-     * elements of the given arrays, and so on.
-     *
-     * @static
-     * @memberOf _
-     * @alias unzip
-     * @category Arrays
-     * @param {...Array} [array] Arrays to process.
-     * @returns {Array} Returns a new array of grouped elements.
-     * @example
-     *
-     * _.zip(['fred', 'barney'], [30, 40], [true, false]);
-     * // => [['fred', 30, true], ['barney', 40, false]]
-     */
-    function zip() {
-      var array = arguments.length > 1 ? arguments : arguments[0],
-          index = -1,
-          length = array ? max(pluck(array, 'length')) : 0,
-          result = Array(length < 0 ? 0 : length);
-
-      while (++index < length) {
-        result[index] = pluck(array, index);
-      }
-      return result;
-    }
-
-    /**
-     * Creates an object composed from arrays of `keys` and `values`. Provide
-     * either a single two dimensional array, i.e. `[[key1, value1], [key2, value2]]`
-     * or two arrays, one of `keys` and one of corresponding `values`.
-     *
-     * @static
-     * @memberOf _
-     * @alias object
-     * @category Arrays
-     * @param {Array} keys The array of keys.
-     * @param {Array} [values=[]] The array of values.
-     * @returns {Object} Returns an object composed of the given keys and
-     *  corresponding values.
-     * @example
-     *
-     * _.zipObject(['fred', 'barney'], [30, 40]);
-     * // => { 'fred': 30, 'barney': 40 }
-     */
-    function zipObject(keys, values) {
-      var index = -1,
-          length = keys ? keys.length : 0,
-          result = {};
-
-      if (!values && length && !isArray(keys[0])) {
-        values = [];
-      }
-      while (++index < length) {
-        var key = keys[index];
-        if (values) {
-          result[key] = values[index];
-        } else if (key) {
-          result[key[0]] = key[1];
-        }
-      }
-      return result;
-    }
-
-    /*--------------------------------------------------------------------------*/
-
-    /**
-     * Creates a function that executes `func`, with  the `this` binding and
-     * arguments of the created function, only after being called `n` times.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {number} n The number of times the function must be called before
-     *  `func` is executed.
-     * @param {Function} func The function to restrict.
-     * @returns {Function} Returns the new restricted function.
-     * @example
-     *
-     * var saves = ['profile', 'settings'];
-     *
-     * var done = _.after(saves.length, function() {
-     *   console.log('Done saving!');
-     * });
-     *
-     * _.forEach(saves, function(type) {
-     *   asyncSave({ 'type': type, 'complete': done });
-     * });
-     * // => logs 'Done saving!', after all saves have completed
-     */
-    function after(n, func) {
-      if (!isFunction(func)) {
-        throw new TypeError;
-      }
-      return function() {
-        if (--n < 1) {
-          return func.apply(this, arguments);
-        }
-      };
-    }
-
-    /**
-     * Creates a function that, when called, invokes `func` with the `this`
-     * binding of `thisArg` and prepends any additional `bind` arguments to those
-     * provided to the bound function.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {Function} func The function to bind.
-     * @param {*} [thisArg] The `this` binding of `func`.
-     * @param {...*} [arg] Arguments to be partially applied.
-     * @returns {Function} Returns the new bound function.
-     * @example
-     *
-     * var func = function(greeting) {
-     *   return greeting + ' ' + this.name;
-     * };
-     *
-     * func = _.bind(func, { 'name': 'fred' }, 'hi');
-     * func();
-     * // => 'hi fred'
-     */
-    function bind(func, thisArg) {
-      return arguments.length > 2
-        ? createWrapper(func, 17, slice(arguments, 2), null, thisArg)
-        : createWrapper(func, 1, null, null, thisArg);
-    }
-
-    /**
-     * Binds methods of an object to the object itself, overwriting the existing
-     * method. Method names may be specified as individual arguments or as arrays
-     * of method names. If no method names are provided all the function properties
-     * of `object` will be bound.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {Object} object The object to bind and assign the bound methods to.
-     * @param {...string} [methodName] The object method names to
-     *  bind, specified as individual method names or arrays of method names.
-     * @returns {Object} Returns `object`.
-     * @example
-     *
-     * var view = {
-     *   'label': 'docs',
-     *   'onClick': function() { console.log('clicked ' + this.label); }
-     * };
-     *
-     * _.bindAll(view);
-     * jQuery('#docs').on('click', view.onClick);
-     * // => logs 'clicked docs', when the button is clicked
-     */
-    function bindAll(object) {
-      var funcs = arguments.length > 1 ? baseFlatten(arguments, true, false, 1) : functions(object),
-          index = -1,
-          length = funcs.length;
-
-      while (++index < length) {
-        var key = funcs[index];
-        object[key] = createWrapper(object[key], 1, null, null, object);
-      }
-      return object;
-    }
-
-    /**
-     * Creates a function that, when called, invokes the method at `object[key]`
-     * and prepends any additional `bindKey` arguments to those provided to the bound
-     * function. This method differs from `_.bind` by allowing bound functions to
-     * reference methods that will be redefined or don't yet exist.
-     * See http://michaux.ca/articles/lazy-function-definition-pattern.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {Object} object The object the method belongs to.
-     * @param {string} key The key of the method.
-     * @param {...*} [arg] Arguments to be partially applied.
-     * @returns {Function} Returns the new bound function.
-     * @example
-     *
-     * var object = {
-     *   'name': 'fred',
-     *   'greet': function(greeting) {
-     *     return greeting + ' ' + this.name;
-     *   }
-     * };
-     *
-     * var func = _.bindKey(object, 'greet', 'hi');
-     * func();
-     * // => 'hi fred'
-     *
-     * object.greet = function(greeting) {
-     *   return greeting + 'ya ' + this.name + '!';
-     * };
-     *
-     * func();
-     * // => 'hiya fred!'
-     */
-    function bindKey(object, key) {
-      return arguments.length > 2
-        ? createWrapper(key, 19, slice(arguments, 2), null, object)
-        : createWrapper(key, 3, null, null, object);
-    }
-
-    /**
-     * Creates a function that is the composition of the provided functions,
-     * where each function consumes the return value of the function that follows.
-     * For example, composing the functions `f()`, `g()`, and `h()` produces `f(g(h()))`.
-     * Each function is executed with the `this` binding of the composed function.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {...Function} [func] Functions to compose.
-     * @returns {Function} Returns the new composed function.
-     * @example
-     *
-     * var realNameMap = {
-     *   'pebbles': 'penelope'
-     * };
-     *
-     * var format = function(name) {
-     *   name = realNameMap[name.toLowerCase()] || name;
-     *   return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-     * };
-     *
-     * var greet = function(formatted) {
-     *   return 'Hiya ' + formatted + '!';
-     * };
-     *
-     * var welcome = _.compose(greet, format);
-     * welcome('pebbles');
-     * // => 'Hiya Penelope!'
-     */
-    function compose() {
-      var funcs = arguments,
-          length = funcs.length;
-
-      while (length--) {
-        if (!isFunction(funcs[length])) {
-          throw new TypeError;
-        }
-      }
-      return function() {
-        var args = arguments,
-            length = funcs.length;
-
-        while (length--) {
-          args = [funcs[length].apply(this, args)];
-        }
-        return args[0];
-      };
-    }
-
-    /**
-     * Creates a function which accepts one or more arguments of `func` that when
-     * invoked either executes `func` returning its result, if all `func` arguments
-     * have been provided, or returns a function that accepts one or more of the
-     * remaining `func` arguments, and so on. The arity of `func` can be specified
-     * if `func.length` is not sufficient.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {Function} func The function to curry.
-     * @param {number} [arity=func.length] The arity of `func`.
-     * @returns {Function} Returns the new curried function.
-     * @example
-     *
-     * var curried = _.curry(function(a, b, c) {
-     *   console.log(a + b + c);
-     * });
-     *
-     * curried(1)(2)(3);
-     * // => 6
-     *
-     * curried(1, 2)(3);
-     * // => 6
-     *
-     * curried(1, 2, 3);
-     * // => 6
-     */
-    function curry(func, arity) {
-      arity = typeof arity == 'number' ? arity : (+arity || func.length);
-      return createWrapper(func, 4, null, null, null, arity);
-    }
-
-    /**
-     * Creates a function that will delay the execution of `func` until after
-     * `wait` milliseconds have elapsed since the last time it was invoked.
-     * Provide an options object to indicate that `func` should be invoked on
-     * the leading and/or trailing edge of the `wait` timeout. Subsequent calls
-     * to the debounced function will return the result of the last `func` call.
-     *
-     * Note: If `leading` and `trailing` options are `true` `func` will be called
-     * on the trailing edge of the timeout only if the the debounced function is
-     * invoked more than once during the `wait` timeout.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {Function} func The function to debounce.
-     * @param {number} wait The number of milliseconds to delay.
-     * @param {Object} [options] The options object.
-     * @param {boolean} [options.leading=false] Specify execution on the leading edge of the timeout.
-     * @param {number} [options.maxWait] The maximum time `func` is allowed to be delayed before it's called.
-     * @param {boolean} [options.trailing=true] Specify execution on the trailing edge of the timeout.
-     * @returns {Function} Returns the new debounced function.
-     * @example
-     *
-     * // avoid costly calculations while the window size is in flux
-     * var lazyLayout = _.debounce(calculateLayout, 150);
-     * jQuery(window).on('resize', lazyLayout);
-     *
-     * // execute `sendMail` when the click event is fired, debouncing subsequent calls
-     * jQuery('#postbox').on('click', _.debounce(sendMail, 300, {
-     *   'leading': true,
-     *   'trailing': false
-     * });
-     *
-     * // ensure `batchLog` is executed once after 1 second of debounced calls
-     * var source = new EventSource('/stream');
-     * source.addEventListener('message', _.debounce(batchLog, 250, {
-     *   'maxWait': 1000
-     * }, false);
-     */
-    function debounce(func, wait, options) {
-      var args,
-          maxTimeoutId,
-          result,
-          stamp,
-          thisArg,
-          timeoutId,
-          trailingCall,
-          lastCalled = 0,
-          maxWait = false,
-          trailing = true;
-
-      if (!isFunction(func)) {
-        throw new TypeError;
-      }
-      wait = nativeMax(0, wait) || 0;
-      if (options === true) {
-        var leading = true;
-        trailing = false;
-      } else if (isObject(options)) {
-        leading = options.leading;
-        maxWait = 'maxWait' in options && (nativeMax(wait, options.maxWait) || 0);
-        trailing = 'trailing' in options ? options.trailing : trailing;
-      }
-      var delayed = function() {
-        var remaining = wait - (now() - stamp);
-        if (remaining <= 0) {
-          if (maxTimeoutId) {
-            clearTimeout(maxTimeoutId);
-          }
-          var isCalled = trailingCall;
-          maxTimeoutId = timeoutId = trailingCall = undefined;
-          if (isCalled) {
-            lastCalled = now();
-            result = func.apply(thisArg, args);
-            if (!timeoutId && !maxTimeoutId) {
-              args = thisArg = null;
-            }
-          }
-        } else {
-          timeoutId = setTimeout(delayed, remaining);
-        }
-      };
-
-      var maxDelayed = function() {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-        maxTimeoutId = timeoutId = trailingCall = undefined;
-        if (trailing || (maxWait !== wait)) {
-          lastCalled = now();
-          result = func.apply(thisArg, args);
-          if (!timeoutId && !maxTimeoutId) {
-            args = thisArg = null;
-          }
-        }
-      };
-
-      return function() {
-        args = arguments;
-        stamp = now();
-        thisArg = this;
-        trailingCall = trailing && (timeoutId || !leading);
-
-        if (maxWait === false) {
-          var leadingCall = leading && !timeoutId;
-        } else {
-          if (!maxTimeoutId && !leading) {
-            lastCalled = stamp;
-          }
-          var remaining = maxWait - (stamp - lastCalled),
-              isCalled = remaining <= 0;
-
-          if (isCalled) {
-            if (maxTimeoutId) {
-              maxTimeoutId = clearTimeout(maxTimeoutId);
-            }
-            lastCalled = stamp;
-            result = func.apply(thisArg, args);
-          }
-          else if (!maxTimeoutId) {
-            maxTimeoutId = setTimeout(maxDelayed, remaining);
-          }
-        }
-        if (isCalled && timeoutId) {
-          timeoutId = clearTimeout(timeoutId);
-        }
-        else if (!timeoutId && wait !== maxWait) {
-          timeoutId = setTimeout(delayed, wait);
-        }
-        if (leadingCall) {
-          isCalled = true;
-          result = func.apply(thisArg, args);
-        }
-        if (isCalled && !timeoutId && !maxTimeoutId) {
-          args = thisArg = null;
-        }
-        return result;
-      };
-    }
-
-    /**
-     * Defers executing the `func` function until the current call stack has cleared.
-     * Additional arguments will be provided to `func` when it is invoked.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {Function} func The function to defer.
-     * @param {...*} [arg] Arguments to invoke the function with.
-     * @returns {number} Returns the timer id.
-     * @example
-     *
-     * _.defer(function(text) { console.log(text); }, 'deferred');
-     * // logs 'deferred' after one or more milliseconds
-     */
-    function defer(func) {
-      if (!isFunction(func)) {
-        throw new TypeError;
-      }
-      var args = slice(arguments, 1);
-      return setTimeout(function() { func.apply(undefined, args); }, 1);
-    }
-
-    /**
-     * Executes the `func` function after `wait` milliseconds. Additional arguments
-     * will be provided to `func` when it is invoked.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {Function} func The function to delay.
-     * @param {number} wait The number of milliseconds to delay execution.
-     * @param {...*} [arg] Arguments to invoke the function with.
-     * @returns {number} Returns the timer id.
-     * @example
-     *
-     * _.delay(function(text) { console.log(text); }, 1000, 'later');
-     * // => logs 'later' after one second
-     */
-    function delay(func, wait) {
-      if (!isFunction(func)) {
-        throw new TypeError;
-      }
-      var args = slice(arguments, 2);
-      return setTimeout(function() { func.apply(undefined, args); }, wait);
-    }
-
-    /**
-     * Creates a function that memoizes the result of `func`. If `resolver` is
-     * provided it will be used to determine the cache key for storing the result
-     * based on the arguments provided to the memoized function. By default, the
-     * first argument provided to the memoized function is used as the cache key.
-     * The `func` is executed with the `this` binding of the memoized function.
-     * The result cache is exposed as the `cache` property on the memoized function.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {Function} func The function to have its output memoized.
-     * @param {Function} [resolver] A function used to resolve the cache key.
-     * @returns {Function} Returns the new memoizing function.
-     * @example
-     *
-     * var fibonacci = _.memoize(function(n) {
-     *   return n < 2 ? n : fibonacci(n - 1) + fibonacci(n - 2);
-     * });
-     *
-     * fibonacci(9)
-     * // => 34
-     *
-     * var data = {
-     *   'fred': { 'name': 'fred', 'age': 40 },
-     *   'pebbles': { 'name': 'pebbles', 'age': 1 }
-     * };
-     *
-     * // modifying the result cache
-     * var get = _.memoize(function(name) { return data[name]; }, _.identity);
-     * get('pebbles');
-     * // => { 'name': 'pebbles', 'age': 1 }
-     *
-     * get.cache.pebbles.name = 'penelope';
-     * get('pebbles');
-     * // => { 'name': 'penelope', 'age': 1 }
-     */
-    function memoize(func, resolver) {
-      if (!isFunction(func)) {
-        throw new TypeError;
-      }
-      var memoized = function() {
-        var cache = memoized.cache,
-            key = resolver ? resolver.apply(this, arguments) : keyPrefix + arguments[0];
-
-        return hasOwnProperty.call(cache, key)
-          ? cache[key]
-          : (cache[key] = func.apply(this, arguments));
-      }
-      memoized.cache = {};
-      return memoized;
-    }
-
-    /**
-     * Creates a function that is restricted to execute `func` once. Repeat calls to
-     * the function will return the value of the first call. The `func` is executed
-     * with the `this` binding of the created function.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {Function} func The function to restrict.
-     * @returns {Function} Returns the new restricted function.
-     * @example
-     *
-     * var initialize = _.once(createApplication);
-     * initialize();
-     * initialize();
-     * // `initialize` executes `createApplication` once
-     */
-    function once(func) {
-      var ran,
-          result;
-
-      if (!isFunction(func)) {
-        throw new TypeError;
-      }
-      return function() {
-        if (ran) {
-          return result;
-        }
-        ran = true;
-        result = func.apply(this, arguments);
-
-        // clear the `func` variable so the function may be garbage collected
-        func = null;
-        return result;
-      };
-    }
-
-    /**
-     * Creates a function that, when called, invokes `func` with any additional
-     * `partial` arguments prepended to those provided to the new function. This
-     * method is similar to `_.bind` except it does **not** alter the `this` binding.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {Function} func The function to partially apply arguments to.
-     * @param {...*} [arg] Arguments to be partially applied.
-     * @returns {Function} Returns the new partially applied function.
-     * @example
-     *
-     * var greet = function(greeting, name) { return greeting + ' ' + name; };
-     * var hi = _.partial(greet, 'hi');
-     * hi('fred');
-     * // => 'hi fred'
-     */
-    function partial(func) {
-      return createWrapper(func, 16, slice(arguments, 1));
-    }
-
-    /**
-     * This method is like `_.partial` except that `partial` arguments are
-     * appended to those provided to the new function.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {Function} func The function to partially apply arguments to.
-     * @param {...*} [arg] Arguments to be partially applied.
-     * @returns {Function} Returns the new partially applied function.
-     * @example
-     *
-     * var defaultsDeep = _.partialRight(_.merge, _.defaults);
-     *
-     * var options = {
-     *   'variable': 'data',
-     *   'imports': { 'jq': $ }
-     * };
-     *
-     * defaultsDeep(options, _.templateSettings);
-     *
-     * options.variable
-     * // => 'data'
-     *
-     * options.imports
-     * // => { '_': _, 'jq': $ }
-     */
-    function partialRight(func) {
-      return createWrapper(func, 32, null, slice(arguments, 1));
-    }
-
-    /**
-     * Creates a function that, when executed, will only call the `func` function
-     * at most once per every `wait` milliseconds. Provide an options object to
-     * indicate that `func` should be invoked on the leading and/or trailing edge
-     * of the `wait` timeout. Subsequent calls to the throttled function will
-     * return the result of the last `func` call.
-     *
-     * Note: If `leading` and `trailing` options are `true` `func` will be called
-     * on the trailing edge of the timeout only if the the throttled function is
-     * invoked more than once during the `wait` timeout.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {Function} func The function to throttle.
-     * @param {number} wait The number of milliseconds to throttle executions to.
-     * @param {Object} [options] The options object.
-     * @param {boolean} [options.leading=true] Specify execution on the leading edge of the timeout.
-     * @param {boolean} [options.trailing=true] Specify execution on the trailing edge of the timeout.
-     * @returns {Function} Returns the new throttled function.
-     * @example
-     *
-     * // avoid excessively updating the position while scrolling
-     * var throttled = _.throttle(updatePosition, 100);
-     * jQuery(window).on('scroll', throttled);
-     *
-     * // execute `renewToken` when the click event is fired, but not more than once every 5 minutes
-     * jQuery('.interactive').on('click', _.throttle(renewToken, 300000, {
-     *   'trailing': false
-     * }));
-     */
-    function throttle(func, wait, options) {
-      var leading = true,
-          trailing = true;
-
-      if (!isFunction(func)) {
-        throw new TypeError;
-      }
-      if (options === false) {
-        leading = false;
-      } else if (isObject(options)) {
-        leading = 'leading' in options ? options.leading : leading;
-        trailing = 'trailing' in options ? options.trailing : trailing;
-      }
-      debounceOptions.leading = leading;
-      debounceOptions.maxWait = wait;
-      debounceOptions.trailing = trailing;
-
-      return debounce(func, wait, debounceOptions);
-    }
-
-    /**
-     * Creates a function that provides `value` to the wrapper function as its
-     * first argument. Additional arguments provided to the function are appended
-     * to those provided to the wrapper function. The wrapper is executed with
-     * the `this` binding of the created function.
-     *
-     * @static
-     * @memberOf _
-     * @category Functions
-     * @param {*} value The value to wrap.
-     * @param {Function} wrapper The wrapper function.
-     * @returns {Function} Returns the new function.
-     * @example
-     *
-     * var p = _.wrap(_.escape, function(func, text) {
-     *   return '<p>' + func(text) + '</p>';
-     * });
-     *
-     * p('Fred, Wilma, & Pebbles');
-     * // => '<p>Fred, Wilma, &amp; Pebbles</p>'
-     */
-    function wrap(value, wrapper) {
-      return createWrapper(wrapper, 16, [value]);
-    }
-
-    /*--------------------------------------------------------------------------*/
-
-    /**
-     * Creates a function that returns `value`.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {*} value The value to return from the new function.
-     * @returns {Function} Returns the new function.
-     * @example
-     *
-     * var object = { 'name': 'fred' };
-     * var getter = _.constant(object);
-     * getter() === object;
-     * // => true
-     */
-    function constant(value) {
-      return function() {
-        return value;
-      };
-    }
-
-    /**
-     * Produces a callback bound to an optional `thisArg`. If `func` is a property
-     * name the created callback will return the property value for a given element.
-     * If `func` is an object the created callback will return `true` for elements
-     * that contain the equivalent object properties, otherwise it will return `false`.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {*} [func=identity] The value to convert to a callback.
-     * @param {*} [thisArg] The `this` binding of the created callback.
-     * @param {number} [argCount] The number of arguments the callback accepts.
-     * @returns {Function} Returns a callback function.
-     * @example
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36 },
-     *   { 'name': 'fred',   'age': 40 }
-     * ];
-     *
-     * // wrap to create custom callback shorthands
-     * _.createCallback = _.wrap(_.createCallback, function(func, callback, thisArg) {
-     *   var match = /^(.+?)__([gl]t)(.+)$/.exec(callback);
-     *   return !match ? func(callback, thisArg) : function(object) {
-     *     return match[2] == 'gt' ? object[match[1]] > match[3] : object[match[1]] < match[3];
-     *   };
-     * });
-     *
-     * _.filter(characters, 'age__gt38');
-     * // => [{ 'name': 'fred', 'age': 40 }]
-     */
-    function createCallback(func, thisArg, argCount) {
-      var type = typeof func;
-      if (func == null || type == 'function') {
-        return baseCreateCallback(func, thisArg, argCount);
-      }
-      // handle "_.pluck" style callback shorthands
-      if (type != 'object') {
-        return property(func);
-      }
-      var props = keys(func),
-          key = props[0],
-          a = func[key];
-
-      // handle "_.where" style callback shorthands
-      if (props.length == 1 && a === a && !isObject(a)) {
-        // fast path the common case of providing an object with a single
-        // property containing a primitive value
-        return function(object) {
-          var b = object[key];
-          return a === b && (a !== 0 || (1 / a == 1 / b));
-        };
-      }
-      return function(object) {
-        var length = props.length,
-            result = false;
-
-        while (length--) {
-          if (!(result = baseIsEqual(object[props[length]], func[props[length]], null, true))) {
-            break;
-          }
-        }
-        return result;
-      };
-    }
-
-    /**
-     * Converts the characters `&`, `<`, `>`, `"`, and `'` in `string` to their
-     * corresponding HTML entities.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {string} string The string to escape.
-     * @returns {string} Returns the escaped string.
-     * @example
-     *
-     * _.escape('Fred, Wilma, & Pebbles');
-     * // => 'Fred, Wilma, &amp; Pebbles'
-     */
-    function escape(string) {
-      return string == null ? '' : String(string).replace(reUnescapedHtml, escapeHtmlChar);
-    }
-
-    /**
-     * This method returns the first argument provided to it.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {*} value Any value.
-     * @returns {*} Returns `value`.
-     * @example
-     *
-     * var object = { 'name': 'fred' };
-     * _.identity(object) === object;
-     * // => true
-     */
-    function identity(value) {
-      return value;
-    }
-
-    /**
-     * Adds function properties of a source object to the destination object.
-     * If `object` is a function methods will be added to its prototype as well.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {Function|Object} [object=lodash] object The destination object.
-     * @param {Object} source The object of functions to add.
-     * @param {Object} [options] The options object.
-     * @param {boolean} [options.chain=true] Specify whether the functions added are chainable.
-     * @example
-     *
-     * function capitalize(string) {
-     *   return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
-     * }
-     *
-     * _.mixin({ 'capitalize': capitalize });
-     * _.capitalize('fred');
-     * // => 'Fred'
-     *
-     * _('fred').capitalize().value();
-     * // => 'Fred'
-     *
-     * _.mixin({ 'capitalize': capitalize }, { 'chain': false });
-     * _('fred').capitalize();
-     * // => 'Fred'
-     */
-    function mixin(object, source, options) {
-      var chain = true,
-          methodNames = source && functions(source);
-
-      if (!source || (!options && !methodNames.length)) {
-        if (options == null) {
-          options = source;
-        }
-        ctor = lodashWrapper;
-        source = object;
-        object = lodash;
-        methodNames = functions(source);
-      }
-      if (options === false) {
-        chain = false;
-      } else if (isObject(options) && 'chain' in options) {
-        chain = options.chain;
-      }
-      var ctor = object,
-          isFunc = isFunction(ctor);
-
-      forEach(methodNames, function(methodName) {
-        var func = object[methodName] = source[methodName];
-        if (isFunc) {
-          ctor.prototype[methodName] = function() {
-            var chainAll = this.__chain__,
-                value = this.__wrapped__,
-                args = [value];
-
-            push.apply(args, arguments);
-            var result = func.apply(object, args);
-            if (chain || chainAll) {
-              if (value === result && isObject(result)) {
-                return this;
-              }
-              result = new ctor(result);
-              result.__chain__ = chainAll;
-            }
-            return result;
-          };
-        }
-      });
-    }
-
-    /**
-     * Reverts the '_' variable to its previous value and returns a reference to
-     * the `lodash` function.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @returns {Function} Returns the `lodash` function.
-     * @example
-     *
-     * var lodash = _.noConflict();
-     */
-    function noConflict() {
-      context._ = oldDash;
-      return this;
-    }
-
-    /**
-     * A no-operation function.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @example
-     *
-     * var object = { 'name': 'fred' };
-     * _.noop(object) === undefined;
-     * // => true
-     */
-    function noop() {
-      // no operation performed
-    }
-
-    /**
-     * Gets the number of milliseconds that have elapsed since the Unix epoch
-     * (1 January 1970 00:00:00 UTC).
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @example
-     *
-     * var stamp = _.now();
-     * _.defer(function() { console.log(_.now() - stamp); });
-     * // => logs the number of milliseconds it took for the deferred function to be called
-     */
-    var now = isNative(now = Date.now) && now || function() {
-      return new Date().getTime();
+  }
+  return result;
+}
+
+module.exports = keys;
+
+},{"lodash._getnative":57,"lodash.isarguments":58,"lodash.isarray":65}],57:[function(require,module,exports){
+/**
+ * lodash 3.9.1 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+
+/** `Object#toString` result references. */
+var funcTag = '[object Function]';
+
+/** Used to detect host constructors (Safari > 5). */
+var reIsHostCtor = /^\[object .+?Constructor\]$/;
+
+/**
+ * Checks if `value` is object-like.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ */
+function isObjectLike(value) {
+  return !!value && typeof value == 'object';
+}
+
+/** Used for native method references. */
+var objectProto = Object.prototype;
+
+/** Used to resolve the decompiled source of functions. */
+var fnToString = Function.prototype.toString;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * Used to resolve the [`toStringTag`](http://ecma-international.org/ecma-262/6.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var objToString = objectProto.toString;
+
+/** Used to detect if a method is native. */
+var reIsNative = RegExp('^' +
+  fnToString.call(hasOwnProperty).replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
+  .replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'
+);
+
+/**
+ * Gets the native function at `key` of `object`.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @param {string} key The key of the method to get.
+ * @returns {*} Returns the function if it's native, else `undefined`.
+ */
+function getNative(object, key) {
+  var value = object == null ? undefined : object[key];
+  return isNative(value) ? value : undefined;
+}
+
+/**
+ * Checks if `value` is classified as a `Function` object.
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
+ * @example
+ *
+ * _.isFunction(_);
+ * // => true
+ *
+ * _.isFunction(/abc/);
+ * // => false
+ */
+function isFunction(value) {
+  // The use of `Object#toString` avoids issues with the `typeof` operator
+  // in older versions of Chrome and Safari which return 'function' for regexes
+  // and Safari 8 equivalents which return 'object' for typed array constructors.
+  return isObject(value) && objToString.call(value) == funcTag;
+}
+
+/**
+ * Checks if `value` is the [language type](https://es5.github.io/#x8) of `Object`.
+ * (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(1);
+ * // => false
+ */
+function isObject(value) {
+  // Avoid a V8 JIT bug in Chrome 19-20.
+  // See https://code.google.com/p/v8/issues/detail?id=2291 for more details.
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+/**
+ * Checks if `value` is a native function.
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a native function, else `false`.
+ * @example
+ *
+ * _.isNative(Array.prototype.push);
+ * // => true
+ *
+ * _.isNative(_);
+ * // => false
+ */
+function isNative(value) {
+  if (value == null) {
+    return false;
+  }
+  if (isFunction(value)) {
+    return reIsNative.test(fnToString.call(value));
+  }
+  return isObjectLike(value) && reIsHostCtor.test(value);
+}
+
+module.exports = getNative;
+
+},{}],58:[function(require,module,exports){
+/**
+ * lodash 3.0.4 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+
+/**
+ * Checks if `value` is object-like.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ */
+function isObjectLike(value) {
+  return !!value && typeof value == 'object';
+}
+
+/** Used for native method references. */
+var objectProto = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/** Native method references. */
+var propertyIsEnumerable = objectProto.propertyIsEnumerable;
+
+/**
+ * Used as the [maximum length](http://ecma-international.org/ecma-262/6.0/#sec-number.max_safe_integer)
+ * of an array-like value.
+ */
+var MAX_SAFE_INTEGER = 9007199254740991;
+
+/**
+ * The base implementation of `_.property` without support for deep paths.
+ *
+ * @private
+ * @param {string} key The key of the property to get.
+ * @returns {Function} Returns the new function.
+ */
+function baseProperty(key) {
+  return function(object) {
+    return object == null ? undefined : object[key];
+  };
+}
+
+/**
+ * Gets the "length" property value of `object`.
+ *
+ * **Note:** This function is used to avoid a [JIT bug](https://bugs.webkit.org/show_bug.cgi?id=142792)
+ * that affects Safari on at least iOS 8.1-8.3 ARM64.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @returns {*} Returns the "length" value.
+ */
+var getLength = baseProperty('length');
+
+/**
+ * Checks if `value` is array-like.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is array-like, else `false`.
+ */
+function isArrayLike(value) {
+  return value != null && isLength(getLength(value));
+}
+
+/**
+ * Checks if `value` is a valid array-like length.
+ *
+ * **Note:** This function is based on [`ToLength`](http://ecma-international.org/ecma-262/6.0/#sec-tolength).
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
+ */
+function isLength(value) {
+  return typeof value == 'number' && value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER;
+}
+
+/**
+ * Checks if `value` is classified as an `arguments` object.
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
+ * @example
+ *
+ * _.isArguments(function() { return arguments; }());
+ * // => true
+ *
+ * _.isArguments([1, 2, 3]);
+ * // => false
+ */
+function isArguments(value) {
+  return isObjectLike(value) && isArrayLike(value) &&
+    hasOwnProperty.call(value, 'callee') && !propertyIsEnumerable.call(value, 'callee');
+}
+
+module.exports = isArguments;
+
+},{}],59:[function(require,module,exports){
+/**
+ * lodash 3.0.1 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+
+/**
+ * A specialized version of `baseCallback` which only supports `this` binding
+ * and specifying the number of arguments to provide to `func`.
+ *
+ * @private
+ * @param {Function} func The function to bind.
+ * @param {*} thisArg The `this` binding of `func`.
+ * @param {number} [argCount] The number of arguments to provide to `func`.
+ * @returns {Function} Returns the callback.
+ */
+function bindCallback(func, thisArg, argCount) {
+  if (typeof func != 'function') {
+    return identity;
+  }
+  if (thisArg === undefined) {
+    return func;
+  }
+  switch (argCount) {
+    case 1: return function(value) {
+      return func.call(thisArg, value);
     };
-
-    /**
-     * Converts the given value into an integer of the specified radix.
-     * If `radix` is `undefined` or `0` a `radix` of `10` is used unless the
-     * `value` is a hexadecimal, in which case a `radix` of `16` is used.
-     *
-     * Note: This method avoids differences in native ES3 and ES5 `parseInt`
-     * implementations. See http://es5.github.io/#E.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {string} value The value to parse.
-     * @param {number} [radix] The radix used to interpret the value to parse.
-     * @returns {number} Returns the new integer value.
-     * @example
-     *
-     * _.parseInt('08');
-     * // => 8
-     */
-    var parseInt = nativeParseInt(whitespace + '08') == 8 ? nativeParseInt : function(value, radix) {
-      // Firefox < 21 and Opera < 15 follow the ES3 specified implementation of `parseInt`
-      return nativeParseInt(isString(value) ? value.replace(reLeadingSpacesAndZeros, '') : value, radix || 0);
+    case 3: return function(value, index, collection) {
+      return func.call(thisArg, value, index, collection);
     };
-
-    /**
-     * Creates a "_.pluck" style function, which returns the `key` value of a
-     * given object.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {string} key The name of the property to retrieve.
-     * @returns {Function} Returns the new function.
-     * @example
-     *
-     * var characters = [
-     *   { 'name': 'fred',   'age': 40 },
-     *   { 'name': 'barney', 'age': 36 }
-     * ];
-     *
-     * var getName = _.property('name');
-     *
-     * _.map(characters, getName);
-     * // => ['barney', 'fred']
-     *
-     * _.sortBy(characters, getName);
-     * // => [{ 'name': 'barney', 'age': 36 }, { 'name': 'fred',   'age': 40 }]
-     */
-    function property(key) {
-      return function(object) {
-        return object[key];
-      };
-    }
-
-    /**
-     * Produces a random number between `min` and `max` (inclusive). If only one
-     * argument is provided a number between `0` and the given number will be
-     * returned. If `floating` is truey or either `min` or `max` are floats a
-     * floating-point number will be returned instead of an integer.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {number} [min=0] The minimum possible value.
-     * @param {number} [max=1] The maximum possible value.
-     * @param {boolean} [floating=false] Specify returning a floating-point number.
-     * @returns {number} Returns a random number.
-     * @example
-     *
-     * _.random(0, 5);
-     * // => an integer between 0 and 5
-     *
-     * _.random(5);
-     * // => also an integer between 0 and 5
-     *
-     * _.random(5, true);
-     * // => a floating-point number between 0 and 5
-     *
-     * _.random(1.2, 5.2);
-     * // => a floating-point number between 1.2 and 5.2
-     */
-    function random(min, max, floating) {
-      var noMin = min == null,
-          noMax = max == null;
-
-      if (floating == null) {
-        if (typeof min == 'boolean' && noMax) {
-          floating = min;
-          min = 1;
-        }
-        else if (!noMax && typeof max == 'boolean') {
-          floating = max;
-          noMax = true;
-        }
-      }
-      if (noMin && noMax) {
-        max = 1;
-      }
-      min = +min || 0;
-      if (noMax) {
-        max = min;
-        min = 0;
-      } else {
-        max = +max || 0;
-      }
-      if (floating || min % 1 || max % 1) {
-        var rand = nativeRandom();
-        return nativeMin(min + (rand * (max - min + parseFloat('1e-' + ((rand +'').length - 1)))), max);
-      }
-      return baseRandom(min, max);
-    }
-
-    /**
-     * Resolves the value of property `key` on `object`. If `key` is a function
-     * it will be invoked with the `this` binding of `object` and its result returned,
-     * else the property value is returned. If `object` is falsey then `undefined`
-     * is returned.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {Object} object The object to inspect.
-     * @param {string} key The name of the property to resolve.
-     * @returns {*} Returns the resolved value.
-     * @example
-     *
-     * var object = {
-     *   'cheese': 'crumpets',
-     *   'stuff': function() {
-     *     return 'nonsense';
-     *   }
-     * };
-     *
-     * _.result(object, 'cheese');
-     * // => 'crumpets'
-     *
-     * _.result(object, 'stuff');
-     * // => 'nonsense'
-     */
-    function result(object, key) {
-      if (object) {
-        var value = object[key];
-        return isFunction(value) ? object[key]() : value;
-      }
-    }
-
-    /**
-     * A micro-templating method that handles arbitrary delimiters, preserves
-     * whitespace, and correctly escapes quotes within interpolated code.
-     *
-     * Note: In the development build, `_.template` utilizes sourceURLs for easier
-     * debugging. See http://www.html5rocks.com/en/tutorials/developertools/sourcemaps/#toc-sourceurl
-     *
-     * For more information on precompiling templates see:
-     * http://lodash.com/custom-builds
-     *
-     * For more information on Chrome extension sandboxes see:
-     * http://developer.chrome.com/stable/extensions/sandboxingEval.html
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {string} text The template text.
-     * @param {Object} data The data object used to populate the text.
-     * @param {Object} [options] The options object.
-     * @param {RegExp} [options.escape] The "escape" delimiter.
-     * @param {RegExp} [options.evaluate] The "evaluate" delimiter.
-     * @param {Object} [options.imports] An object to import into the template as local variables.
-     * @param {RegExp} [options.interpolate] The "interpolate" delimiter.
-     * @param {string} [sourceURL] The sourceURL of the template's compiled source.
-     * @param {string} [variable] The data object variable name.
-     * @returns {Function|string} Returns a compiled function when no `data` object
-     *  is given, else it returns the interpolated text.
-     * @example
-     *
-     * // using the "interpolate" delimiter to create a compiled template
-     * var compiled = _.template('hello <%= name %>');
-     * compiled({ 'name': 'fred' });
-     * // => 'hello fred'
-     *
-     * // using the "escape" delimiter to escape HTML in data property values
-     * _.template('<b><%- value %></b>', { 'value': '<script>' });
-     * // => '<b>&lt;script&gt;</b>'
-     *
-     * // using the "evaluate" delimiter to generate HTML
-     * var list = '<% _.forEach(people, function(name) { %><li><%- name %></li><% }); %>';
-     * _.template(list, { 'people': ['fred', 'barney'] });
-     * // => '<li>fred</li><li>barney</li>'
-     *
-     * // using the ES6 delimiter as an alternative to the default "interpolate" delimiter
-     * _.template('hello ${ name }', { 'name': 'pebbles' });
-     * // => 'hello pebbles'
-     *
-     * // using the internal `print` function in "evaluate" delimiters
-     * _.template('<% print("hello " + name); %>!', { 'name': 'barney' });
-     * // => 'hello barney!'
-     *
-     * // using a custom template delimiters
-     * _.templateSettings = {
-     *   'interpolate': /{{([\s\S]+?)}}/g
-     * };
-     *
-     * _.template('hello {{ name }}!', { 'name': 'mustache' });
-     * // => 'hello mustache!'
-     *
-     * // using the `imports` option to import jQuery
-     * var list = '<% jq.each(people, function(name) { %><li><%- name %></li><% }); %>';
-     * _.template(list, { 'people': ['fred', 'barney'] }, { 'imports': { 'jq': jQuery } });
-     * // => '<li>fred</li><li>barney</li>'
-     *
-     * // using the `sourceURL` option to specify a custom sourceURL for the template
-     * var compiled = _.template('hello <%= name %>', null, { 'sourceURL': '/basic/greeting.jst' });
-     * compiled(data);
-     * // => find the source of "greeting.jst" under the Sources tab or Resources panel of the web inspector
-     *
-     * // using the `variable` option to ensure a with-statement isn't used in the compiled template
-     * var compiled = _.template('hi <%= data.name %>!', null, { 'variable': 'data' });
-     * compiled.source;
-     * // => function(data) {
-     *   var __t, __p = '', __e = _.escape;
-     *   __p += 'hi ' + ((__t = ( data.name )) == null ? '' : __t) + '!';
-     *   return __p;
-     * }
-     *
-     * // using the `source` property to inline compiled templates for meaningful
-     * // line numbers in error messages and a stack trace
-     * fs.writeFileSync(path.join(cwd, 'jst.js'), '\
-     *   var JST = {\
-     *     "main": ' + _.template(mainText).source + '\
-     *   };\
-     * ');
-     */
-    function template(text, data, options) {
-      // based on John Resig's `tmpl` implementation
-      // http://ejohn.org/blog/javascript-micro-templating/
-      // and Laura Doktorova's doT.js
-      // https://github.com/olado/doT
-      var settings = lodash.templateSettings;
-      text = String(text || '');
-
-      // avoid missing dependencies when `iteratorTemplate` is not defined
-      options = defaults({}, options, settings);
-
-      var imports = defaults({}, options.imports, settings.imports),
-          importsKeys = keys(imports),
-          importsValues = values(imports);
-
-      var isEvaluating,
-          index = 0,
-          interpolate = options.interpolate || reNoMatch,
-          source = "__p += '";
-
-      // compile the regexp to match each delimiter
-      var reDelimiters = RegExp(
-        (options.escape || reNoMatch).source + '|' +
-        interpolate.source + '|' +
-        (interpolate === reInterpolate ? reEsTemplate : reNoMatch).source + '|' +
-        (options.evaluate || reNoMatch).source + '|$'
-      , 'g');
-
-      text.replace(reDelimiters, function(match, escapeValue, interpolateValue, esTemplateValue, evaluateValue, offset) {
-        interpolateValue || (interpolateValue = esTemplateValue);
-
-        // escape characters that cannot be included in string literals
-        source += text.slice(index, offset).replace(reUnescapedString, escapeStringChar);
-
-        // replace delimiters with snippets
-        if (escapeValue) {
-          source += "' +\n__e(" + escapeValue + ") +\n'";
-        }
-        if (evaluateValue) {
-          isEvaluating = true;
-          source += "';\n" + evaluateValue + ";\n__p += '";
-        }
-        if (interpolateValue) {
-          source += "' +\n((__t = (" + interpolateValue + ")) == null ? '' : __t) +\n'";
-        }
-        index = offset + match.length;
-
-        // the JS engine embedded in Adobe products requires returning the `match`
-        // string in order to produce the correct `offset` value
-        return match;
-      });
-
-      source += "';\n";
-
-      // if `variable` is not specified, wrap a with-statement around the generated
-      // code to add the data object to the top of the scope chain
-      var variable = options.variable,
-          hasVariable = variable;
-
-      if (!hasVariable) {
-        variable = 'obj';
-        source = 'with (' + variable + ') {\n' + source + '\n}\n';
-      }
-      // cleanup code by stripping empty strings
-      source = (isEvaluating ? source.replace(reEmptyStringLeading, '') : source)
-        .replace(reEmptyStringMiddle, '$1')
-        .replace(reEmptyStringTrailing, '$1;');
-
-      // frame code as the function body
-      source = 'function(' + variable + ') {\n' +
-        (hasVariable ? '' : variable + ' || (' + variable + ' = {});\n') +
-        "var __t, __p = '', __e = _.escape" +
-        (isEvaluating
-          ? ', __j = Array.prototype.join;\n' +
-            "function print() { __p += __j.call(arguments, '') }\n"
-          : ';\n'
-        ) +
-        source +
-        'return __p\n}';
-
-      // Use a sourceURL for easier debugging.
-      // http://www.html5rocks.com/en/tutorials/developertools/sourcemaps/#toc-sourceurl
-      var sourceURL = '\n/*\n//# sourceURL=' + (options.sourceURL || '/lodash/template/source[' + (templateCounter++) + ']') + '\n*/';
-
-      try {
-        var result = Function(importsKeys, 'return ' + source + sourceURL).apply(undefined, importsValues);
-      } catch(e) {
-        e.source = source;
-        throw e;
-      }
-      if (data) {
-        return result(data);
-      }
-      // provide the compiled function's source by its `toString` method, in
-      // supported environments, or the `source` property as a convenience for
-      // inlining compiled templates during the build process
-      result.source = source;
-      return result;
-    }
-
-    /**
-     * Executes the callback `n` times, returning an array of the results
-     * of each callback execution. The callback is bound to `thisArg` and invoked
-     * with one argument; (index).
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {number} n The number of times to execute the callback.
-     * @param {Function} callback The function called per iteration.
-     * @param {*} [thisArg] The `this` binding of `callback`.
-     * @returns {Array} Returns an array of the results of each `callback` execution.
-     * @example
-     *
-     * var diceRolls = _.times(3, _.partial(_.random, 1, 6));
-     * // => [3, 6, 4]
-     *
-     * _.times(3, function(n) { mage.castSpell(n); });
-     * // => calls `mage.castSpell(n)` three times, passing `n` of `0`, `1`, and `2` respectively
-     *
-     * _.times(3, function(n) { this.cast(n); }, mage);
-     * // => also calls `mage.castSpell(n)` three times
-     */
-    function times(n, callback, thisArg) {
-      n = (n = +n) > -1 ? n : 0;
-      var index = -1,
-          result = Array(n);
-
-      callback = baseCreateCallback(callback, thisArg, 1);
-      while (++index < n) {
-        result[index] = callback(index);
-      }
-      return result;
-    }
-
-    /**
-     * The inverse of `_.escape` this method converts the HTML entities
-     * `&amp;`, `&lt;`, `&gt;`, `&quot;`, and `&#39;` in `string` to their
-     * corresponding characters.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {string} string The string to unescape.
-     * @returns {string} Returns the unescaped string.
-     * @example
-     *
-     * _.unescape('Fred, Barney &amp; Pebbles');
-     * // => 'Fred, Barney & Pebbles'
-     */
-    function unescape(string) {
-      return string == null ? '' : String(string).replace(reEscapedHtml, unescapeHtmlChar);
-    }
-
-    /**
-     * Generates a unique ID. If `prefix` is provided the ID will be appended to it.
-     *
-     * @static
-     * @memberOf _
-     * @category Utilities
-     * @param {string} [prefix] The value to prefix the ID with.
-     * @returns {string} Returns the unique ID.
-     * @example
-     *
-     * _.uniqueId('contact_');
-     * // => 'contact_104'
-     *
-     * _.uniqueId();
-     * // => '105'
-     */
-    function uniqueId(prefix) {
-      var id = ++idCounter;
-      return String(prefix == null ? '' : prefix) + id;
-    }
-
-    /*--------------------------------------------------------------------------*/
-
-    /**
-     * Creates a `lodash` object that wraps the given value with explicit
-     * method chaining enabled.
-     *
-     * @static
-     * @memberOf _
-     * @category Chaining
-     * @param {*} value The value to wrap.
-     * @returns {Object} Returns the wrapper object.
-     * @example
-     *
-     * var characters = [
-     *   { 'name': 'barney',  'age': 36 },
-     *   { 'name': 'fred',    'age': 40 },
-     *   { 'name': 'pebbles', 'age': 1 }
-     * ];
-     *
-     * var youngest = _.chain(characters)
-     *     .sortBy('age')
-     *     .map(function(chr) { return chr.name + ' is ' + chr.age; })
-     *     .first()
-     *     .value();
-     * // => 'pebbles is 1'
-     */
-    function chain(value) {
-      value = new lodashWrapper(value);
-      value.__chain__ = true;
-      return value;
-    }
-
-    /**
-     * Invokes `interceptor` with the `value` as the first argument and then
-     * returns `value`. The purpose of this method is to "tap into" a method
-     * chain in order to perform operations on intermediate results within
-     * the chain.
-     *
-     * @static
-     * @memberOf _
-     * @category Chaining
-     * @param {*} value The value to provide to `interceptor`.
-     * @param {Function} interceptor The function to invoke.
-     * @returns {*} Returns `value`.
-     * @example
-     *
-     * _([1, 2, 3, 4])
-     *  .tap(function(array) { array.pop(); })
-     *  .reverse()
-     *  .value();
-     * // => [3, 2, 1]
-     */
-    function tap(value, interceptor) {
-      interceptor(value);
-      return value;
-    }
-
-    /**
-     * Enables explicit method chaining on the wrapper object.
-     *
-     * @name chain
-     * @memberOf _
-     * @category Chaining
-     * @returns {*} Returns the wrapper object.
-     * @example
-     *
-     * var characters = [
-     *   { 'name': 'barney', 'age': 36 },
-     *   { 'name': 'fred',   'age': 40 }
-     * ];
-     *
-     * // without explicit chaining
-     * _(characters).first();
-     * // => { 'name': 'barney', 'age': 36 }
-     *
-     * // with explicit chaining
-     * _(characters).chain()
-     *   .first()
-     *   .pick('age')
-     *   .value();
-     * // => { 'age': 36 }
-     */
-    function wrapperChain() {
-      this.__chain__ = true;
-      return this;
-    }
-
-    /**
-     * Produces the `toString` result of the wrapped value.
-     *
-     * @name toString
-     * @memberOf _
-     * @category Chaining
-     * @returns {string} Returns the string result.
-     * @example
-     *
-     * _([1, 2, 3]).toString();
-     * // => '1,2,3'
-     */
-    function wrapperToString() {
-      return String(this.__wrapped__);
-    }
-
-    /**
-     * Extracts the wrapped value.
-     *
-     * @name valueOf
-     * @memberOf _
-     * @alias value
-     * @category Chaining
-     * @returns {*} Returns the wrapped value.
-     * @example
-     *
-     * _([1, 2, 3]).valueOf();
-     * // => [1, 2, 3]
-     */
-    function wrapperValueOf() {
-      return this.__wrapped__;
-    }
-
-    /*--------------------------------------------------------------------------*/
-
-    // add functions that return wrapped values when chaining
-    lodash.after = after;
-    lodash.assign = assign;
-    lodash.at = at;
-    lodash.bind = bind;
-    lodash.bindAll = bindAll;
-    lodash.bindKey = bindKey;
-    lodash.chain = chain;
-    lodash.compact = compact;
-    lodash.compose = compose;
-    lodash.constant = constant;
-    lodash.countBy = countBy;
-    lodash.create = create;
-    lodash.createCallback = createCallback;
-    lodash.curry = curry;
-    lodash.debounce = debounce;
-    lodash.defaults = defaults;
-    lodash.defer = defer;
-    lodash.delay = delay;
-    lodash.difference = difference;
-    lodash.filter = filter;
-    lodash.flatten = flatten;
-    lodash.forEach = forEach;
-    lodash.forEachRight = forEachRight;
-    lodash.forIn = forIn;
-    lodash.forInRight = forInRight;
-    lodash.forOwn = forOwn;
-    lodash.forOwnRight = forOwnRight;
-    lodash.functions = functions;
-    lodash.groupBy = groupBy;
-    lodash.indexBy = indexBy;
-    lodash.initial = initial;
-    lodash.intersection = intersection;
-    lodash.invert = invert;
-    lodash.invoke = invoke;
-    lodash.keys = keys;
-    lodash.map = map;
-    lodash.mapValues = mapValues;
-    lodash.max = max;
-    lodash.memoize = memoize;
-    lodash.merge = merge;
-    lodash.min = min;
-    lodash.omit = omit;
-    lodash.once = once;
-    lodash.pairs = pairs;
-    lodash.partial = partial;
-    lodash.partialRight = partialRight;
-    lodash.pick = pick;
-    lodash.pluck = pluck;
-    lodash.property = property;
-    lodash.pull = pull;
-    lodash.range = range;
-    lodash.reject = reject;
-    lodash.remove = remove;
-    lodash.rest = rest;
-    lodash.shuffle = shuffle;
-    lodash.sortBy = sortBy;
-    lodash.tap = tap;
-    lodash.throttle = throttle;
-    lodash.times = times;
-    lodash.toArray = toArray;
-    lodash.transform = transform;
-    lodash.union = union;
-    lodash.uniq = uniq;
-    lodash.values = values;
-    lodash.where = where;
-    lodash.without = without;
-    lodash.wrap = wrap;
-    lodash.xor = xor;
-    lodash.zip = zip;
-    lodash.zipObject = zipObject;
-
-    // add aliases
-    lodash.collect = map;
-    lodash.drop = rest;
-    lodash.each = forEach;
-    lodash.eachRight = forEachRight;
-    lodash.extend = assign;
-    lodash.methods = functions;
-    lodash.object = zipObject;
-    lodash.select = filter;
-    lodash.tail = rest;
-    lodash.unique = uniq;
-    lodash.unzip = zip;
-
-    // add functions to `lodash.prototype`
-    mixin(lodash);
-
-    /*--------------------------------------------------------------------------*/
-
-    // add functions that return unwrapped values when chaining
-    lodash.clone = clone;
-    lodash.cloneDeep = cloneDeep;
-    lodash.contains = contains;
-    lodash.escape = escape;
-    lodash.every = every;
-    lodash.find = find;
-    lodash.findIndex = findIndex;
-    lodash.findKey = findKey;
-    lodash.findLast = findLast;
-    lodash.findLastIndex = findLastIndex;
-    lodash.findLastKey = findLastKey;
-    lodash.has = has;
-    lodash.identity = identity;
-    lodash.indexOf = indexOf;
-    lodash.isArguments = isArguments;
-    lodash.isArray = isArray;
-    lodash.isBoolean = isBoolean;
-    lodash.isDate = isDate;
-    lodash.isElement = isElement;
-    lodash.isEmpty = isEmpty;
-    lodash.isEqual = isEqual;
-    lodash.isFinite = isFinite;
-    lodash.isFunction = isFunction;
-    lodash.isNaN = isNaN;
-    lodash.isNull = isNull;
-    lodash.isNumber = isNumber;
-    lodash.isObject = isObject;
-    lodash.isPlainObject = isPlainObject;
-    lodash.isRegExp = isRegExp;
-    lodash.isString = isString;
-    lodash.isUndefined = isUndefined;
-    lodash.lastIndexOf = lastIndexOf;
-    lodash.mixin = mixin;
-    lodash.noConflict = noConflict;
-    lodash.noop = noop;
-    lodash.now = now;
-    lodash.parseInt = parseInt;
-    lodash.random = random;
-    lodash.reduce = reduce;
-    lodash.reduceRight = reduceRight;
-    lodash.result = result;
-    lodash.runInContext = runInContext;
-    lodash.size = size;
-    lodash.some = some;
-    lodash.sortedIndex = sortedIndex;
-    lodash.template = template;
-    lodash.unescape = unescape;
-    lodash.uniqueId = uniqueId;
-
-    // add aliases
-    lodash.all = every;
-    lodash.any = some;
-    lodash.detect = find;
-    lodash.findWhere = find;
-    lodash.foldl = reduce;
-    lodash.foldr = reduceRight;
-    lodash.include = contains;
-    lodash.inject = reduce;
-
-    mixin(function() {
-      var source = {}
-      forOwn(lodash, function(func, methodName) {
-        if (!lodash.prototype[methodName]) {
-          source[methodName] = func;
-        }
-      });
-      return source;
-    }(), false);
-
-    /*--------------------------------------------------------------------------*/
-
-    // add functions capable of returning wrapped and unwrapped values when chaining
-    lodash.first = first;
-    lodash.last = last;
-    lodash.sample = sample;
-
-    // add aliases
-    lodash.take = first;
-    lodash.head = first;
-
-    forOwn(lodash, function(func, methodName) {
-      var callbackable = methodName !== 'sample';
-      if (!lodash.prototype[methodName]) {
-        lodash.prototype[methodName]= function(n, guard) {
-          var chainAll = this.__chain__,
-              result = func(this.__wrapped__, n, guard);
-
-          return !chainAll && (n == null || (guard && !(callbackable && typeof n == 'function')))
-            ? result
-            : new lodashWrapper(result, chainAll);
-        };
-      }
-    });
-
-    /*--------------------------------------------------------------------------*/
-
-    /**
-     * The semantic version number.
-     *
-     * @static
-     * @memberOf _
-     * @type string
-     */
-    lodash.VERSION = '2.4.1';
-
-    // add "Chaining" functions to the wrapper
-    lodash.prototype.chain = wrapperChain;
-    lodash.prototype.toString = wrapperToString;
-    lodash.prototype.value = wrapperValueOf;
-    lodash.prototype.valueOf = wrapperValueOf;
-
-    // add `Array` functions that return unwrapped values
-    forEach(['join', 'pop', 'shift'], function(methodName) {
-      var func = arrayRef[methodName];
-      lodash.prototype[methodName] = function() {
-        var chainAll = this.__chain__,
-            result = func.apply(this.__wrapped__, arguments);
-
-        return chainAll
-          ? new lodashWrapper(result, chainAll)
-          : result;
-      };
-    });
-
-    // add `Array` functions that return the existing wrapped value
-    forEach(['push', 'reverse', 'sort', 'unshift'], function(methodName) {
-      var func = arrayRef[methodName];
-      lodash.prototype[methodName] = function() {
-        func.apply(this.__wrapped__, arguments);
-        return this;
-      };
-    });
-
-    // add `Array` functions that return new wrapped values
-    forEach(['concat', 'slice', 'splice'], function(methodName) {
-      var func = arrayRef[methodName];
-      lodash.prototype[methodName] = function() {
-        return new lodashWrapper(func.apply(this.__wrapped__, arguments), this.__chain__);
-      };
-    });
-
-    return lodash;
+    case 4: return function(accumulator, value, index, collection) {
+      return func.call(thisArg, accumulator, value, index, collection);
+    };
+    case 5: return function(value, other, key, object, source) {
+      return func.call(thisArg, value, other, key, object, source);
+    };
   }
+  return function() {
+    return func.apply(thisArg, arguments);
+  };
+}
 
-  /*--------------------------------------------------------------------------*/
+/**
+ * This method returns the first argument provided to it.
+ *
+ * @static
+ * @memberOf _
+ * @category Utility
+ * @param {*} value Any value.
+ * @returns {*} Returns `value`.
+ * @example
+ *
+ * var object = { 'user': 'fred' };
+ *
+ * _.identity(object) === object;
+ * // => true
+ */
+function identity(value) {
+  return value;
+}
 
-  // expose Lo-Dash
-  var _ = runInContext();
+module.exports = bindCallback;
 
-  // some AMD build optimizers like r.js check for condition patterns like the following:
-  if (typeof define == 'function' && typeof define.amd == 'object' && define.amd) {
-    // Expose Lo-Dash to the global object even when an AMD loader is present in
-    // case Lo-Dash is loaded with a RequireJS shim config.
-    // See http://requirejs.org/docs/api.html#config-shim
-    root._ = _;
+},{}],60:[function(require,module,exports){
+/**
+ * lodash 3.0.1 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+var keys = require('lodash.keys');
 
-    // define as an anonymous module so, through path mapping, it can be
-    // referenced as the "underscore" module
-    define(function() {
-      return _;
-    });
+/**
+ * Converts `value` to an object if it's not one.
+ *
+ * @private
+ * @param {*} value The value to process.
+ * @returns {Object} Returns the object.
+ */
+function toObject(value) {
+  return isObject(value) ? value : Object(value);
+}
+
+/**
+ * Checks if `value` is the [language type](https://es5.github.io/#x8) of `Object`.
+ * (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(1);
+ * // => false
+ */
+function isObject(value) {
+  // Avoid a V8 JIT bug in Chrome 19-20.
+  // See https://code.google.com/p/v8/issues/detail?id=2291 for more details.
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+/**
+ * Creates a two dimensional array of the key-value pairs for `object`,
+ * e.g. `[[key1, value1], [key2, value2]]`.
+ *
+ * @static
+ * @memberOf _
+ * @category Object
+ * @param {Object} object The object to query.
+ * @returns {Array} Returns the new array of key-value pairs.
+ * @example
+ *
+ * _.pairs({ 'barney': 36, 'fred': 40 });
+ * // => [['barney', 36], ['fred', 40]] (iteration order is not guaranteed)
+ */
+function pairs(object) {
+  object = toObject(object);
+
+  var index = -1,
+      props = keys(object),
+      length = props.length,
+      result = Array(length);
+
+  while (++index < length) {
+    var key = props[index];
+    result[index] = [key, object[key]];
   }
-  // check for `exports` after `define` in case a build optimizer adds an `exports` object
-  else if (freeExports && freeModule) {
-    // in Node.js or RingoJS
-    if (moduleExports) {
-      (freeModule.exports = _)._ = _;
-    }
-    // in Narwhal or Rhino -require
-    else {
-      freeExports._ = _;
+  return result;
+}
+
+module.exports = pairs;
+
+},{"lodash.keys":61}],61:[function(require,module,exports){
+arguments[4][56][0].apply(exports,arguments)
+},{"dup":56,"lodash._getnative":62,"lodash.isarguments":63,"lodash.isarray":65}],62:[function(require,module,exports){
+arguments[4][57][0].apply(exports,arguments)
+},{"dup":57}],63:[function(require,module,exports){
+arguments[4][58][0].apply(exports,arguments)
+},{"dup":58}],64:[function(require,module,exports){
+/**
+ * lodash 3.6.0 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.2 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+
+/**
+ * The base implementation of `_.findIndex` and `_.findLastIndex` without
+ * support for callback shorthands and `this` binding.
+ *
+ * @private
+ * @param {Array} array The array to search.
+ * @param {Function} predicate The function invoked per iteration.
+ * @param {boolean} [fromRight] Specify iterating from right to left.
+ * @returns {number} Returns the index of the matched value, else `-1`.
+ */
+function baseFindIndex(array, predicate, fromRight) {
+  var length = array.length,
+      index = fromRight ? length : -1;
+
+  while ((fromRight ? index-- : ++index < length)) {
+    if (predicate(array[index], index, array)) {
+      return index;
     }
   }
-  else {
-    // in a browser or Rhino
-    root._ = _;
-  }
-}.call(this));
+  return -1;
+}
 
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],88:[function(require,module,exports){
+module.exports = baseFindIndex;
+
+},{}],65:[function(require,module,exports){
+/**
+ * lodash 3.0.4 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+
+/** `Object#toString` result references. */
+var arrayTag = '[object Array]',
+    funcTag = '[object Function]';
+
+/** Used to detect host constructors (Safari > 5). */
+var reIsHostCtor = /^\[object .+?Constructor\]$/;
+
+/**
+ * Checks if `value` is object-like.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ */
+function isObjectLike(value) {
+  return !!value && typeof value == 'object';
+}
+
+/** Used for native method references. */
+var objectProto = Object.prototype;
+
+/** Used to resolve the decompiled source of functions. */
+var fnToString = Function.prototype.toString;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * Used to resolve the [`toStringTag`](http://ecma-international.org/ecma-262/6.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var objToString = objectProto.toString;
+
+/** Used to detect if a method is native. */
+var reIsNative = RegExp('^' +
+  fnToString.call(hasOwnProperty).replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
+  .replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'
+);
+
+/* Native method references for those with the same name as other `lodash` methods. */
+var nativeIsArray = getNative(Array, 'isArray');
+
+/**
+ * Used as the [maximum length](http://ecma-international.org/ecma-262/6.0/#sec-number.max_safe_integer)
+ * of an array-like value.
+ */
+var MAX_SAFE_INTEGER = 9007199254740991;
+
+/**
+ * Gets the native function at `key` of `object`.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @param {string} key The key of the method to get.
+ * @returns {*} Returns the function if it's native, else `undefined`.
+ */
+function getNative(object, key) {
+  var value = object == null ? undefined : object[key];
+  return isNative(value) ? value : undefined;
+}
+
+/**
+ * Checks if `value` is a valid array-like length.
+ *
+ * **Note:** This function is based on [`ToLength`](http://ecma-international.org/ecma-262/6.0/#sec-tolength).
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
+ */
+function isLength(value) {
+  return typeof value == 'number' && value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER;
+}
+
+/**
+ * Checks if `value` is classified as an `Array` object.
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
+ * @example
+ *
+ * _.isArray([1, 2, 3]);
+ * // => true
+ *
+ * _.isArray(function() { return arguments; }());
+ * // => false
+ */
+var isArray = nativeIsArray || function(value) {
+  return isObjectLike(value) && isLength(value.length) && objToString.call(value) == arrayTag;
+};
+
+/**
+ * Checks if `value` is classified as a `Function` object.
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
+ * @example
+ *
+ * _.isFunction(_);
+ * // => true
+ *
+ * _.isFunction(/abc/);
+ * // => false
+ */
+function isFunction(value) {
+  // The use of `Object#toString` avoids issues with the `typeof` operator
+  // in older versions of Chrome and Safari which return 'function' for regexes
+  // and Safari 8 equivalents which return 'object' for typed array constructors.
+  return isObject(value) && objToString.call(value) == funcTag;
+}
+
+/**
+ * Checks if `value` is the [language type](https://es5.github.io/#x8) of `Object`.
+ * (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(1);
+ * // => false
+ */
+function isObject(value) {
+  // Avoid a V8 JIT bug in Chrome 19-20.
+  // See https://code.google.com/p/v8/issues/detail?id=2291 for more details.
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+/**
+ * Checks if `value` is a native function.
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a native function, else `false`.
+ * @example
+ *
+ * _.isNative(Array.prototype.push);
+ * // => true
+ *
+ * _.isNative(_);
+ * // => false
+ */
+function isNative(value) {
+  if (value == null) {
+    return false;
+  }
+  if (isFunction(value)) {
+    return reIsNative.test(fnToString.call(value));
+  }
+  return isObjectLike(value) && reIsHostCtor.test(value);
+}
+
+module.exports = isArray;
+
+},{}],66:[function(require,module,exports){
+/**
+ * lodash 3.0.3 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+var arrayEach = require('lodash._arrayeach'),
+    baseEach = require('lodash._baseeach'),
+    bindCallback = require('lodash._bindcallback'),
+    isArray = require('lodash.isarray');
+
+/**
+ * Creates a function for `_.forEach` or `_.forEachRight`.
+ *
+ * @private
+ * @param {Function} arrayFunc The function to iterate over an array.
+ * @param {Function} eachFunc The function to iterate over a collection.
+ * @returns {Function} Returns the new each function.
+ */
+function createForEach(arrayFunc, eachFunc) {
+  return function(collection, iteratee, thisArg) {
+    return (typeof iteratee == 'function' && thisArg === undefined && isArray(collection))
+      ? arrayFunc(collection, iteratee)
+      : eachFunc(collection, bindCallback(iteratee, thisArg, 3));
+  };
+}
+
+/**
+ * Iterates over elements of `collection` invoking `iteratee` for each element.
+ * The `iteratee` is bound to `thisArg` and invoked with three arguments:
+ * (value, index|key, collection). Iteratee functions may exit iteration early
+ * by explicitly returning `false`.
+ *
+ * **Note:** As with other "Collections" methods, objects with a "length" property
+ * are iterated like arrays. To avoid this behavior `_.forIn` or `_.forOwn`
+ * may be used for object iteration.
+ *
+ * @static
+ * @memberOf _
+ * @alias each
+ * @category Collection
+ * @param {Array|Object|string} collection The collection to iterate over.
+ * @param {Function} [iteratee=_.identity] The function invoked per iteration.
+ * @param {*} [thisArg] The `this` binding of `iteratee`.
+ * @returns {Array|Object|string} Returns `collection`.
+ * @example
+ *
+ * _([1, 2]).forEach(function(n) {
+ *   console.log(n);
+ * }).value();
+ * // => logs each value from left to right and returns the array
+ *
+ * _.forEach({ 'a': 1, 'b': 2 }, function(n, key) {
+ *   console.log(n, key);
+ * });
+ * // => logs each value-key pair and returns the object (iteration order is not guaranteed)
+ */
+var forEach = createForEach(arrayEach, baseEach);
+
+module.exports = forEach;
+
+},{"lodash._arrayeach":67,"lodash._baseeach":68,"lodash._bindcallback":72,"lodash.isarray":73}],67:[function(require,module,exports){
+/**
+ * lodash 3.0.0 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.7.0 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+
+/**
+ * A specialized version of `_.forEach` for arrays without support for callback
+ * shorthands or `this` binding.
+ *
+ * @private
+ * @param {Array} array The array to iterate over.
+ * @param {Function} iteratee The function invoked per iteration.
+ * @returns {Array} Returns `array`.
+ */
+function arrayEach(array, iteratee) {
+  var index = -1,
+      length = array.length;
+
+  while (++index < length) {
+    if (iteratee(array[index], index, array) === false) {
+      break;
+    }
+  }
+  return array;
+}
+
+module.exports = arrayEach;
+
+},{}],68:[function(require,module,exports){
+/**
+ * lodash 3.0.4 (Custom Build) <https://lodash.com/>
+ * Build: `lodash modern modularize exports="npm" -o ./`
+ * Copyright 2012-2015 The Dojo Foundation <http://dojofoundation.org/>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ * Available under MIT license <https://lodash.com/license>
+ */
+var keys = require('lodash.keys');
+
+/**
+ * Used as the [maximum length](https://people.mozilla.org/~jorendorff/es6-draft.html#sec-number.max_safe_integer)
+ * of an array-like value.
+ */
+var MAX_SAFE_INTEGER = 9007199254740991;
+
+/**
+ * The base implementation of `_.forEach` without support for callback
+ * shorthands and `this` binding.
+ *
+ * @private
+ * @param {Array|Object|string} collection The collection to iterate over.
+ * @param {Function} iteratee The function invoked per iteration.
+ * @returns {Array|Object|string} Returns `collection`.
+ */
+var baseEach = createBaseEach(baseForOwn);
+
+/**
+ * The base implementation of `baseForIn` and `baseForOwn` which iterates
+ * over `object` properties returned by `keysFunc` invoking `iteratee` for
+ * each property. Iteratee functions may exit iteration early by explicitly
+ * returning `false`.
+ *
+ * @private
+ * @param {Object} object The object to iterate over.
+ * @param {Function} iteratee The function invoked per iteration.
+ * @param {Function} keysFunc The function to get the keys of `object`.
+ * @returns {Object} Returns `object`.
+ */
+var baseFor = createBaseFor();
+
+/**
+ * The base implementation of `_.forOwn` without support for callback
+ * shorthands and `this` binding.
+ *
+ * @private
+ * @param {Object} object The object to iterate over.
+ * @param {Function} iteratee The function invoked per iteration.
+ * @returns {Object} Returns `object`.
+ */
+function baseForOwn(object, iteratee) {
+  return baseFor(object, iteratee, keys);
+}
+
+/**
+ * The base implementation of `_.property` without support for deep paths.
+ *
+ * @private
+ * @param {string} key The key of the property to get.
+ * @returns {Function} Returns the new function.
+ */
+function baseProperty(key) {
+  return function(object) {
+    return object == null ? undefined : object[key];
+  };
+}
+
+/**
+ * Creates a `baseEach` or `baseEachRight` function.
+ *
+ * @private
+ * @param {Function} eachFunc The function to iterate over a collection.
+ * @param {boolean} [fromRight] Specify iterating from right to left.
+ * @returns {Function} Returns the new base function.
+ */
+function createBaseEach(eachFunc, fromRight) {
+  return function(collection, iteratee) {
+    var length = collection ? getLength(collection) : 0;
+    if (!isLength(length)) {
+      return eachFunc(collection, iteratee);
+    }
+    var index = fromRight ? length : -1,
+        iterable = toObject(collection);
+
+    while ((fromRight ? index-- : ++index < length)) {
+      if (iteratee(iterable[index], index, iterable) === false) {
+        break;
+      }
+    }
+    return collection;
+  };
+}
+
+/**
+ * Creates a base function for `_.forIn` or `_.forInRight`.
+ *
+ * @private
+ * @param {boolean} [fromRight] Specify iterating from right to left.
+ * @returns {Function} Returns the new base function.
+ */
+function createBaseFor(fromRight) {
+  return function(object, iteratee, keysFunc) {
+    var iterable = toObject(object),
+        props = keysFunc(object),
+        length = props.length,
+        index = fromRight ? length : -1;
+
+    while ((fromRight ? index-- : ++index < length)) {
+      var key = props[index];
+      if (iteratee(iterable[key], key, iterable) === false) {
+        break;
+      }
+    }
+    return object;
+  };
+}
+
+/**
+ * Gets the "length" property value of `object`.
+ *
+ * **Note:** This function is used to avoid a [JIT bug](https://bugs.webkit.org/show_bug.cgi?id=142792)
+ * that affects Safari on at least iOS 8.1-8.3 ARM64.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @returns {*} Returns the "length" value.
+ */
+var getLength = baseProperty('length');
+
+/**
+ * Checks if `value` is a valid array-like length.
+ *
+ * **Note:** This function is based on [`ToLength`](https://people.mozilla.org/~jorendorff/es6-draft.html#sec-tolength).
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
+ */
+function isLength(value) {
+  return typeof value == 'number' && value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER;
+}
+
+/**
+ * Converts `value` to an object if it's not one.
+ *
+ * @private
+ * @param {*} value The value to process.
+ * @returns {Object} Returns the object.
+ */
+function toObject(value) {
+  return isObject(value) ? value : Object(value);
+}
+
+/**
+ * Checks if `value` is the [language type](https://es5.github.io/#x8) of `Object`.
+ * (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(1);
+ * // => false
+ */
+function isObject(value) {
+  // Avoid a V8 JIT bug in Chrome 19-20.
+  // See https://code.google.com/p/v8/issues/detail?id=2291 for more details.
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+module.exports = baseEach;
+
+},{"lodash.keys":69}],69:[function(require,module,exports){
+arguments[4][56][0].apply(exports,arguments)
+},{"dup":56,"lodash._getnative":70,"lodash.isarguments":71,"lodash.isarray":73}],70:[function(require,module,exports){
+arguments[4][57][0].apply(exports,arguments)
+},{"dup":57}],71:[function(require,module,exports){
+arguments[4][58][0].apply(exports,arguments)
+},{"dup":58}],72:[function(require,module,exports){
+arguments[4][59][0].apply(exports,arguments)
+},{"dup":59}],73:[function(require,module,exports){
+arguments[4][65][0].apply(exports,arguments)
+},{"dup":65}],74:[function(require,module,exports){
 module.exports = require('./src/PathFinding');
 
-},{"./src/PathFinding":91}],89:[function(require,module,exports){
+},{"./src/PathFinding":77}],75:[function(require,module,exports){
 module.exports = require('./lib/heap');
 
-},{"./lib/heap":90}],90:[function(require,module,exports){
+},{"./lib/heap":76}],76:[function(require,module,exports){
 // Generated by CoffeeScript 1.8.0
 (function() {
   var Heap, defaultCmp, floor, heapify, heappop, heappush, heappushpop, heapreplace, insort, min, nlargest, nsmallest, updateItem, _siftdown, _siftup;
@@ -21753,7 +15311,7 @@ module.exports = require('./lib/heap');
 
 }).call(this);
 
-},{}],91:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 module.exports = {
     'Heap'                      : require('heap'),
     'Node'                      : require('./core/Node'),
@@ -21773,7 +15331,7 @@ module.exports = {
     'JumpPointFinder'           : require('./finders/JumpPointFinder'),
 };
 
-},{"./core/DiagonalMovement":92,"./core/Grid":93,"./core/Heuristic":94,"./core/Node":95,"./core/Util":96,"./finders/AStarFinder":97,"./finders/BestFirstFinder":98,"./finders/BiAStarFinder":99,"./finders/BiBestFirstFinder":100,"./finders/BiBreadthFirstFinder":101,"./finders/BiDijkstraFinder":102,"./finders/BreadthFirstFinder":103,"./finders/DijkstraFinder":104,"./finders/IDAStarFinder":105,"./finders/JumpPointFinder":110,"heap":89}],92:[function(require,module,exports){
+},{"./core/DiagonalMovement":78,"./core/Grid":79,"./core/Heuristic":80,"./core/Node":81,"./core/Util":82,"./finders/AStarFinder":83,"./finders/BestFirstFinder":84,"./finders/BiAStarFinder":85,"./finders/BiBestFirstFinder":86,"./finders/BiBreadthFirstFinder":87,"./finders/BiDijkstraFinder":88,"./finders/BreadthFirstFinder":89,"./finders/DijkstraFinder":90,"./finders/IDAStarFinder":91,"./finders/JumpPointFinder":96,"heap":75}],78:[function(require,module,exports){
 var DiagonalMovement = {
     Always: 1,
     Never: 2,
@@ -21782,19 +15340,29 @@ var DiagonalMovement = {
 };
 
 module.exports = DiagonalMovement;
-},{}],93:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 var Node = require('./Node');
 var DiagonalMovement = require('./DiagonalMovement');
 
 /**
  * The Grid class, which serves as the encapsulation of the layout of the nodes.
  * @constructor
- * @param {number} width Number of columns of the grid.
+ * @param {number|Array.<Array.<(number|boolean)>>} width_or_matrix Number of columns of the grid, or matrix
  * @param {number} height Number of rows of the grid.
  * @param {Array.<Array.<(number|boolean)>>} [matrix] - A 0-1 matrix
  *     representing the walkable status of the nodes(0 or false for walkable).
  *     If the matrix is not supplied, all the nodes will be walkable.  */
-function Grid(width, height, matrix) {
+function Grid(width_or_matrix, height, matrix) {
+    var width;
+
+    if (typeof width_or_matrix !== 'object') {
+        width = width_or_matrix;
+    } else {
+        height = width_or_matrix.length;
+        width = width_or_matrix[0].length;
+        matrix = width_or_matrix;
+    }
+
     /**
      * The number of columns of the grid.
      * @type number
@@ -22021,7 +15589,7 @@ Grid.prototype.clone = function() {
 
 module.exports = Grid;
 
-},{"./DiagonalMovement":92,"./Node":95}],94:[function(require,module,exports){
+},{"./DiagonalMovement":78,"./Node":81}],80:[function(require,module,exports){
 /**
  * @namespace PF.Heuristic
  * @description A collection of heuristic functions.
@@ -22071,7 +15639,7 @@ module.exports = {
 
 };
 
-},{}],95:[function(require,module,exports){
+},{}],81:[function(require,module,exports){
 /**
  * A node in grid. 
  * This class holds some basic information about a node and custom 
@@ -22101,7 +15669,7 @@ function Node(x, y, walkable) {
 
 module.exports = Node;
 
-},{}],96:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 /**
  * Backtrace according to the parent records and return the path.
  * (including both start and end nodes)
@@ -22349,7 +15917,7 @@ function compressPath(path) {
 }
 exports.compressPath = compressPath;
 
-},{}],97:[function(require,module,exports){
+},{}],83:[function(require,module,exports){
 var Heap       = require('heap');
 var Util       = require('../core/Util');
 var Heuristic  = require('../core/Heuristic');
@@ -22476,7 +16044,7 @@ AStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
 
 module.exports = AStarFinder;
 
-},{"../core/DiagonalMovement":92,"../core/Heuristic":94,"../core/Util":96,"heap":89}],98:[function(require,module,exports){
+},{"../core/DiagonalMovement":78,"../core/Heuristic":80,"../core/Util":82,"heap":75}],84:[function(require,module,exports){
 var AStarFinder = require('./AStarFinder');
 
 /**
@@ -22504,7 +16072,7 @@ BestFirstFinder.prototype.constructor = BestFirstFinder;
 
 module.exports = BestFirstFinder;
 
-},{"./AStarFinder":97}],99:[function(require,module,exports){
+},{"./AStarFinder":83}],85:[function(require,module,exports){
 var Heap       = require('heap');
 var Util       = require('../core/Util');
 var Heuristic  = require('../core/Heuristic');
@@ -22683,7 +16251,7 @@ BiAStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
 
 module.exports = BiAStarFinder;
 
-},{"../core/DiagonalMovement":92,"../core/Heuristic":94,"../core/Util":96,"heap":89}],100:[function(require,module,exports){
+},{"../core/DiagonalMovement":78,"../core/Heuristic":80,"../core/Util":82,"heap":75}],86:[function(require,module,exports){
 var BiAStarFinder = require('./BiAStarFinder');
 
 /**
@@ -22711,7 +16279,7 @@ BiBestFirstFinder.prototype.constructor = BiBestFirstFinder;
 
 module.exports = BiBestFirstFinder;
 
-},{"./BiAStarFinder":99}],101:[function(require,module,exports){
+},{"./BiAStarFinder":85}],87:[function(require,module,exports){
 var Util = require('../core/Util');
 var DiagonalMovement = require('../core/DiagonalMovement');
 
@@ -22826,7 +16394,7 @@ BiBreadthFirstFinder.prototype.findPath = function(startX, startY, endX, endY, g
 
 module.exports = BiBreadthFirstFinder;
 
-},{"../core/DiagonalMovement":92,"../core/Util":96}],102:[function(require,module,exports){
+},{"../core/DiagonalMovement":78,"../core/Util":82}],88:[function(require,module,exports){
 var BiAStarFinder = require('./BiAStarFinder');
 
 /**
@@ -22850,7 +16418,7 @@ BiDijkstraFinder.prototype.constructor = BiDijkstraFinder;
 
 module.exports = BiDijkstraFinder;
 
-},{"./BiAStarFinder":99}],103:[function(require,module,exports){
+},{"./BiAStarFinder":85}],89:[function(require,module,exports){
 var Util = require('../core/Util');
 var DiagonalMovement = require('../core/DiagonalMovement');
 
@@ -22929,7 +16497,7 @@ BreadthFirstFinder.prototype.findPath = function(startX, startY, endX, endY, gri
 
 module.exports = BreadthFirstFinder;
 
-},{"../core/DiagonalMovement":92,"../core/Util":96}],104:[function(require,module,exports){
+},{"../core/DiagonalMovement":78,"../core/Util":82}],90:[function(require,module,exports){
 var AStarFinder = require('./AStarFinder');
 
 /**
@@ -22953,7 +16521,7 @@ DijkstraFinder.prototype.constructor = DijkstraFinder;
 
 module.exports = DijkstraFinder;
 
-},{"./AStarFinder":97}],105:[function(require,module,exports){
+},{"./AStarFinder":83}],91:[function(require,module,exports){
 var Util       = require('../core/Util');
 var Heuristic  = require('../core/Heuristic');
 var Node       = require('../core/Node');
@@ -23163,7 +16731,7 @@ IDAStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
 
 module.exports = IDAStarFinder;
 
-},{"../core/DiagonalMovement":92,"../core/Heuristic":94,"../core/Node":95,"../core/Util":96}],106:[function(require,module,exports){
+},{"../core/DiagonalMovement":78,"../core/Heuristic":80,"../core/Node":81,"../core/Util":82}],92:[function(require,module,exports){
 /**
  * @author imor / https://github.com/imor
  */
@@ -23314,7 +16882,7 @@ JPFAlwaysMoveDiagonally.prototype._findNeighbors = function(node) {
 
 module.exports = JPFAlwaysMoveDiagonally;
 
-},{"../core/DiagonalMovement":92,"./JumpPointFinderBase":111}],107:[function(require,module,exports){
+},{"../core/DiagonalMovement":78,"./JumpPointFinderBase":97}],93:[function(require,module,exports){
 /**
  * @author imor / https://github.com/imor
  */
@@ -23471,7 +17039,7 @@ JPFMoveDiagonallyIfAtMostOneObstacle.prototype._findNeighbors = function(node) {
 
 module.exports = JPFMoveDiagonallyIfAtMostOneObstacle;
 
-},{"../core/DiagonalMovement":92,"./JumpPointFinderBase":111}],108:[function(require,module,exports){
+},{"../core/DiagonalMovement":78,"./JumpPointFinderBase":97}],94:[function(require,module,exports){
 /**
  * @author imor / https://github.com/imor
  */
@@ -23647,7 +17215,7 @@ JPFMoveDiagonallyIfNoObstacles.prototype._findNeighbors = function(node) {
 
 module.exports = JPFMoveDiagonallyIfNoObstacles;
 
-},{"../core/DiagonalMovement":92,"./JumpPointFinderBase":111}],109:[function(require,module,exports){
+},{"../core/DiagonalMovement":78,"./JumpPointFinderBase":97}],95:[function(require,module,exports){
 /**
  * @author imor / https://github.com/imor
  */
@@ -23769,7 +17337,7 @@ JPFNeverMoveDiagonally.prototype._findNeighbors = function(node) {
 
 module.exports = JPFNeverMoveDiagonally;
 
-},{"../core/DiagonalMovement":92,"./JumpPointFinderBase":111}],110:[function(require,module,exports){
+},{"../core/DiagonalMovement":78,"./JumpPointFinderBase":97}],96:[function(require,module,exports){
 /**
  * @author aniero / https://github.com/aniero
  */
@@ -23802,7 +17370,7 @@ function JumpPointFinder(opt) {
 
 module.exports = JumpPointFinder;
 
-},{"../core/DiagonalMovement":92,"./JPFAlwaysMoveDiagonally":106,"./JPFMoveDiagonallyIfAtMostOneObstacle":107,"./JPFMoveDiagonallyIfNoObstacles":108,"./JPFNeverMoveDiagonally":109}],111:[function(require,module,exports){
+},{"../core/DiagonalMovement":78,"./JPFAlwaysMoveDiagonally":92,"./JPFMoveDiagonallyIfAtMostOneObstacle":93,"./JPFMoveDiagonallyIfNoObstacles":94,"./JPFNeverMoveDiagonally":95}],97:[function(require,module,exports){
 /**
  * @author imor / https://github.com/imor
  */
@@ -23918,618 +17486,2484 @@ JumpPointFinderBase.prototype._identifySuccessors = function(node) {
 
 module.exports = JumpPointFinderBase;
 
-},{"../core/DiagonalMovement":92,"../core/Heuristic":94,"../core/Util":96,"heap":89}],112:[function(require,module,exports){
-/*
- * Stately.js: A JavaScript based finite-state machine (FSM) engine.
- *
- * Copyright (c) 2012 Florian Schäfer (florian.schaefer@gmail.com)
- * Released under MIT license.
- *
- * Version: 1.2.0
- *
- */
-(function (root, factory) {
-    if (typeof exports === 'object') {
-        module.exports = factory();
-    } else if (typeof define === 'function' && define.amd) {
-        define(factory);
-    } else {
-        root.Stately = factory();
-    }
-})(this, function () {
-
-    var
-        toString = Object.prototype.toString,
-
-        InvalidStateError = (function () {
-
-            function InvalidStateError(message) {
-
-                this.name = 'InvalidStateError';
-
-                this.message = message;
-            }
-
-            InvalidStateError.prototype = new Error();
-
-            InvalidStateError.prototype.constructor = InvalidStateError;
-
-            return InvalidStateError;
-        })();
-
-    function Stately(statesObject, initialStateName) {
-
-        if (typeof statesObject === 'function') {
-
-            statesObject = statesObject();
-        }
-
-        if (toString.call(statesObject) !== '[object Object]') {
-
-            throw new InvalidStateError('Stately.js: Invalid states object: `' + statesObject + '`.');
-        }
-
-        var
-            currentState,
-
-            notificationStore = [],
-
-            notify = function () {
-
-                var notifications = notificationStore.slice();
-
-                for (var i = 0, l = notifications.length; i < l; i++) {
-
-                    notifications[i].apply(this, arguments);
-                }
-            },
-
-            stateStore = {
-
-                getMachineState: function getMachineState() {
-
-                    return currentState.name;
-                },
-
-                setMachineState: function setMachineState(nextState /*, eventName */) {
-
-                    var
-                        eventName = arguments[1],
-
-                        onBeforeState,
-
-                        onEnterState,
-
-                        onLeaveState,
-
-                        lastState = currentState;
-
-                    if (!nextState || !nextState.name || !stateStore[nextState.name]) {
-
-                        throw new InvalidStateError('Stately.js: Transitioned into invalid state: `' + setMachineState.caller + '`.');
-                    }
-
-                    currentState = nextState;
-
-                    onBeforeState = stateMachine['onbefore' + currentState.name];
-
-                    if (onBeforeState && typeof onBeforeState === 'function') {
-
-                        onBeforeState.call(stateStore, eventName, lastState.name, nextState.name);
-                    }
-
-                    onEnterState = stateMachine['onenter' + currentState.name] || stateMachine['on' + currentState.name];
-
-                    if (onEnterState && typeof onEnterState === 'function') {
-
-                        onEnterState.call(stateStore, eventName, lastState.name, nextState.name);
-                    }
-
-                    onLeaveState = stateMachine['onleave' + lastState.name];
-
-                    if (onLeaveState && typeof onLeaveState === 'function') {
-
-                        onLeaveState.call(stateStore, eventName, lastState.name, nextState.name);
-                    }
-
-                    notify.call(stateStore, eventName, lastState.name, nextState.name);
-
-                    return this;
-                },
-
-                getMachineEvents: function getMachineEvents() {
-
-                    var events = [];
-
-                    for (var property in currentState) {
-
-                        if (currentState.hasOwnProperty(property)) {
-
-                            if (typeof currentState[property] === 'function') {
-
-                                events.push(property);
-                            }
-                        }
-                    }
-
-                    return events;
-                }
-
-            },
-
-            stateMachine = {
-
-                getMachineState: stateStore.getMachineState,
-
-                getMachineEvents: stateStore.getMachineEvents,
-
-                bind: function bind(callback) {
-
-                    if (callback) {
-
-                        notificationStore.push(callback);
-                    }
-
-                    return this;
-                },
-
-                unbind: function unbind(callback) {
-
-                    if (!callback) {
-
-                        notificationStore = [];
-
-                    } else {
-
-                        for (var i = 0, l = notificationStore.length; i < l; i++) {
-
-                            if (notificationStore[i] === callback) {
-
-                                notificationStore.splice(i, 1);
-                            }
-                        }
-                    }
-
-                    return this;
-                }
-            },
-
-            transition = function transition(stateName, eventName, nextEvent) {
-
-                return function event() {
-
-                    var
-                        onBeforeEvent,
-
-                        onAfterEvent,
-
-                        nextState,
-
-                        eventValue = stateMachine;
-
-                    if (stateStore[stateName] !== currentState) {
-
-                        if (nextEvent) {
-
-                            eventValue = nextEvent.apply(stateStore, arguments);
-                        }
-
-                        return eventValue;
-                    }
-
-                    onBeforeEvent = stateMachine['onbefore' + eventName];
-
-                    if (onBeforeEvent && typeof onBeforeEvent === 'function') {
-
-                        onBeforeEvent.call(stateStore, eventName, currentState.name, currentState.name);
-                    }
-
-                    eventValue = stateStore[stateName][eventName].apply(stateStore, arguments);
-
-                    if (typeof eventValue === 'undefined') {
-
-                        nextState = currentState;
-
-                        eventValue = stateMachine;
-
-                    } else if (toString.call(eventValue) === '[object Object]') {
-
-                        nextState = (eventValue === stateStore ? currentState : eventValue);
-
-                        eventValue = stateMachine;
-
-                    } else if (toString.call(eventValue) === '[object Array]' && eventValue.length >= 1) {
-
-                        nextState = eventValue[0];
-
-                        eventValue = eventValue[1];
-                    }
-
-                    onAfterEvent = stateMachine['onafter' + eventName] || stateMachine['on' + eventName];
-
-                    if (onAfterEvent && typeof onAfterEvent === 'function') {
-
-                        onAfterEvent.call(stateStore, eventName, currentState.name, nextState.name);
-                    }
-
-                    stateStore.setMachineState(nextState, eventName);
-
-                    return eventValue;
-                };
-            };
-
-        for (var stateName in statesObject) {
-
-            if (statesObject.hasOwnProperty(stateName)) {
-
-                stateStore[stateName] = statesObject[stateName];
-
-                for (var eventName in stateStore[stateName]) {
-
-                    if (stateStore[stateName].hasOwnProperty(eventName)) {
-
-                        if (typeof stateStore[stateName][eventName] === 'string') {
-
-                            stateStore[stateName][eventName] = (function (stateName) {
-
-                                return function event() {
-
-                                    return this[stateName];
-                                };
-
-                            })(stateStore[stateName][eventName]);
-                        }
-
-                        if (typeof stateStore[stateName][eventName] === 'function') {
-
-                            stateMachine[eventName] = transition(stateName, eventName, stateMachine[eventName]);
-                        }
-                    }
-                }
-
-                stateStore[stateName].name = stateName;
-
-                if (!currentState) {
-
-                    currentState = stateStore[stateName];
-                }
-            }
-        }
-
-        if (typeof stateStore[initialStateName] !== 'undefined') {
-            currentState = stateStore[initialStateName];
-        }
-
-        if (!currentState) {
-
-            throw new InvalidStateError('Stately.js: Invalid initial state.');
-        }
-
-        return stateMachine;
-    }
-
-    Stately.machine = function machine(statesObject, initialStateName) {
-        return new Stately(statesObject, initialStateName);
-    };
-
-    Stately.InvalidStateError = InvalidStateError;
-
-    return Stately;
-
-});
-
-},{}],113:[function(require,module,exports){
-module.exports = function(THREE) {
-    var renderer = require('./lib/renderer')(THREE),
-        Primitive = renderer.Primitive;
-
-    var UNIT_X = new THREE.Vector3(1, 0, 0);
-    var UNIT_Y = new THREE.Vector3(0, 1, 0);
-    var UNIT_Z = new THREE.Vector3(0, 0, 1);
-    var DEG_TO_RAD = Math.PI / 180;
-
-    function stringToColor(str) {
-        switch (str) {
-        case 'red':
-            return 0xFF0000;
-        case 'green':
-            return 0x00FF00;
-        case 'blue':
-            return 0x0000FF;
-        case 'yellow':
-            return 0xFFFF00;
-        case 'magenta':
-            return 0xFF00FF;
-        case 'cyan':
-            return 0x00FFFF;
-        case 'white':
-            return 0xFFFFFF;
+},{"../core/DiagonalMovement":78,"../core/Heuristic":80,"../core/Util":82,"heap":75}],98:[function(require,module,exports){
+(function (Buffer){
+var sax = require('sax');
+var fs = require('fs');
+var path = require('path');
+var zlib = require('zlib');
+var Pend = require('pend');
+
+exports.readFile = defaultReadFile;
+exports.parseFile = parseFile;
+exports.parse = parse;
+exports.Map = Map;
+exports.TileSet = TileSet;
+exports.Image = Image;
+exports.Tile = Tile;
+exports.TileLayer = TileLayer;
+exports.ObjectLayer = ObjectLayer;
+exports.ImageLayer = ImageLayer;
+exports.TmxObject = TmxObject;
+exports.Terrain = Terrain;
+
+var FLIPPED_HORIZONTALLY_FLAG = 0x80000000;
+var FLIPPED_VERTICALLY_FLAG   = 0x40000000;
+var FLIPPED_DIAGONALLY_FLAG   = 0x20000000;
+
+var STATE_COUNT = 0;
+var STATE_START                = STATE_COUNT++;
+var STATE_MAP                  = STATE_COUNT++;
+var STATE_COLLECT_PROPS        = STATE_COUNT++;
+var STATE_COLLECT_ANIMATIONS   = STATE_COUNT++;
+var STATE_COLLECT_OBJECT_GROUPS = STATE_COUNT++;
+var STATE_WAIT_FOR_CLOSE       = STATE_COUNT++;
+var STATE_TILESET              = STATE_COUNT++;
+var STATE_TILE                 = STATE_COUNT++;
+var STATE_TILE_LAYER           = STATE_COUNT++;
+var STATE_OBJECT_LAYER         = STATE_COUNT++;
+var STATE_OBJECT               = STATE_COUNT++;
+var STATE_TILE_OBJECT          = STATE_COUNT++;
+var STATE_IMAGE_LAYER          = STATE_COUNT++;
+var STATE_TILE_DATA_XML        = STATE_COUNT++;
+var STATE_TILE_DATA_CSV        = STATE_COUNT++;
+var STATE_TILE_DATA_B64_RAW    = STATE_COUNT++;
+var STATE_TILE_DATA_B64_GZIP   = STATE_COUNT++;
+var STATE_TILE_DATA_B64_ZLIB   = STATE_COUNT++;
+var STATE_TERRAIN_TYPES        = STATE_COUNT++;
+var STATE_TERRAIN              = STATE_COUNT++;
+
+function parse(content, pathToFile, cb) {
+  var pathToDir = path.dirname(pathToFile);
+  var parser = sax.parser();
+  var map;
+  var topLevelObject = null;
+  var state = STATE_START;
+  var states = new Array(STATE_COUNT);
+  var waitForCloseNextState = 0;
+  var waitForCloseOpenCount = 0;
+  var propertiesObject = null;
+  var propertiesNextState = 0;
+  var animationsObject = null;
+  var animationsNextState = 0;
+  var objectGroupsObject = null;
+  var objectGroupsNextState = 0;
+  var tileIndex = 0;
+  var tileSet = null;
+  var tileSetNextState = 0;
+  var tile;
+  var layer;
+  var object;
+  var terrain;
+  var pend = new Pend();
+  // this holds the numerical tile ids
+  // later we use it to resolve the real tiles
+  var unresolvedLayers = [];
+  var unresolvedLayer;
+  states[STATE_START] = {
+    opentag: function(tag) {
+      if (tag.name === 'MAP') {
+        map = new Map();
+        topLevelObject = map;
+        map.version = tag.attributes.VERSION;
+        map.orientation = tag.attributes.ORIENTATION;
+        map.width = int(tag.attributes.WIDTH);
+        map.height = int(tag.attributes.HEIGHT);
+        map.tileWidth = int(tag.attributes.TILEWIDTH);
+        map.tileHeight = int(tag.attributes.TILEHEIGHT);
+        map.backgroundColor = tag.attributes.BACKGROUNDCOLOR;
+
+        state = STATE_MAP;
+      } else if (tag.name === 'TILESET') {
+        collectTileSet(tag, STATE_START);
+        topLevelObject = tileSet;
+      } else {
+        waitForClose();
+      }
+    },
+    closetag: noop,
+    text: noop,
+  };
+  states[STATE_MAP] = {
+    opentag: function(tag) {
+      switch (tag.name) {
+        case 'PROPERTIES':
+          collectProperties(map.properties);
+          break;
+        case 'TILESET':
+          collectTileSet(tag, STATE_MAP);
+          map.tileSets.push(tileSet);
+          break;
+        case 'LAYER':
+          layer = new TileLayer(map);
+          tileIndex = 0;
+          layer.name = tag.attributes.NAME;
+          layer.opacity = float(tag.attributes.OPACITY, 1);
+          layer.visible = bool(tag.attributes.VISIBLE, true);
+          map.layers.push(layer);
+          unresolvedLayer = {
+            layer: layer,
+            tiles: new Array(map.width * map.height),
+          };
+          unresolvedLayers.push(unresolvedLayer);
+          state = STATE_TILE_LAYER;
+          break;
+        case 'OBJECTGROUP':
+          layer = new ObjectLayer();
+          layer.name = tag.attributes.NAME;
+          layer.color = tag.attributes.COLOR;
+          layer.opacity = float(tag.attributes.OPACITY, 1);
+          layer.visible = bool(tag.attributes.VISIBLE, true);
+          map.layers.push(layer);
+          state = STATE_OBJECT_LAYER;
+          break;
+        case 'IMAGELAYER':
+          layer = new ImageLayer();
+          layer.name = tag.attributes.NAME;
+          layer.x = int(tag.attributes.X);
+          layer.y = int(tag.attributes.Y);
+          layer.opacity = float(tag.attributes.OPACITY, 1);
+          layer.visible = bool(tag.attributes.VISIBLE, true);
+          map.layers.push(layer);
+          state = STATE_IMAGE_LAYER;
+          break;
         default:
-            return 0x000000;
-        }
-    }
-
-    function toColor(arg) {
-        if (typeof arg == 'string') {
-            return stringToColor(arg);
-        } else {
-            return arg;
-        }
-    }
-
-    /**
-     * Draws a single line from v0 to v1 with the given color.
-     *
-     * Each point is a THREE.Vector3 object.
-     */
-    function _drawLine(v0, v1, color) {
-        var p = new Primitive();
-
-        p.vertices = [v0, v1];
-        p.color = toColor(color);
-
-        renderer.addPrimitive(p);
-    }
-
-    /**
-     * Draws a strip of connected lines using the specified points[].
-     *
-     * Each point is a THREE.Vector3 object.
-     */
-    function _drawLineStrip(points, color) {
-        if (points.length < 2) {
-            console.error('Line strips must have at least 2 points.');
+          waitForClose();
+      }
+    },
+    closetag: noop,
+    text: noop,
+  };
+  states[STATE_TILESET] = {
+    opentag: function(tag) {
+      switch (tag.name) {
+        case 'TILEOFFSET':
+          tileSet.tileOffset.x = int(tag.attributes.X);
+          tileSet.tileOffset.y = int(tag.attributes.Y);
+          waitForClose();
+          break;
+        case 'PROPERTIES':
+          collectProperties(tileSet.properties);
+          break;
+        case 'IMAGE':
+          tileSet.image = collectImage(tag);
+          break;
+        case 'TERRAINTYPES':
+          state = STATE_TERRAIN_TYPES;
+          break;
+        case 'TILE':
+          tile = new Tile();
+          tile.id = int(tag.attributes.ID);
+          if (tag.attributes.TERRAIN) {
+            var indexes = tag.attributes.TERRAIN.split(",");
+            tile.terrain = indexes.map(resolveTerrain);
+          }
+          tile.probability = float(tag.attributes.PROBABILITY);
+          tileSet.tiles[tile.id] = tile;
+          state = STATE_TILE;
+          break;
+        default:
+          waitForClose();
+      }
+    },
+    closetag: function(name) {
+      state = tileSetNextState;
+    },
+    text: noop,
+  };
+  states[STATE_COLLECT_PROPS] = {
+    opentag: function(tag) {
+      if (tag.name === 'PROPERTY') {
+        propertiesObject[tag.attributes.NAME] = tag.attributes.VALUE;
+      }
+      waitForClose();
+    },
+    closetag: function(name) {
+      state = propertiesNextState;
+    },
+    text: noop,
+  };
+  states[STATE_COLLECT_ANIMATIONS] = {
+    opentag: function(tag) {
+      if (tag.name === 'FRAME') {
+          animationsObject.push({
+              'tileId': tag.attributes.TILEID,
+              'duration': tag.attributes.DURATION
+          });
+      }
+      waitForClose();
+    },
+    closetag: function(name) {
+      state = animationsNextState;
+    },
+    text: noop,
+  };
+  states[STATE_COLLECT_OBJECT_GROUPS] = {
+    opentag: function(tag) {
+      if (tag.name === 'OBJECT') {
+        object = new TmxObject();
+        object.name = tag.attributes.NAME;
+        object.type = tag.attributes.TYPE;
+        object.x = int(tag.attributes.X);
+        object.y = int(tag.attributes.Y);
+        object.width = int(tag.attributes.WIDTH, 0);
+        object.height = int(tag.attributes.HEIGHT, 0);
+        object.rotation = float(tag.attributes.ROTATION, 0);
+        object.gid = int(tag.attributes.GID);
+        object.visible = bool(tag.attributes.VISIBLE, true);
+        objectGroupsObject.push(object);
+        state = STATE_TILE_OBJECT;
+      } else {
+        waitForClose();
+      }
+    },
+    closetag: function(name) {
+      state = objectGroupsNextState;
+    },
+    text: noop
+  };
+  states[STATE_WAIT_FOR_CLOSE] = {
+    opentag: function(tag) {
+      waitForCloseOpenCount += 1;
+    },
+    closetag: function(name) {
+      waitForCloseOpenCount -= 1;
+      if (waitForCloseOpenCount === 0) state = waitForCloseNextState;
+    },
+    text: noop,
+  };
+  states[STATE_TILE] = {
+    opentag: function(tag) {
+      if (tag.name === 'PROPERTIES') {
+        collectProperties(tile.properties);
+      } else if (tag.name === 'IMAGE') {
+        tile.image = collectImage(tag);
+      } else if (tag.name === 'ANIMATION') {
+        tile.animation = collectAnimations(tile.animations);
+      } else if (tag.name === 'OBJECTGROUP') {
+        tile.objectGroup = collectObjectGroups(tile.objectGroups);
+      } else {
+        waitForClose();
+      }
+    },
+    closetag: function(name) {
+      state = STATE_TILESET
+    },
+    text: noop,
+  };
+  states[STATE_TILE_LAYER] = {
+    opentag: function(tag) {
+      if (tag.name === 'PROPERTIES') {
+        collectProperties(layer.properties);
+      } else if (tag.name === 'DATA') {
+        var dataEncoding = tag.attributes.ENCODING;
+        var dataCompression = tag.attributes.COMPRESSION;
+        switch (dataEncoding) {
+          case undefined:
+          case null:
+            state = STATE_TILE_DATA_XML;
+            break;
+          case 'csv':
+            state = STATE_TILE_DATA_CSV;
+            break;
+          case 'base64':
+            switch (dataCompression) {
+              case undefined:
+              case null:
+                state = STATE_TILE_DATA_B64_RAW;
+                break;
+              case 'gzip':
+                state = STATE_TILE_DATA_B64_GZIP;
+                break;
+              case 'zlib':
+                state = STATE_TILE_DATA_B64_ZLIB;
+                break;
+              default:
+                error(new Error("unsupported data compression: " + dataCompression));
+                return;
+            }
+            break;
+          default:
+            error(new Error("unsupported data encoding: " + dataEncoding));
             return;
         }
+      } else {
+        waitForClose();
+      }
+    },
+    closetag: function(name) {
+      state = STATE_MAP;
+    },
+    text: noop,
+  };
+  states[STATE_OBJECT_LAYER] = {
+    opentag: function(tag) {
+      if (tag.name === 'PROPERTIES') {
+        collectProperties(layer.properties);
+      } else if (tag.name === 'OBJECT') {
+        object = new TmxObject();
+        object.name = tag.attributes.NAME;
+        object.type = tag.attributes.TYPE;
+        object.x = int(tag.attributes.X);
+        object.y = int(tag.attributes.Y);
+        object.width = int(tag.attributes.WIDTH, 0);
+        object.height = int(tag.attributes.HEIGHT, 0);
+        object.rotation = float(tag.attributes.ROTATION, 0);
+        object.gid = int(tag.attributes.GID);
+        object.visible = bool(tag.attributes.VISIBLE, true);
+        layer.objects.push(object);
+        state = STATE_OBJECT;
+      } else {
+        waitForClose();
+      }
+    },
+    closetag: function(name) {
+      state = STATE_MAP;
+    },
+    text: noop,
+  };
+  states[STATE_IMAGE_LAYER] = {
+    opentag: function(tag) {
+      if (tag.name === 'PROPERTIES') {
+        collectProperties(layer.properties);
+      } else if (tag.name === 'IMAGE') {
+        layer.image = collectImage(tag);
+      } else {
+        waitForClose();
+      }
+    },
+    closetag: function(name) {
+      state = STATE_MAP;
+    },
+    text: noop,
+  };
+  states[STATE_OBJECT] = {
+    opentag: function(tag) {
+      switch (tag.name) {
+        case 'PROPERTIES':
+          collectProperties(object.properties);
+          break;
+        case 'ELLIPSE':
+          object.ellipse = true;
+          waitForClose();
+          break;
+        case 'POLYGON':
+          object.polygon = parsePoints(tag.attributes.POINTS);
+          waitForClose();
+          break;
+        case 'POLYLINE':
+          object.polyline = parsePoints(tag.attributes.POINTS);
+          waitForClose();
+          break;
+        case 'IMAGE':
+          object.image = collectImage(tag);
+          break;
+        default:
+          waitForClose();
+      }
+    },
+    closetag: function(name) {
+      state = STATE_OBJECT_LAYER;
+    },
+    text: noop,
+  };
+  states[STATE_TILE_OBJECT] = {
+    opentag: function(tag) {
+      switch (tag.name) {
+        case 'PROPERTIES':
+          collectProperties(object.properties);
+          break;
+        case 'ELLIPSE':
+          object.ellipse = true;
+          waitForClose();
+          break;
+        case 'POLYGON':
+          object.polygon = parsePoints(tag.attributes.POINTS);
+          waitForClose();
+          break;
+        case 'POLYLINE':
+          object.polyline = parsePoints(tag.attributes.POINTS);
+          waitForClose();
+          break;
+        case 'IMAGE':
+          object.image = collectImage(tag);
+          break;
+        default:
+          waitForClose();
+      }
+    },
+    closetag: function(name) {
+      state = STATE_COLLECT_OBJECT_GROUPS;
+    },
+    text: noop
+  };
+  states[STATE_TILE_DATA_XML] = {
+    opentag: function(tag) {
+      if (tag.name === 'TILE') {
+        saveTile(int(tag.attributes.GID, 0));
+      }
+      waitForClose();
+    },
+    closetag: function(name) {
+      state = STATE_TILE_LAYER;
+    },
+    text: noop,
+  };
+  states[STATE_TILE_DATA_CSV] = {
+    opentag: function(tag) {
+      waitForClose();
+    },
+    closetag: function(name) {
+      state = STATE_TILE_LAYER;
+    },
+    text: function(text) {
+      text.split(",").forEach(function(c) {
+        saveTile(parseInt(c, 10));
+      });
+    },
+  };
+  states[STATE_TILE_DATA_B64_RAW] = {
+    opentag: function(tag) {
+      waitForClose();
+    },
+    closetag: function(name) {
+      state = STATE_TILE_LAYER;
+    },
+    text: function(text) {
+      unpackTileBytes(new Buffer(text.trim(), 'base64'));
+    },
+  };
+  states[STATE_TILE_DATA_B64_GZIP] = {
+    opentag: function(tag) {
+      waitForClose();
+    },
+    closetag: function(name) {
+      state = STATE_TILE_LAYER;
+    },
+    text: function(text) {
+      var zipped = new Buffer(text.trim(), 'base64');
+      var oldUnresolvedLayer = unresolvedLayer;
+      var oldLayer = layer;
+      pend.go(function(cb) {
+        zlib.gunzip(zipped, function(err, buf) {
+          if (err) {
+            cb(err);
+            return;
+          }
+          unresolvedLayer = oldUnresolvedLayer;
+          layer = oldLayer;
+          unpackTileBytes(buf);
+          cb();
+        });
+      });
+    },
+  };
+  states[STATE_TILE_DATA_B64_ZLIB] = {
+    opentag: function(tag) {
+      waitForClose();
+    },
+    closetag: function(name) {
+      state = STATE_TILE_LAYER;
+    },
+    text: function(text) {
+      var zipped = new Buffer(text.trim(), 'base64');
+      var oldUnresolvedLayer = unresolvedLayer;
+      var oldLayer = layer;
+      pend.go(function(cb) {
+        zlib.inflate(zipped, function(err, buf) {
+          if (err) {
+            cb(err);
+            return;
+          }
+          layer = oldLayer;
+          unresolvedLayer = oldUnresolvedLayer;
+          unpackTileBytes(buf);
+          cb();
+        });
+      });
+    },
+  };
+  states[STATE_TERRAIN_TYPES] = {
+    opentag: function(tag) {
+      if (tag.name === 'TERRAIN') {
+        terrain = new Terrain();
+        terrain.name = tag.attributes.NAME;
+        terrain.tile = int(tag.attributes.TILE);
+        tileSet.terrainTypes.push(terrain);
+        state = STATE_TERRAIN;
+      } else {
+        waitForClose();
+      }
+    },
+    closetag: function(name) {
+      state = STATE_TILESET;
+    },
+    text: noop,
+  };
+  states[STATE_TERRAIN] = {
+    opentag: function(tag) {
+      if (tag.name === 'PROPERTIES') {
+        collectProperties(terrain.properties);
+      } else {
+        waitForClose();
+      }
+    },
+    closetag: function(name) {
+      state = STATE_TERRAIN_TYPES;
+    },
+    text: noop,
+  };
 
-        var p = new Primitive();
+  parser.onerror = cb;
+  parser.onopentag = function(tag) {
+    states[state].opentag(tag);
+  };
+  parser.onclosetag = function(name) {
+    states[state].closetag(name);
+  };
+  parser.ontext = function(text) {
+    states[state].text(text);
+  };
+  parser.onend = function() {
+    // wait until async stuff has finished
+    pend.wait(function(err) {
+      if (err) {
+        cb(err);
+        return;
+      }
+      // now all tilesets are resolved and all data is decoded
+      unresolvedLayers.forEach(resolveLayer);
+      cb(null, topLevelObject);
+    });
+  };
+  parser.write(content).close();
 
-        p.vertices = points;
-        p.color = toColor(color);
+  function resolveTerrain(terrainIndexStr) {
+    return tileSet.terrainTypes[parseInt(terrainIndexStr, 10)];
+  }
 
-        renderer.addPrimitive(p);
+  function saveTile(gid) {
+    layer.horizontalFlips[tileIndex] = !!(gid & FLIPPED_HORIZONTALLY_FLAG);
+    layer.verticalFlips[tileIndex]   = !!(gid & FLIPPED_VERTICALLY_FLAG);
+    layer.diagonalFlips[tileIndex]   = !!(gid & FLIPPED_DIAGONALLY_FLAG);
+
+    gid &= ~(FLIPPED_HORIZONTALLY_FLAG |
+             FLIPPED_VERTICALLY_FLAG |
+             FLIPPED_DIAGONALLY_FLAG);
+
+    unresolvedLayer.tiles[tileIndex] = gid;
+
+    tileIndex += 1;
+  }
+
+  function collectImage(tag) {
+    var img = new Image();
+    img.format = tag.attributes.FORMAT;
+    img.source = tag.attributes.SOURCE;
+    img.trans = tag.attributes.TRANS;
+    img.width = int(tag.attributes.WIDTH);
+    img.height = int(tag.attributes.HEIGHT);
+
+    // TODO: read possible <data>
+    waitForClose();
+    return img;
+  }
+
+  function collectTileSet(tag, nextState) {
+    tileSet = new TileSet();
+    tileSet.firstGid = int(tag.attributes.FIRSTGID);
+    tileSet.source = tag.attributes.SOURCE;
+    tileSet.name = tag.attributes.NAME;
+    tileSet.tileWidth = int(tag.attributes.TILEWIDTH);
+    tileSet.tileHeight = int(tag.attributes.TILEHEIGHT);
+    tileSet.spacing = int(tag.attributes.SPACING);
+    tileSet.margin = int(tag.attributes.MARGIN);
+
+    if (tileSet.source) {
+      pend.go(function(cb) {
+        resolveTileSet(tileSet, cb);
+      });
     }
 
-    /**
-     * Draws an arrow pointing from pStart to pEnd.
-     * Specify the size of the arrow with arrowSize.
-     */
-    function _drawArrow(pStart, pEnd, arrowSize, color) {
-        var p = new Primitive();
-        p.color = toColor(color);
+    state = STATE_TILESET;
+    tileSetNextState = nextState;
+  }
 
-        p.vertices.push(pStart);
-        p.vertices.push(pEnd);
+  function collectProperties(obj) {
+    propertiesObject = obj;
+    propertiesNextState = state;
+    state = STATE_COLLECT_PROPS;
+  }
 
-        var dir = new THREE.Vector3();
-        dir.subVectors(pEnd, pStart);
-        dir.normalize();
+  function collectAnimations(obj) {
+    animationsObject = obj;
+    animationsNextState = state;
+    state = STATE_COLLECT_ANIMATIONS;
+  }
 
-        var right = new THREE.Vector3();
-        var dot = dir.dot(UNIT_Y);
-        if (dot > 0.99 || dot < -0.99) {
-            right.crossVectors(dir, UNIT_X);
+  function collectObjectGroups(obj) {
+    objectGroupsObject = obj;
+    objectGroupsNextState = state;
+    state = STATE_COLLECT_OBJECT_GROUPS;
+  }
+
+  function waitForClose() {
+    waitForCloseNextState = state;
+    state = STATE_WAIT_FOR_CLOSE;
+    waitForCloseOpenCount = 1;
+  }
+
+  function error(err) {
+    parser.onerror = null;
+    parser.onopentag = null;
+    parser.onclosetag = null;
+    parser.ontext = null;
+    parser.onend = null;
+    cb(err);
+  }
+
+  function resolveTileSet(unresolvedTileSet, cb) {
+    var target = path.join(pathToDir, unresolvedTileSet.source);
+    parseFile(target, function(err, resolvedTileSet) {
+      if (err) {
+        cb(err);
+        return;
+      }
+      resolvedTileSet.mergeTo(unresolvedTileSet);
+      cb();
+    });
+  }
+
+  function resolveLayer(unresolvedLayer) {
+    for (var i = 0; i < unresolvedLayer.tiles.length; i += 1) {
+      var globalTileId = unresolvedLayer.tiles[i];
+      for (var tileSetIndex = map.tileSets.length - 1;
+          tileSetIndex >= 0; tileSetIndex -= 1)
+      {
+        var tileSet = map.tileSets[tileSetIndex];
+        if (tileSet.firstGid <= globalTileId) {
+          var tileId = globalTileId - tileSet.firstGid;
+          var tile = tileSet.tiles[tileId];
+          if (!tile) {
+            // implicit tile
+            tile = new Tile();
+            tile.id = tileId;
+            tileSet.tiles[tileId] = tile;
+          }
+          tile.gid = globalTileId;
+          unresolvedLayer.layer.tiles[i] = tile;
+          break;
+        }
+      }
+    }
+  }
+
+  function unpackTileBytes(buf) {
+    var expectedCount = map.width * map.height * 4;
+    if (buf.length !== expectedCount) {
+      error(new Error("Expected " + expectedCount +
+            " bytes of tile data; received " + buf.length));
+      return;
+    }
+    tileIndex = 0;
+    for (var i = 0; i < expectedCount; i += 4) {
+      saveTile(buf.readUInt32LE(i));
+    }
+  }
+}
+
+function defaultReadFile(name, cb) {
+  fs.readFile(name, { encoding: 'utf8' }, cb);
+}
+
+function parseFile(name, cb) {
+  exports.readFile(name, function(err, content) {
+    if (err) {
+      cb(err);
+    } else {
+      parse(content, name, cb);
+    }
+  });
+}
+
+function parsePoints(str) {
+  var points = str.split(" ");
+  return points.map(function(pt) {
+    var xy = pt.split(",");
+    return {
+      x: xy[0],
+      y: xy[1],
+    };
+  });
+}
+
+function noop() {}
+
+function int(value, defaultValue) {
+  defaultValue = defaultValue == null ? null : defaultValue;
+  return value == null ? defaultValue : parseInt(value, 10);
+}
+
+function bool(value, defaultValue) {
+  defaultValue = defaultValue == null ? null : defaultValue;
+  return value == null ? defaultValue : !!parseInt(value, 10);
+}
+
+function float(value, defaultValue) {
+  defaultValue = defaultValue == null ? null : defaultValue;
+  return value == null ? defaultValue : parseFloat(value, 10);
+}
+
+function Map() {
+  this.version = null;
+  this.orientation = "orthogonal";
+  this.width = 0;
+  this.height = 0;
+  this.tileWidth = 0;
+  this.tileHeight = 0;
+  this.backgroundColor = null;
+
+  this.layers = [];
+  this.properties = {};
+  this.tileSets = [];
+}
+
+function TileSet() {
+  this.firstGid = 0;
+  this.source = "";
+  this.name = "";
+  this.tileWidth = 0;
+  this.tileHeight = 0;
+  this.spacing = 0;
+  this.margin = 0;
+  this.tileOffset = {x: 0, y: 0};
+  this.properties = {};
+  this.image = null;
+  this.tiles = [];
+  this.terrainTypes = [];
+}
+
+TileSet.prototype.mergeTo = function(other) {
+  other.firstGid = this.firstGid == null ? other.firstGid : this.firstGid;
+  other.source = this.source == null ? other.source : this.source;
+  other.name = this.name == null ? other.name : this.name;
+  other.tileWidth = this.tileWidth == null ? other.tileWidth : this.tileWidth;
+  other.tileHeight = this.tileHeight == null ? other.tileHeight : this.tileHeight;
+  other.spacing = this.spacing == null ? other.spacing : this.spacing;
+  other.margin = this.margin == null ? other.margin : this.margin;
+  other.tileOffset = this.tileOffset == null ? other.tileOffset : this.tileOffset;
+  other.properties = this.properties == null ? other.properties : this.properties;
+  other.image = this.image == null ? other.image : this.image;
+  other.tiles = this.tiles == null ? other.tiles : this.tiles;
+  other.terrainTypes = this.terrainTypes == null ? other.terrainTypes : this.terrainTypes;
+};
+
+function Image() {
+  this.format = null;
+  this.source = "";
+  this.trans = null;
+  this.width = 0;
+  this.height = 0;
+}
+
+function Tile() {
+  this.id = 0;
+  this.terrain = [];
+  this.probability = null;
+  this.properties = {};
+  this.animations = [];
+  this.objectGroups = [];
+  this.image = null;
+}
+
+function TileLayer(map) {
+  var tileCount = map.width * map.height;
+  this.map = map;
+  this.type = "tile";
+  this.name = null;
+  this.opacity = 1;
+  this.visible = true;
+  this.properties = {};
+  this.tiles = new Array(tileCount);
+  this.horizontalFlips = new Array(tileCount);
+  this.verticalFlips = new Array(tileCount);
+  this.diagonalFlips = new Array(tileCount);
+}
+
+TileLayer.prototype.tileAt = function(x, y) {
+  return this.tiles[y * this.map.width + x];
+};
+
+TileLayer.prototype.setTileAt = function(x, y, tile) {
+  this.tiles[y * this.map.width + x] = tile;
+};
+
+function ObjectLayer() {
+  this.type = "object";
+  this.name = null;
+  this.color = null;
+  this.opacity = 1;
+  this.visible = true;
+  this.properties = {};
+  this.objects = [];
+}
+
+function ImageLayer() {
+  this.type = "image";
+  this.name = null;
+  this.x = 0;
+  this.y = 0;
+  this.opacity = 1;
+  this.visible = true;
+  this.properties = {};
+  this.image = null;
+}
+
+function TmxObject() {
+  this.name = null;
+  this.type = null;
+  this.x = 0;
+  this.y = 0;
+  this.width = 0;
+  this.height = 0;
+  this.rotation = 0;
+  this.properties = {};
+  this.gid = null;
+  this.visible = true;
+  this.ellipse = false;
+  this.polygon = null;
+  this.polyline = null;
+}
+
+function Terrain() {
+  this.name = "";
+  this.tile = 0;
+  this.properties = {};
+}
+
+}).call(this,require("buffer").Buffer)
+},{"buffer":24,"fs":8,"path":32,"pend":99,"sax":100,"zlib":23}],99:[function(require,module,exports){
+module.exports = Pend;
+
+function Pend() {
+  this.pending = 0;
+  this.max = Infinity;
+  this.listeners = [];
+  this.waiting = [];
+  this.error = null;
+}
+
+Pend.prototype.go = function(fn) {
+  if (this.pending < this.max) {
+    pendGo(this, fn);
+  } else {
+    this.waiting.push(fn);
+  }
+};
+
+Pend.prototype.wait = function(cb) {
+  if (this.pending === 0) {
+    cb(this.error);
+  } else {
+    this.listeners.push(cb);
+  }
+};
+
+Pend.prototype.hold = function() {
+  return pendHold(this);
+};
+
+function pendHold(self) {
+  self.pending += 1;
+  var called = false;
+  return onCb;
+  function onCb(err) {
+    if (called) throw new Error("callback called twice");
+    called = true;
+    self.error = self.error || err;
+    self.pending -= 1;
+    if (self.waiting.length > 0 && self.pending < self.max) {
+      pendGo(self, self.waiting.shift());
+    } else if (self.pending === 0) {
+      var listeners = self.listeners;
+      self.listeners = [];
+      listeners.forEach(cbListener);
+    }
+  }
+  function cbListener(listener) {
+    listener(self.error);
+  }
+}
+
+function pendGo(self, fn) {
+  fn(pendHold(self));
+}
+
+},{}],100:[function(require,module,exports){
+(function (Buffer){
+;(function (sax) { // wrapper for non-node envs
+  sax.parser = function (strict, opt) { return new SAXParser(strict, opt) }
+  sax.SAXParser = SAXParser
+  sax.SAXStream = SAXStream
+  sax.createStream = createStream
+
+  // When we pass the MAX_BUFFER_LENGTH position, start checking for buffer overruns.
+  // When we check, schedule the next check for MAX_BUFFER_LENGTH - (max(buffer lengths)),
+  // since that's the earliest that a buffer overrun could occur.  This way, checks are
+  // as rare as required, but as often as necessary to ensure never crossing this bound.
+  // Furthermore, buffers are only tested at most once per write(), so passing a very
+  // large string into write() might have undesirable effects, but this is manageable by
+  // the caller, so it is assumed to be safe.  Thus, a call to write() may, in the extreme
+  // edge case, result in creating at most one complete copy of the string passed in.
+  // Set to Infinity to have unlimited buffers.
+  sax.MAX_BUFFER_LENGTH = 64 * 1024
+
+  var buffers = [
+    'comment', 'sgmlDecl', 'textNode', 'tagName', 'doctype',
+    'procInstName', 'procInstBody', 'entity', 'attribName',
+    'attribValue', 'cdata', 'script'
+  ]
+
+  sax.EVENTS = [
+    'text',
+    'processinginstruction',
+    'sgmldeclaration',
+    'doctype',
+    'comment',
+    'attribute',
+    'opentag',
+    'closetag',
+    'opencdata',
+    'cdata',
+    'closecdata',
+    'error',
+    'end',
+    'ready',
+    'script',
+    'opennamespace',
+    'closenamespace'
+  ]
+
+  function SAXParser (strict, opt) {
+    if (!(this instanceof SAXParser)) {
+      return new SAXParser(strict, opt)
+    }
+
+    var parser = this
+    clearBuffers(parser)
+    parser.q = parser.c = ''
+    parser.bufferCheckPosition = sax.MAX_BUFFER_LENGTH
+    parser.opt = opt || {}
+    parser.opt.lowercase = parser.opt.lowercase || parser.opt.lowercasetags
+    parser.looseCase = parser.opt.lowercase ? 'toLowerCase' : 'toUpperCase'
+    parser.tags = []
+    parser.closed = parser.closedRoot = parser.sawRoot = false
+    parser.tag = parser.error = null
+    parser.strict = !!strict
+    parser.noscript = !!(strict || parser.opt.noscript)
+    parser.state = S.BEGIN
+    parser.strictEntities = parser.opt.strictEntities
+    parser.ENTITIES = parser.strictEntities ? Object.create(sax.XML_ENTITIES) : Object.create(sax.ENTITIES)
+    parser.attribList = []
+
+    // namespaces form a prototype chain.
+    // it always points at the current tag,
+    // which protos to its parent tag.
+    if (parser.opt.xmlns) {
+      parser.ns = Object.create(rootNS)
+    }
+
+    // mostly just for error reporting
+    parser.trackPosition = parser.opt.position !== false
+    if (parser.trackPosition) {
+      parser.position = parser.line = parser.column = 0
+    }
+    emit(parser, 'onready')
+  }
+
+  if (!Object.create) {
+    Object.create = function (o) {
+      function F () {}
+      F.prototype = o
+      var newf = new F()
+      return newf
+    }
+  }
+
+  if (!Object.keys) {
+    Object.keys = function (o) {
+      var a = []
+      for (var i in o) if (o.hasOwnProperty(i)) a.push(i)
+      return a
+    }
+  }
+
+  function checkBufferLength (parser) {
+    var maxAllowed = Math.max(sax.MAX_BUFFER_LENGTH, 10)
+    var maxActual = 0
+    for (var i = 0, l = buffers.length; i < l; i++) {
+      var len = parser[buffers[i]].length
+      if (len > maxAllowed) {
+        // Text/cdata nodes can get big, and since they're buffered,
+        // we can get here under normal conditions.
+        // Avoid issues by emitting the text node now,
+        // so at least it won't get any bigger.
+        switch (buffers[i]) {
+          case 'textNode':
+            closeText(parser)
+            break
+
+          case 'cdata':
+            emitNode(parser, 'oncdata', parser.cdata)
+            parser.cdata = ''
+            break
+
+          case 'script':
+            emitNode(parser, 'onscript', parser.script)
+            parser.script = ''
+            break
+
+          default:
+            error(parser, 'Max buffer length exceeded: ' + buffers[i])
+        }
+      }
+      maxActual = Math.max(maxActual, len)
+    }
+    // schedule the next check for the earliest possible buffer overrun.
+    var m = sax.MAX_BUFFER_LENGTH - maxActual
+    parser.bufferCheckPosition = m + parser.position
+  }
+
+  function clearBuffers (parser) {
+    for (var i = 0, l = buffers.length; i < l; i++) {
+      parser[buffers[i]] = ''
+    }
+  }
+
+  function flushBuffers (parser) {
+    closeText(parser)
+    if (parser.cdata !== '') {
+      emitNode(parser, 'oncdata', parser.cdata)
+      parser.cdata = ''
+    }
+    if (parser.script !== '') {
+      emitNode(parser, 'onscript', parser.script)
+      parser.script = ''
+    }
+  }
+
+  SAXParser.prototype = {
+    end: function () { end(this) },
+    write: write,
+    resume: function () { this.error = null; return this },
+    close: function () { return this.write(null) },
+    flush: function () { flushBuffers(this) }
+  }
+
+  var Stream
+  try {
+    Stream = require('stream').Stream
+  } catch (ex) {
+    Stream = function () {}
+  }
+
+  var streamWraps = sax.EVENTS.filter(function (ev) {
+    return ev !== 'error' && ev !== 'end'
+  })
+
+  function createStream (strict, opt) {
+    return new SAXStream(strict, opt)
+  }
+
+  function SAXStream (strict, opt) {
+    if (!(this instanceof SAXStream)) {
+      return new SAXStream(strict, opt)
+    }
+
+    Stream.apply(this)
+
+    this._parser = new SAXParser(strict, opt)
+    this.writable = true
+    this.readable = true
+
+    var me = this
+
+    this._parser.onend = function () {
+      me.emit('end')
+    }
+
+    this._parser.onerror = function (er) {
+      me.emit('error', er)
+
+      // if didn't throw, then means error was handled.
+      // go ahead and clear error, so we can write again.
+      me._parser.error = null
+    }
+
+    this._decoder = null
+
+    streamWraps.forEach(function (ev) {
+      Object.defineProperty(me, 'on' + ev, {
+        get: function () {
+          return me._parser['on' + ev]
+        },
+        set: function (h) {
+          if (!h) {
+            me.removeAllListeners(ev)
+            me._parser['on' + ev] = h
+            return h
+          }
+          me.on(ev, h)
+        },
+        enumerable: true,
+        configurable: false
+      })
+    })
+  }
+
+  SAXStream.prototype = Object.create(Stream.prototype, {
+    constructor: {
+      value: SAXStream
+    }
+  })
+
+  SAXStream.prototype.write = function (data) {
+    if (typeof Buffer === 'function' &&
+      typeof Buffer.isBuffer === 'function' &&
+      Buffer.isBuffer(data)) {
+      if (!this._decoder) {
+        var SD = require('string_decoder').StringDecoder
+        this._decoder = new SD('utf8')
+      }
+      data = this._decoder.write(data)
+    }
+
+    this._parser.write(data.toString())
+    this.emit('data', data)
+    return true
+  }
+
+  SAXStream.prototype.end = function (chunk) {
+    if (chunk && chunk.length) {
+      this.write(chunk)
+    }
+    this._parser.end()
+    return true
+  }
+
+  SAXStream.prototype.on = function (ev, handler) {
+    var me = this
+    if (!me._parser['on' + ev] && streamWraps.indexOf(ev) !== -1) {
+      me._parser['on' + ev] = function () {
+        var args = arguments.length === 1 ? [arguments[0]] : Array.apply(null, arguments)
+        args.splice(0, 0, ev)
+        me.emit.apply(me, args)
+      }
+    }
+
+    return Stream.prototype.on.call(me, ev, handler)
+  }
+
+  // character classes and tokens
+  var whitespace = '\r\n\t '
+
+  // this really needs to be replaced with character classes.
+  // XML allows all manner of ridiculous numbers and digits.
+  var number = '0124356789'
+  var letter = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+  // (Letter | "_" | ":")
+  var quote = '\'"'
+  var attribEnd = whitespace + '>'
+  var CDATA = '[CDATA['
+  var DOCTYPE = 'DOCTYPE'
+  var XML_NAMESPACE = 'http://www.w3.org/XML/1998/namespace'
+  var XMLNS_NAMESPACE = 'http://www.w3.org/2000/xmlns/'
+  var rootNS = { xml: XML_NAMESPACE, xmlns: XMLNS_NAMESPACE }
+
+  // turn all the string character sets into character class objects.
+  whitespace = charClass(whitespace)
+  number = charClass(number)
+  letter = charClass(letter)
+
+  // http://www.w3.org/TR/REC-xml/#NT-NameStartChar
+  // This implementation works on strings, a single character at a time
+  // as such, it cannot ever support astral-plane characters (10000-EFFFF)
+  // without a significant breaking change to either this  parser, or the
+  // JavaScript language.  Implementation of an emoji-capable xml parser
+  // is left as an exercise for the reader.
+  var nameStart = /[:_A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]/
+
+  var nameBody = /[:_A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD\u00B7\u0300-\u036F\u203F-\u2040\.\d-]/
+
+  var entityStart = /[#:_A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]/
+  var entityBody = /[#:_A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD\u00B7\u0300-\u036F\u203F-\u2040\.\d-]/
+
+  quote = charClass(quote)
+  attribEnd = charClass(attribEnd)
+
+  function charClass (str) {
+    return str.split('').reduce(function (s, c) {
+      s[c] = true
+      return s
+    }, {})
+  }
+
+  function isRegExp (c) {
+    return Object.prototype.toString.call(c) === '[object RegExp]'
+  }
+
+  function is (charclass, c) {
+    return isRegExp(charclass) ? !!c.match(charclass) : charclass[c]
+  }
+
+  function not (charclass, c) {
+    return !is(charclass, c)
+  }
+
+  var S = 0
+  sax.STATE = {
+    BEGIN: S++, // leading byte order mark or whitespace
+    BEGIN_WHITESPACE: S++, // leading whitespace
+    TEXT: S++, // general stuff
+    TEXT_ENTITY: S++, // &amp and such.
+    OPEN_WAKA: S++, // <
+    SGML_DECL: S++, // <!BLARG
+    SGML_DECL_QUOTED: S++, // <!BLARG foo "bar
+    DOCTYPE: S++, // <!DOCTYPE
+    DOCTYPE_QUOTED: S++, // <!DOCTYPE "//blah
+    DOCTYPE_DTD: S++, // <!DOCTYPE "//blah" [ ...
+    DOCTYPE_DTD_QUOTED: S++, // <!DOCTYPE "//blah" [ "foo
+    COMMENT_STARTING: S++, // <!-
+    COMMENT: S++, // <!--
+    COMMENT_ENDING: S++, // <!-- blah -
+    COMMENT_ENDED: S++, // <!-- blah --
+    CDATA: S++, // <![CDATA[ something
+    CDATA_ENDING: S++, // ]
+    CDATA_ENDING_2: S++, // ]]
+    PROC_INST: S++, // <?hi
+    PROC_INST_BODY: S++, // <?hi there
+    PROC_INST_ENDING: S++, // <?hi "there" ?
+    OPEN_TAG: S++, // <strong
+    OPEN_TAG_SLASH: S++, // <strong /
+    ATTRIB: S++, // <a
+    ATTRIB_NAME: S++, // <a foo
+    ATTRIB_NAME_SAW_WHITE: S++, // <a foo _
+    ATTRIB_VALUE: S++, // <a foo=
+    ATTRIB_VALUE_QUOTED: S++, // <a foo="bar
+    ATTRIB_VALUE_CLOSED: S++, // <a foo="bar"
+    ATTRIB_VALUE_UNQUOTED: S++, // <a foo=bar
+    ATTRIB_VALUE_ENTITY_Q: S++, // <foo bar="&quot;"
+    ATTRIB_VALUE_ENTITY_U: S++, // <foo bar=&quot
+    CLOSE_TAG: S++, // </a
+    CLOSE_TAG_SAW_WHITE: S++, // </a   >
+    SCRIPT: S++, // <script> ...
+    SCRIPT_ENDING: S++ // <script> ... <
+  }
+
+  sax.XML_ENTITIES = {
+    'amp': '&',
+    'gt': '>',
+    'lt': '<',
+    'quot': '"',
+    'apos': "'"
+  }
+
+  sax.ENTITIES = {
+    'amp': '&',
+    'gt': '>',
+    'lt': '<',
+    'quot': '"',
+    'apos': "'",
+    'AElig': 198,
+    'Aacute': 193,
+    'Acirc': 194,
+    'Agrave': 192,
+    'Aring': 197,
+    'Atilde': 195,
+    'Auml': 196,
+    'Ccedil': 199,
+    'ETH': 208,
+    'Eacute': 201,
+    'Ecirc': 202,
+    'Egrave': 200,
+    'Euml': 203,
+    'Iacute': 205,
+    'Icirc': 206,
+    'Igrave': 204,
+    'Iuml': 207,
+    'Ntilde': 209,
+    'Oacute': 211,
+    'Ocirc': 212,
+    'Ograve': 210,
+    'Oslash': 216,
+    'Otilde': 213,
+    'Ouml': 214,
+    'THORN': 222,
+    'Uacute': 218,
+    'Ucirc': 219,
+    'Ugrave': 217,
+    'Uuml': 220,
+    'Yacute': 221,
+    'aacute': 225,
+    'acirc': 226,
+    'aelig': 230,
+    'agrave': 224,
+    'aring': 229,
+    'atilde': 227,
+    'auml': 228,
+    'ccedil': 231,
+    'eacute': 233,
+    'ecirc': 234,
+    'egrave': 232,
+    'eth': 240,
+    'euml': 235,
+    'iacute': 237,
+    'icirc': 238,
+    'igrave': 236,
+    'iuml': 239,
+    'ntilde': 241,
+    'oacute': 243,
+    'ocirc': 244,
+    'ograve': 242,
+    'oslash': 248,
+    'otilde': 245,
+    'ouml': 246,
+    'szlig': 223,
+    'thorn': 254,
+    'uacute': 250,
+    'ucirc': 251,
+    'ugrave': 249,
+    'uuml': 252,
+    'yacute': 253,
+    'yuml': 255,
+    'copy': 169,
+    'reg': 174,
+    'nbsp': 160,
+    'iexcl': 161,
+    'cent': 162,
+    'pound': 163,
+    'curren': 164,
+    'yen': 165,
+    'brvbar': 166,
+    'sect': 167,
+    'uml': 168,
+    'ordf': 170,
+    'laquo': 171,
+    'not': 172,
+    'shy': 173,
+    'macr': 175,
+    'deg': 176,
+    'plusmn': 177,
+    'sup1': 185,
+    'sup2': 178,
+    'sup3': 179,
+    'acute': 180,
+    'micro': 181,
+    'para': 182,
+    'middot': 183,
+    'cedil': 184,
+    'ordm': 186,
+    'raquo': 187,
+    'frac14': 188,
+    'frac12': 189,
+    'frac34': 190,
+    'iquest': 191,
+    'times': 215,
+    'divide': 247,
+    'OElig': 338,
+    'oelig': 339,
+    'Scaron': 352,
+    'scaron': 353,
+    'Yuml': 376,
+    'fnof': 402,
+    'circ': 710,
+    'tilde': 732,
+    'Alpha': 913,
+    'Beta': 914,
+    'Gamma': 915,
+    'Delta': 916,
+    'Epsilon': 917,
+    'Zeta': 918,
+    'Eta': 919,
+    'Theta': 920,
+    'Iota': 921,
+    'Kappa': 922,
+    'Lambda': 923,
+    'Mu': 924,
+    'Nu': 925,
+    'Xi': 926,
+    'Omicron': 927,
+    'Pi': 928,
+    'Rho': 929,
+    'Sigma': 931,
+    'Tau': 932,
+    'Upsilon': 933,
+    'Phi': 934,
+    'Chi': 935,
+    'Psi': 936,
+    'Omega': 937,
+    'alpha': 945,
+    'beta': 946,
+    'gamma': 947,
+    'delta': 948,
+    'epsilon': 949,
+    'zeta': 950,
+    'eta': 951,
+    'theta': 952,
+    'iota': 953,
+    'kappa': 954,
+    'lambda': 955,
+    'mu': 956,
+    'nu': 957,
+    'xi': 958,
+    'omicron': 959,
+    'pi': 960,
+    'rho': 961,
+    'sigmaf': 962,
+    'sigma': 963,
+    'tau': 964,
+    'upsilon': 965,
+    'phi': 966,
+    'chi': 967,
+    'psi': 968,
+    'omega': 969,
+    'thetasym': 977,
+    'upsih': 978,
+    'piv': 982,
+    'ensp': 8194,
+    'emsp': 8195,
+    'thinsp': 8201,
+    'zwnj': 8204,
+    'zwj': 8205,
+    'lrm': 8206,
+    'rlm': 8207,
+    'ndash': 8211,
+    'mdash': 8212,
+    'lsquo': 8216,
+    'rsquo': 8217,
+    'sbquo': 8218,
+    'ldquo': 8220,
+    'rdquo': 8221,
+    'bdquo': 8222,
+    'dagger': 8224,
+    'Dagger': 8225,
+    'bull': 8226,
+    'hellip': 8230,
+    'permil': 8240,
+    'prime': 8242,
+    'Prime': 8243,
+    'lsaquo': 8249,
+    'rsaquo': 8250,
+    'oline': 8254,
+    'frasl': 8260,
+    'euro': 8364,
+    'image': 8465,
+    'weierp': 8472,
+    'real': 8476,
+    'trade': 8482,
+    'alefsym': 8501,
+    'larr': 8592,
+    'uarr': 8593,
+    'rarr': 8594,
+    'darr': 8595,
+    'harr': 8596,
+    'crarr': 8629,
+    'lArr': 8656,
+    'uArr': 8657,
+    'rArr': 8658,
+    'dArr': 8659,
+    'hArr': 8660,
+    'forall': 8704,
+    'part': 8706,
+    'exist': 8707,
+    'empty': 8709,
+    'nabla': 8711,
+    'isin': 8712,
+    'notin': 8713,
+    'ni': 8715,
+    'prod': 8719,
+    'sum': 8721,
+    'minus': 8722,
+    'lowast': 8727,
+    'radic': 8730,
+    'prop': 8733,
+    'infin': 8734,
+    'ang': 8736,
+    'and': 8743,
+    'or': 8744,
+    'cap': 8745,
+    'cup': 8746,
+    'int': 8747,
+    'there4': 8756,
+    'sim': 8764,
+    'cong': 8773,
+    'asymp': 8776,
+    'ne': 8800,
+    'equiv': 8801,
+    'le': 8804,
+    'ge': 8805,
+    'sub': 8834,
+    'sup': 8835,
+    'nsub': 8836,
+    'sube': 8838,
+    'supe': 8839,
+    'oplus': 8853,
+    'otimes': 8855,
+    'perp': 8869,
+    'sdot': 8901,
+    'lceil': 8968,
+    'rceil': 8969,
+    'lfloor': 8970,
+    'rfloor': 8971,
+    'lang': 9001,
+    'rang': 9002,
+    'loz': 9674,
+    'spades': 9824,
+    'clubs': 9827,
+    'hearts': 9829,
+    'diams': 9830
+  }
+
+  Object.keys(sax.ENTITIES).forEach(function (key) {
+    var e = sax.ENTITIES[key]
+    var s = typeof e === 'number' ? String.fromCharCode(e) : e
+    sax.ENTITIES[key] = s
+  })
+
+  for (var s in sax.STATE) {
+    sax.STATE[sax.STATE[s]] = s
+  }
+
+  // shorthand
+  S = sax.STATE
+
+  function emit (parser, event, data) {
+    parser[event] && parser[event](data)
+  }
+
+  function emitNode (parser, nodeType, data) {
+    if (parser.textNode) closeText(parser)
+    emit(parser, nodeType, data)
+  }
+
+  function closeText (parser) {
+    parser.textNode = textopts(parser.opt, parser.textNode)
+    if (parser.textNode) emit(parser, 'ontext', parser.textNode)
+    parser.textNode = ''
+  }
+
+  function textopts (opt, text) {
+    if (opt.trim) text = text.trim()
+    if (opt.normalize) text = text.replace(/\s+/g, ' ')
+    return text
+  }
+
+  function error (parser, er) {
+    closeText(parser)
+    if (parser.trackPosition) {
+      er += '\nLine: ' + parser.line +
+        '\nColumn: ' + parser.column +
+        '\nChar: ' + parser.c
+    }
+    er = new Error(er)
+    parser.error = er
+    emit(parser, 'onerror', er)
+    return parser
+  }
+
+  function end (parser) {
+    if (parser.sawRoot && !parser.closedRoot) strictFail(parser, 'Unclosed root tag')
+    if ((parser.state !== S.BEGIN) &&
+      (parser.state !== S.BEGIN_WHITESPACE) &&
+      (parser.state !== S.TEXT)) {
+      error(parser, 'Unexpected end')
+    }
+    closeText(parser)
+    parser.c = ''
+    parser.closed = true
+    emit(parser, 'onend')
+    SAXParser.call(parser, parser.strict, parser.opt)
+    return parser
+  }
+
+  function strictFail (parser, message) {
+    if (typeof parser !== 'object' || !(parser instanceof SAXParser)) {
+      throw new Error('bad call to strictFail')
+    }
+    if (parser.strict) {
+      error(parser, message)
+    }
+  }
+
+  function newTag (parser) {
+    if (!parser.strict) parser.tagName = parser.tagName[parser.looseCase]()
+    var parent = parser.tags[parser.tags.length - 1] || parser
+    var tag = parser.tag = { name: parser.tagName, attributes: {} }
+
+    // will be overridden if tag contails an xmlns="foo" or xmlns:foo="bar"
+    if (parser.opt.xmlns) {
+      tag.ns = parent.ns
+    }
+    parser.attribList.length = 0
+  }
+
+  function qname (name, attribute) {
+    var i = name.indexOf(':')
+    var qualName = i < 0 ? [ '', name ] : name.split(':')
+    var prefix = qualName[0]
+    var local = qualName[1]
+
+    // <x "xmlns"="http://foo">
+    if (attribute && name === 'xmlns') {
+      prefix = 'xmlns'
+      local = ''
+    }
+
+    return { prefix: prefix, local: local }
+  }
+
+  function attrib (parser) {
+    if (!parser.strict) {
+      parser.attribName = parser.attribName[parser.looseCase]()
+    }
+
+    if (parser.attribList.indexOf(parser.attribName) !== -1 ||
+      parser.tag.attributes.hasOwnProperty(parser.attribName)) {
+      parser.attribName = parser.attribValue = ''
+      return
+    }
+
+    if (parser.opt.xmlns) {
+      var qn = qname(parser.attribName, true)
+      var prefix = qn.prefix
+      var local = qn.local
+
+      if (prefix === 'xmlns') {
+        // namespace binding attribute. push the binding into scope
+        if (local === 'xml' && parser.attribValue !== XML_NAMESPACE) {
+          strictFail(parser,
+            'xml: prefix must be bound to ' + XML_NAMESPACE + '\n' +
+            'Actual: ' + parser.attribValue)
+        } else if (local === 'xmlns' && parser.attribValue !== XMLNS_NAMESPACE) {
+          strictFail(parser,
+            'xmlns: prefix must be bound to ' + XMLNS_NAMESPACE + '\n' +
+            'Actual: ' + parser.attribValue)
         } else {
-            right.crossVectors(dir, UNIT_Y);
+          var tag = parser.tag
+          var parent = parser.tags[parser.tags.length - 1] || parser
+          if (tag.ns === parent.ns) {
+            tag.ns = Object.create(parent.ns)
+          }
+          tag.ns[local] = parser.attribValue
         }
+      }
 
-        var top = new THREE.Vector3();
-        top.crossVectors(right, dir);
-
-        dir.multiplyScalar(arrowSize);
-        right.multiplyScalar(arrowSize);
-        top.multiplyScalar(arrowSize);
-
-        // Right slant.
-        var tmp = new THREE.Vector3();
-        p.vertices.push(pEnd);
-        p.vertices.push(tmp.addVectors(pEnd, right).sub(dir));
-
-        // Left slant.
-        tmp = new THREE.Vector3();
-        p.vertices.push(pEnd);
-        p.vertices.push(tmp.subVectors(pEnd, right).sub(dir));
-
-        // Top slant.
-        tmp = new THREE.Vector3();
-        p.vertices.push(pEnd);
-        p.vertices.push(tmp.addVectors(pEnd, top).sub(dir));
-
-        // Bottom slant.
-        tmp = new THREE.Vector3();
-        p.vertices.push(pEnd);
-        p.vertices.push(tmp.subVectors(pEnd, top).sub(dir));
-
-        renderer.addPrimitive(p);
+      // defer onattribute events until all attributes have been seen
+      // so any new bindings can take effect. preserve attribute order
+      // so deferred events can be emitted in document order
+      parser.attribList.push([parser.attribName, parser.attribValue])
+    } else {
+      // in non-xmlns mode, we can emit the event right away
+      parser.tag.attributes[parser.attribName] = parser.attribValue
+      emitNode(parser, 'onattribute', {
+        name: parser.attribName,
+        value: parser.attribValue
+      })
     }
 
-    /**
-     * Draws a bounding box defined by the min/max coordinates.
-     *
-     * min/max are THREE.Vector3 objects.
-     */
-    function _drawBoundingBox(min, max, color) {
-        var p = new Primitive();
-        p.color = toColor(color);
+    parser.attribName = parser.attribValue = ''
+  }
 
-        var halfExtents = new THREE.Vector3();
-        halfExtents.subVectors(max, min);
-        halfExtents.multiplyScalar(0.5);
-        var center = new THREE.Vector3();
-        center.addVectors(max, min);
-        center.multiplyScalar(0.5);
+  function openTag (parser, selfClosing) {
+    if (parser.opt.xmlns) {
+      // emit namespace binding events
+      var tag = parser.tag
 
-        var edgeCoord = [1, 1, 1];
+      // add namespace info to tag
+      var qn = qname(parser.tagName)
+      tag.prefix = qn.prefix
+      tag.local = qn.local
+      tag.uri = tag.ns[qn.prefix] || ''
 
-        for (var i = 0; i < 4; i++) {
-            for (var j = 0; j < 3; j++) {
-                var pa = new THREE.Vector3(
-                    edgeCoord[0] * halfExtents.x,
-                    edgeCoord[1] * halfExtents.y,
-                    edgeCoord[2] * halfExtents.z);
-                pa.add(center);
+      if (tag.prefix && !tag.uri) {
+        strictFail(parser, 'Unbound namespace prefix: ' +
+          JSON.stringify(parser.tagName))
+        tag.uri = qn.prefix
+      }
 
-                var otherCoord = j % 3;
-                edgeCoord[otherCoord] = edgeCoord[otherCoord] * -1;
-                var pb = new THREE.Vector3(
-                    edgeCoord[0] * halfExtents.x,
-                    edgeCoord[1] * halfExtents.y,
-                    edgeCoord[2] * halfExtents.z);
-                pb.add(center);
+      var parent = parser.tags[parser.tags.length - 1] || parser
+      if (tag.ns && parent.ns !== tag.ns) {
+        Object.keys(tag.ns).forEach(function (p) {
+          emitNode(parser, 'onopennamespace', {
+            prefix: p,
+            uri: tag.ns[p]
+          })
+        })
+      }
 
-                p.vertices.push(pa, pb);
-            }
-
-            edgeCoord = [-1, -1, -1];
-
-            if (i < 3) {
-                edgeCoord[i] = edgeCoord[i] * -1;
-            }
+      // handle deferred onattribute events
+      // Note: do not apply default ns to attributes:
+      //   http://www.w3.org/TR/REC-xml-names/#defaulting
+      for (var i = 0, l = parser.attribList.length; i < l; i++) {
+        var nv = parser.attribList[i]
+        var name = nv[0]
+        var value = nv[1]
+        var qualName = qname(name, true)
+        var prefix = qualName.prefix
+        var local = qualName.local
+        var uri = prefix === '' ? '' : (tag.ns[prefix] || '')
+        var a = {
+          name: name,
+          value: value,
+          prefix: prefix,
+          local: local,
+          uri: uri
         }
 
-        renderer.addPrimitive(p);
+        // if there's any attributes with an undefined namespace,
+        // then fail on them now.
+        if (prefix && prefix !== 'xmlns' && !uri) {
+          strictFail(parser, 'Unbound namespace prefix: ' +
+            JSON.stringify(prefix))
+          a.uri = prefix
+        }
+        parser.tag.attributes[name] = a
+        emitNode(parser, 'onattribute', a)
+      }
+      parser.attribList.length = 0
     }
 
-    /**
-     * Draw a sphere at pos with radius r.
-     */
-    function _drawSphere(pos, r, color) {
-        var p = new Primitive();
-        p.color = toColor(color);
+    parser.tag.isSelfClosing = !!selfClosing
 
-        // Decreasing these angles will increase complexity of sphere.
-        var dtheta = 35; var dphi = 35;
+    // process the tag
+    parser.sawRoot = true
+    parser.tags.push(parser.tag)
+    emitNode(parser, 'onopentag', parser.tag)
+    if (!selfClosing) {
+      // special case for <script> in non-strict mode.
+      if (!parser.noscript && parser.tagName.toLowerCase() === 'script') {
+        parser.state = S.SCRIPT
+      } else {
+        parser.state = S.TEXT
+      }
+      parser.tag = null
+      parser.tagName = ''
+    }
+    parser.attribName = parser.attribValue = ''
+    parser.attribList.length = 0
+  }
 
-        for (var theta = -90; theta <= (90 - dtheta); theta += dtheta) {
-            for (var phi = 0; phi <= (360 - dphi); phi += dphi) {
-                p.vertices.push(new THREE.Vector3(
-                    pos.x + r * Math.cos(theta * DEG_TO_RAD) * Math.cos(phi * DEG_TO_RAD),
-                    pos.y + r * Math.cos(theta * DEG_TO_RAD) * Math.sin(phi * DEG_TO_RAD),
-                    pos.z + r * Math.sin(theta * DEG_TO_RAD)
-                ));
+  function closeTag (parser) {
+    if (!parser.tagName) {
+      strictFail(parser, 'Weird empty close tag.')
+      parser.textNode += '</>'
+      parser.state = S.TEXT
+      return
+    }
 
-                p.vertices.push(new THREE.Vector3(
-                    pos.x + r * Math.cos((theta + dtheta) * DEG_TO_RAD) * Math.cos(phi * DEG_TO_RAD),
-                    pos.y + r * Math.cos((theta + dtheta) * DEG_TO_RAD) * Math.sin(phi * DEG_TO_RAD),
-                    pos.z + r * Math.sin((theta + dtheta) * DEG_TO_RAD)
-                ));
+    if (parser.script) {
+      if (parser.tagName !== 'script') {
+        parser.script += '</' + parser.tagName + '>'
+        parser.tagName = ''
+        parser.state = S.SCRIPT
+        return
+      }
+      emitNode(parser, 'onscript', parser.script)
+      parser.script = ''
+    }
 
-                p.vertices.push(new THREE.Vector3(
-                    pos.x + r * Math.cos((theta + dtheta) * DEG_TO_RAD) * Math.cos((phi + dphi) * DEG_TO_RAD),
-                    pos.y + r * Math.cos((theta + dtheta) * DEG_TO_RAD) * Math.sin((phi + dphi) * DEG_TO_RAD),
-                    pos.z + r * Math.sin((theta + dtheta) * DEG_TO_RAD)
-                ));
+    // first make sure that the closing tag actually exists.
+    // <a><b></c></b></a> will close everything, otherwise.
+    var t = parser.tags.length
+    var tagName = parser.tagName
+    if (!parser.strict) {
+      tagName = tagName[parser.looseCase]()
+    }
+    var closeTo = tagName
+    while (t--) {
+      var close = parser.tags[t]
+      if (close.name !== closeTo) {
+        // fail the first time in strict mode
+        strictFail(parser, 'Unexpected close tag')
+      } else {
+        break
+      }
+    }
 
-                if ((theta > -90) && (theta < 90)) {
-                    p.vertices.push(new THREE.Vector3(
-                        pos.x + r * Math.cos(theta * DEG_TO_RAD) * Math.cos((phi + dphi) * DEG_TO_RAD),
-                        pos.y + r * Math.cos(theta * DEG_TO_RAD) * Math.sin((phi + dphi) * DEG_TO_RAD),
-                        pos.z + r * Math.sin(theta * DEG_TO_RAD)
-                    ));
+    // didn't find it.  we already failed for strict, so just abort.
+    if (t < 0) {
+      strictFail(parser, 'Unmatched closing tag: ' + parser.tagName)
+      parser.textNode += '</' + parser.tagName + '>'
+      parser.state = S.TEXT
+      return
+    }
+    parser.tagName = tagName
+    var s = parser.tags.length
+    while (s-- > t) {
+      var tag = parser.tag = parser.tags.pop()
+      parser.tagName = parser.tag.name
+      emitNode(parser, 'onclosetag', parser.tagName)
+
+      var x = {}
+      for (var i in tag.ns) {
+        x[i] = tag.ns[i]
+      }
+
+      var parent = parser.tags[parser.tags.length - 1] || parser
+      if (parser.opt.xmlns && tag.ns !== parent.ns) {
+        // remove namespace bindings introduced by tag
+        Object.keys(tag.ns).forEach(function (p) {
+          var n = tag.ns[p]
+          emitNode(parser, 'onclosenamespace', { prefix: p, uri: n })
+        })
+      }
+    }
+    if (t === 0) parser.closedRoot = true
+    parser.tagName = parser.attribValue = parser.attribName = ''
+    parser.attribList.length = 0
+    parser.state = S.TEXT
+  }
+
+  function parseEntity (parser) {
+    var entity = parser.entity
+    var entityLC = entity.toLowerCase()
+    var num
+    var numStr = ''
+
+    if (parser.ENTITIES[entity]) {
+      return parser.ENTITIES[entity]
+    }
+    if (parser.ENTITIES[entityLC]) {
+      return parser.ENTITIES[entityLC]
+    }
+    entity = entityLC
+    if (entity.charAt(0) === '#') {
+      if (entity.charAt(1) === 'x') {
+        entity = entity.slice(2)
+        num = parseInt(entity, 16)
+        numStr = num.toString(16)
+      } else {
+        entity = entity.slice(1)
+        num = parseInt(entity, 10)
+        numStr = num.toString(10)
+      }
+    }
+    entity = entity.replace(/^0+/, '')
+    if (numStr.toLowerCase() !== entity) {
+      strictFail(parser, 'Invalid character entity')
+      return '&' + parser.entity + ';'
+    }
+
+    return String.fromCodePoint(num)
+  }
+
+  function beginWhiteSpace (parser, c) {
+    if (c === '<') {
+      parser.state = S.OPEN_WAKA
+      parser.startTagPosition = parser.position
+    } else if (not(whitespace, c)) {
+      // have to process this as a text node.
+      // weird, but happens.
+      strictFail(parser, 'Non-whitespace before first tag.')
+      parser.textNode = c
+      parser.state = S.TEXT
+    }
+  }
+
+  function write (chunk) {
+    var parser = this
+    if (this.error) {
+      throw this.error
+    }
+    if (parser.closed) {
+      return error(parser,
+        'Cannot write after close. Assign an onready handler.')
+    }
+    if (chunk === null) {
+      return end(parser)
+    }
+    var i = 0
+    var c = ''
+    while (true) {
+      c = chunk.charAt(i++)
+      parser.c = c
+      if (!c) {
+        break
+      }
+      if (parser.trackPosition) {
+        parser.position++
+        if (c === '\n') {
+          parser.line++
+          parser.column = 0
+        } else {
+          parser.column++
+        }
+      }
+      switch (parser.state) {
+        case S.BEGIN:
+          parser.state = S.BEGIN_WHITESPACE
+          if (c === '\uFEFF') {
+            continue
+          }
+          beginWhiteSpace(parser, c)
+          continue
+
+        case S.BEGIN_WHITESPACE:
+          beginWhiteSpace(parser, c)
+          continue
+
+        case S.TEXT:
+          if (parser.sawRoot && !parser.closedRoot) {
+            var starti = i - 1
+            while (c && c !== '<' && c !== '&') {
+              c = chunk.charAt(i++)
+              if (c && parser.trackPosition) {
+                parser.position++
+                if (c === '\n') {
+                  parser.line++
+                  parser.column = 0
+                } else {
+                  parser.column++
                 }
+              }
             }
-        }
-
-        renderer.addPrimitive(p);
-    }
-
-    /**
-     * Render all objects drawn this frame into the scene.
-     */
-    function _render(scene) {
-        renderer.update(scene);
-    }
-
-    return {
-        drawLine: _drawLine,
-        drawLineStrip: _drawLineStrip,
-        drawArrow: _drawArrow,
-        drawBoundingBox: _drawBoundingBox,
-        drawSphere: _drawSphere,
-        render: _render
-    };
-};
-
-},{"./lib/renderer":114}],114:[function(require,module,exports){
-var activePrimitives = [];
-var activeMesh = null;
-
-module.exports = function(THREE) {
-    function Primitive() {
-        this.vertices = [];
-        this.color = 0x000000;
-    }
-
-    function _addPrimitive(p) {
-        activePrimitives.push(p);
-    }
-
-    function constructGeometry() {
-        var positions = [];
-        var colors = [];
-        var indices = [];
-
-        // Collect all primitives into geometry buffers.
-        var i, j;
-        var indexOffset = 0;
-        for (i = 0; i < activePrimitives.length; i++) {
-            var p = activePrimitives[i];
-
-            // Vertices/colors.
-            for (j = 0; j < p.vertices.length; j++) {
-                var v = p.vertices[j];
-                positions.push(v.x, v.y, v.z);
-                colors.push(p.color & 0xFF0000, p.color & 0xFF00, p.color & 0xFF);
+            parser.textNode += chunk.substring(starti, i - 1)
+          }
+          if (c === '<' && !(parser.sawRoot && parser.closedRoot && !parser.strict)) {
+            parser.state = S.OPEN_WAKA
+            parser.startTagPosition = parser.position
+          } else {
+            if (not(whitespace, c) && (!parser.sawRoot || parser.closedRoot)) {
+              strictFail(parser, 'Text data outside of root node.')
             }
-
-            // Indices.
-            for (j = 0; j < p.vertices.length - 1; j++) {
-                indices.push(indexOffset + j, indexOffset + j + 1);
+            if (c === '&') {
+              parser.state = S.TEXT_ENTITY
+            } else {
+              parser.textNode += c
             }
-            indexOffset += p.vertices.length;
-        }
+          }
+          continue
 
-        // Construct geometry.
-        var indicesAttr = new THREE.Uint16Attribute(indices.length, 1);
-            indicesAttr.set(indices);
-        var positionsAttr = new THREE.Float32Attribute(positions.length / 3, 3);
-            positionsAttr.set(positions);
-        var colorsAttr = new THREE.Float32Attribute(colors.length / 3, 3);
-            colorsAttr.set(colors);
+        case S.SCRIPT:
+          // only non-strict
+          if (c === '<') {
+            parser.state = S.SCRIPT_ENDING
+          } else {
+            parser.script += c
+          }
+          continue
 
-        var geometry = new THREE.BufferGeometry();
-        geometry.addAttribute( 'index', indicesAttr);
-        geometry.addAttribute( 'position', positionsAttr);
-        geometry.addAttribute( 'color', colorsAttr);
-        geometry.computeBoundingSphere();
-        return geometry;
+        case S.SCRIPT_ENDING:
+          if (c === '/') {
+            parser.state = S.CLOSE_TAG
+          } else {
+            parser.script += '<' + c
+            parser.state = S.SCRIPT
+          }
+          continue
+
+        case S.OPEN_WAKA:
+          // either a /, ?, !, or text is coming next.
+          if (c === '!') {
+            parser.state = S.SGML_DECL
+            parser.sgmlDecl = ''
+          } else if (is(whitespace, c)) {
+            // wait for it...
+          } else if (is(nameStart, c)) {
+            parser.state = S.OPEN_TAG
+            parser.tagName = c
+          } else if (c === '/') {
+            parser.state = S.CLOSE_TAG
+            parser.tagName = ''
+          } else if (c === '?') {
+            parser.state = S.PROC_INST
+            parser.procInstName = parser.procInstBody = ''
+          } else {
+            strictFail(parser, 'Unencoded <')
+            // if there was some whitespace, then add that in.
+            if (parser.startTagPosition + 1 < parser.position) {
+              var pad = parser.position - parser.startTagPosition
+              c = new Array(pad).join(' ') + c
+            }
+            parser.textNode += '<' + c
+            parser.state = S.TEXT
+          }
+          continue
+
+        case S.SGML_DECL:
+          if ((parser.sgmlDecl + c).toUpperCase() === CDATA) {
+            emitNode(parser, 'onopencdata')
+            parser.state = S.CDATA
+            parser.sgmlDecl = ''
+            parser.cdata = ''
+          } else if (parser.sgmlDecl + c === '--') {
+            parser.state = S.COMMENT
+            parser.comment = ''
+            parser.sgmlDecl = ''
+          } else if ((parser.sgmlDecl + c).toUpperCase() === DOCTYPE) {
+            parser.state = S.DOCTYPE
+            if (parser.doctype || parser.sawRoot) {
+              strictFail(parser,
+                'Inappropriately located doctype declaration')
+            }
+            parser.doctype = ''
+            parser.sgmlDecl = ''
+          } else if (c === '>') {
+            emitNode(parser, 'onsgmldeclaration', parser.sgmlDecl)
+            parser.sgmlDecl = ''
+            parser.state = S.TEXT
+          } else if (is(quote, c)) {
+            parser.state = S.SGML_DECL_QUOTED
+            parser.sgmlDecl += c
+          } else {
+            parser.sgmlDecl += c
+          }
+          continue
+
+        case S.SGML_DECL_QUOTED:
+          if (c === parser.q) {
+            parser.state = S.SGML_DECL
+            parser.q = ''
+          }
+          parser.sgmlDecl += c
+          continue
+
+        case S.DOCTYPE:
+          if (c === '>') {
+            parser.state = S.TEXT
+            emitNode(parser, 'ondoctype', parser.doctype)
+            parser.doctype = true // just remember that we saw it.
+          } else {
+            parser.doctype += c
+            if (c === '[') {
+              parser.state = S.DOCTYPE_DTD
+            } else if (is(quote, c)) {
+              parser.state = S.DOCTYPE_QUOTED
+              parser.q = c
+            }
+          }
+          continue
+
+        case S.DOCTYPE_QUOTED:
+          parser.doctype += c
+          if (c === parser.q) {
+            parser.q = ''
+            parser.state = S.DOCTYPE
+          }
+          continue
+
+        case S.DOCTYPE_DTD:
+          parser.doctype += c
+          if (c === ']') {
+            parser.state = S.DOCTYPE
+          } else if (is(quote, c)) {
+            parser.state = S.DOCTYPE_DTD_QUOTED
+            parser.q = c
+          }
+          continue
+
+        case S.DOCTYPE_DTD_QUOTED:
+          parser.doctype += c
+          if (c === parser.q) {
+            parser.state = S.DOCTYPE_DTD
+            parser.q = ''
+          }
+          continue
+
+        case S.COMMENT:
+          if (c === '-') {
+            parser.state = S.COMMENT_ENDING
+          } else {
+            parser.comment += c
+          }
+          continue
+
+        case S.COMMENT_ENDING:
+          if (c === '-') {
+            parser.state = S.COMMENT_ENDED
+            parser.comment = textopts(parser.opt, parser.comment)
+            if (parser.comment) {
+              emitNode(parser, 'oncomment', parser.comment)
+            }
+            parser.comment = ''
+          } else {
+            parser.comment += '-' + c
+            parser.state = S.COMMENT
+          }
+          continue
+
+        case S.COMMENT_ENDED:
+          if (c !== '>') {
+            strictFail(parser, 'Malformed comment')
+            // allow <!-- blah -- bloo --> in non-strict mode,
+            // which is a comment of " blah -- bloo "
+            parser.comment += '--' + c
+            parser.state = S.COMMENT
+          } else {
+            parser.state = S.TEXT
+          }
+          continue
+
+        case S.CDATA:
+          if (c === ']') {
+            parser.state = S.CDATA_ENDING
+          } else {
+            parser.cdata += c
+          }
+          continue
+
+        case S.CDATA_ENDING:
+          if (c === ']') {
+            parser.state = S.CDATA_ENDING_2
+          } else {
+            parser.cdata += ']' + c
+            parser.state = S.CDATA
+          }
+          continue
+
+        case S.CDATA_ENDING_2:
+          if (c === '>') {
+            if (parser.cdata) {
+              emitNode(parser, 'oncdata', parser.cdata)
+            }
+            emitNode(parser, 'onclosecdata')
+            parser.cdata = ''
+            parser.state = S.TEXT
+          } else if (c === ']') {
+            parser.cdata += ']'
+          } else {
+            parser.cdata += ']]' + c
+            parser.state = S.CDATA
+          }
+          continue
+
+        case S.PROC_INST:
+          if (c === '?') {
+            parser.state = S.PROC_INST_ENDING
+          } else if (is(whitespace, c)) {
+            parser.state = S.PROC_INST_BODY
+          } else {
+            parser.procInstName += c
+          }
+          continue
+
+        case S.PROC_INST_BODY:
+          if (!parser.procInstBody && is(whitespace, c)) {
+            continue
+          } else if (c === '?') {
+            parser.state = S.PROC_INST_ENDING
+          } else {
+            parser.procInstBody += c
+          }
+          continue
+
+        case S.PROC_INST_ENDING:
+          if (c === '>') {
+            emitNode(parser, 'onprocessinginstruction', {
+              name: parser.procInstName,
+              body: parser.procInstBody
+            })
+            parser.procInstName = parser.procInstBody = ''
+            parser.state = S.TEXT
+          } else {
+            parser.procInstBody += '?' + c
+            parser.state = S.PROC_INST_BODY
+          }
+          continue
+
+        case S.OPEN_TAG:
+          if (is(nameBody, c)) {
+            parser.tagName += c
+          } else {
+            newTag(parser)
+            if (c === '>') {
+              openTag(parser)
+            } else if (c === '/') {
+              parser.state = S.OPEN_TAG_SLASH
+            } else {
+              if (not(whitespace, c)) {
+                strictFail(parser, 'Invalid character in tag name')
+              }
+              parser.state = S.ATTRIB
+            }
+          }
+          continue
+
+        case S.OPEN_TAG_SLASH:
+          if (c === '>') {
+            openTag(parser, true)
+            closeTag(parser)
+          } else {
+            strictFail(parser, 'Forward-slash in opening tag not followed by >')
+            parser.state = S.ATTRIB
+          }
+          continue
+
+        case S.ATTRIB:
+          // haven't read the attribute name yet.
+          if (is(whitespace, c)) {
+            continue
+          } else if (c === '>') {
+            openTag(parser)
+          } else if (c === '/') {
+            parser.state = S.OPEN_TAG_SLASH
+          } else if (is(nameStart, c)) {
+            parser.attribName = c
+            parser.attribValue = ''
+            parser.state = S.ATTRIB_NAME
+          } else {
+            strictFail(parser, 'Invalid attribute name')
+          }
+          continue
+
+        case S.ATTRIB_NAME:
+          if (c === '=') {
+            parser.state = S.ATTRIB_VALUE
+          } else if (c === '>') {
+            strictFail(parser, 'Attribute without value')
+            parser.attribValue = parser.attribName
+            attrib(parser)
+            openTag(parser)
+          } else if (is(whitespace, c)) {
+            parser.state = S.ATTRIB_NAME_SAW_WHITE
+          } else if (is(nameBody, c)) {
+            parser.attribName += c
+          } else {
+            strictFail(parser, 'Invalid attribute name')
+          }
+          continue
+
+        case S.ATTRIB_NAME_SAW_WHITE:
+          if (c === '=') {
+            parser.state = S.ATTRIB_VALUE
+          } else if (is(whitespace, c)) {
+            continue
+          } else {
+            strictFail(parser, 'Attribute without value')
+            parser.tag.attributes[parser.attribName] = ''
+            parser.attribValue = ''
+            emitNode(parser, 'onattribute', {
+              name: parser.attribName,
+              value: ''
+            })
+            parser.attribName = ''
+            if (c === '>') {
+              openTag(parser)
+            } else if (is(nameStart, c)) {
+              parser.attribName = c
+              parser.state = S.ATTRIB_NAME
+            } else {
+              strictFail(parser, 'Invalid attribute name')
+              parser.state = S.ATTRIB
+            }
+          }
+          continue
+
+        case S.ATTRIB_VALUE:
+          if (is(whitespace, c)) {
+            continue
+          } else if (is(quote, c)) {
+            parser.q = c
+            parser.state = S.ATTRIB_VALUE_QUOTED
+          } else {
+            strictFail(parser, 'Unquoted attribute value')
+            parser.state = S.ATTRIB_VALUE_UNQUOTED
+            parser.attribValue = c
+          }
+          continue
+
+        case S.ATTRIB_VALUE_QUOTED:
+          if (c !== parser.q) {
+            if (c === '&') {
+              parser.state = S.ATTRIB_VALUE_ENTITY_Q
+            } else {
+              parser.attribValue += c
+            }
+            continue
+          }
+          attrib(parser)
+          parser.q = ''
+          parser.state = S.ATTRIB_VALUE_CLOSED
+          continue
+
+        case S.ATTRIB_VALUE_CLOSED:
+          if (is(whitespace, c)) {
+            parser.state = S.ATTRIB
+          } else if (c === '>') {
+            openTag(parser)
+          } else if (c === '/') {
+            parser.state = S.OPEN_TAG_SLASH
+          } else if (is(nameStart, c)) {
+            strictFail(parser, 'No whitespace between attributes')
+            parser.attribName = c
+            parser.attribValue = ''
+            parser.state = S.ATTRIB_NAME
+          } else {
+            strictFail(parser, 'Invalid attribute name')
+          }
+          continue
+
+        case S.ATTRIB_VALUE_UNQUOTED:
+          if (not(attribEnd, c)) {
+            if (c === '&') {
+              parser.state = S.ATTRIB_VALUE_ENTITY_U
+            } else {
+              parser.attribValue += c
+            }
+            continue
+          }
+          attrib(parser)
+          if (c === '>') {
+            openTag(parser)
+          } else {
+            parser.state = S.ATTRIB
+          }
+          continue
+
+        case S.CLOSE_TAG:
+          if (!parser.tagName) {
+            if (is(whitespace, c)) {
+              continue
+            } else if (not(nameStart, c)) {
+              if (parser.script) {
+                parser.script += '</' + c
+                parser.state = S.SCRIPT
+              } else {
+                strictFail(parser, 'Invalid tagname in closing tag.')
+              }
+            } else {
+              parser.tagName = c
+            }
+          } else if (c === '>') {
+            closeTag(parser)
+          } else if (is(nameBody, c)) {
+            parser.tagName += c
+          } else if (parser.script) {
+            parser.script += '</' + parser.tagName
+            parser.tagName = ''
+            parser.state = S.SCRIPT
+          } else {
+            if (not(whitespace, c)) {
+              strictFail(parser, 'Invalid tagname in closing tag')
+            }
+            parser.state = S.CLOSE_TAG_SAW_WHITE
+          }
+          continue
+
+        case S.CLOSE_TAG_SAW_WHITE:
+          if (is(whitespace, c)) {
+            continue
+          }
+          if (c === '>') {
+            closeTag(parser)
+          } else {
+            strictFail(parser, 'Invalid characters in closing tag')
+          }
+          continue
+
+        case S.TEXT_ENTITY:
+        case S.ATTRIB_VALUE_ENTITY_Q:
+        case S.ATTRIB_VALUE_ENTITY_U:
+          var returnState
+          var buffer
+          switch (parser.state) {
+            case S.TEXT_ENTITY:
+              returnState = S.TEXT
+              buffer = 'textNode'
+              break
+
+            case S.ATTRIB_VALUE_ENTITY_Q:
+              returnState = S.ATTRIB_VALUE_QUOTED
+              buffer = 'attribValue'
+              break
+
+            case S.ATTRIB_VALUE_ENTITY_U:
+              returnState = S.ATTRIB_VALUE_UNQUOTED
+              buffer = 'attribValue'
+              break
+          }
+
+          if (c === ';') {
+            parser[buffer] += parseEntity(parser)
+            parser.entity = ''
+            parser.state = returnState
+          } else if (is(parser.entity.length ? entityBody : entityStart, c)) {
+            parser.entity += c
+          } else {
+            strictFail(parser, 'Invalid character in entity name')
+            parser[buffer] += '&' + parser.entity + c
+            parser.entity = ''
+            parser.state = returnState
+          }
+
+          continue
+
+        default:
+          throw new Error(parser, 'Unknown state: ' + parser.state)
+      }
+    } // while
+
+    if (parser.position >= parser.bufferCheckPosition) {
+      checkBufferLength(parser)
     }
+    return parser
+  }
 
-    function _update(scene) {
-        if (activeMesh !== null) {
-            scene.remove(activeMesh);
-            activeMesh = null;
+  /*! http://mths.be/fromcodepoint v0.1.0 by @mathias */
+  if (!String.fromCodePoint) {
+    (function () {
+      var stringFromCharCode = String.fromCharCode
+      var floor = Math.floor
+      var fromCodePoint = function () {
+        var MAX_SIZE = 0x4000
+        var codeUnits = []
+        var highSurrogate
+        var lowSurrogate
+        var index = -1
+        var length = arguments.length
+        if (!length) {
+          return ''
         }
-
-        if (activePrimitives.length === 0) {
-            return;
+        var result = ''
+        while (++index < length) {
+          var codePoint = Number(arguments[index])
+          if (
+            !isFinite(codePoint) || // `NaN`, `+Infinity`, or `-Infinity`
+            codePoint < 0 || // not a valid Unicode code point
+            codePoint > 0x10FFFF || // not a valid Unicode code point
+            floor(codePoint) !== codePoint // not an integer
+          ) {
+            throw RangeError('Invalid code point: ' + codePoint)
+          }
+          if (codePoint <= 0xFFFF) { // BMP code point
+            codeUnits.push(codePoint)
+          } else { // Astral code point; split in surrogate halves
+            // http://mathiasbynens.be/notes/javascript-encoding#surrogate-formulae
+            codePoint -= 0x10000
+            highSurrogate = (codePoint >> 10) + 0xD800
+            lowSurrogate = (codePoint % 0x400) + 0xDC00
+            codeUnits.push(highSurrogate, lowSurrogate)
+          }
+          if (index + 1 === length || codeUnits.length > MAX_SIZE) {
+            result += stringFromCharCode.apply(null, codeUnits)
+            codeUnits.length = 0
+          }
         }
+        return result
+      }
+      if (Object.defineProperty) {
+        Object.defineProperty(String, 'fromCodePoint', {
+          value: fromCodePoint,
+          configurable: true,
+          writable: true
+        })
+      } else {
+        String.fromCodePoint = fromCodePoint
+      }
+    }())
+  }
+})(typeof exports === 'undefined' ? this.sax = {} : exports)
 
-        // Create geometry and add to scene.
-        var geometry = constructGeometry();
-        var material = new THREE.LineBasicMaterial({ vertexColors: true });
-        activeMesh = new THREE.Line(geometry, material, THREE.LinePieces);
-        scene.add(activeMesh);
-
-        // Clear primitives from this frame.
-        activePrimitives = [];
-    }
-
-    return {
-        Primitive: Primitive,
-        addPrimitive: _addPrimitive,
-        update: _update
-    };
-};
-
-},{}]},{},[1]);
+}).call(this,require("buffer").Buffer)
+},{"buffer":24,"stream":45,"string_decoder":46}]},{},[1]);
