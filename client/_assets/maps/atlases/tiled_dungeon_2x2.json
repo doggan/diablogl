@@ -1,0 +1,140 @@
+{"frames": [
+
+{
+	"filename": "0000",
+	"frame": {"x":2,"y":2,"w":128,"h":64},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":128,"h":64},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0001",
+	"frame": {"x":132,"y":2,"w":128,"h":64},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":128,"h":64},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0002",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0003",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0004",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0005",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0006",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0007",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0008",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0009",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0010",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0011",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0012",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0013",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0014",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+},
+{
+	"filename": "0015",
+	"frame": {"x":262,"y":2,"w":1,"h":1},
+	"rotated": false,
+	"trimmed": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":1,"h":1},
+	"sourceSize": {"w":128,"h":64}
+}],
+"meta": {
+	"app": "http://www.codeandweb.com/texturepacker",
+	"version": "1.0",
+	"image": "tiled_dungeon_2x2.png",
+	"format": "RGBA8888",
+	"size": {"w":268,"h":68},
+	"scale": "1",
+	"smartupdate": "$TexturePacker:SmartUpdate:f309ed426b7ed504c67beb4b02afbf8b:411b03a797b46aa8804af1abfe37da5f:d994847a85616c1dfbc0711316acc8d8$"
+}
+}
